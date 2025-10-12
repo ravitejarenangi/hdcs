@@ -20,6 +20,8 @@ import {
   Activity,
   UserCheck,
   UserX,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { format } from "date-fns"
 
@@ -44,6 +46,10 @@ export default function OfficersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all")
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   // Dialog states
   const [showOfficerDialog, setShowOfficerDialog] = useState(false)
@@ -71,6 +77,7 @@ export default function OfficersPage() {
     }
 
     setFilteredOfficers(filtered)
+    setCurrentPage(1) // Reset to first page when filters change
   }, [officers, searchQuery, statusFilter])
 
   useEffect(() => {
@@ -80,6 +87,12 @@ export default function OfficersPage() {
   useEffect(() => {
     filterOfficers()
   }, [filterOfficers])
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredOfficers.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedOfficers = filteredOfficers.slice(startIndex, endIndex)
 
   const fetchOfficers = async () => {
     try {
@@ -349,10 +362,20 @@ export default function OfficersPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredOfficers.map((officer) => {
+                    {paginatedOfficers.map((officer) => {
                       const assignedSecs = officer.assignedSecretariats
                         ? JSON.parse(officer.assignedSecretariats)
                         : []
+
+                      // Handle both old format (string[]) and new format (object[])
+                      const displaySecretariats = assignedSecs.map((sec: any) => {
+                        if (typeof sec === 'string') {
+                          return sec
+                        } else if (sec && typeof sec === 'object' && sec.secName) {
+                          return `${sec.mandalName} → ${sec.secName}`
+                        }
+                        return 'Unknown'
+                      })
 
                       return (
                         <tr key={officer.id} className="border-b hover:bg-gray-50">
@@ -380,9 +403,9 @@ export default function OfficersPage() {
                             )}
                             {officer.role === "FIELD_OFFICER" && (
                               <div className="flex flex-wrap gap-1">
-                                {assignedSecs.length > 0 ? (
+                                {displaySecretariats.length > 0 ? (
                                   <>
-                                    {assignedSecs.slice(0, 2).map((sec: string, idx: number) => (
+                                    {displaySecretariats.slice(0, 2).map((sec: string, idx: number) => (
                                       <span
                                         key={idx}
                                         className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs"
@@ -390,9 +413,9 @@ export default function OfficersPage() {
                                         {sec}
                                       </span>
                                     ))}
-                                    {assignedSecs.length > 2 && (
+                                    {displaySecretariats.length > 2 && (
                                       <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
-                                        +{assignedSecs.length - 2}
+                                        +{displaySecretariats.length - 2}
                                       </span>
                                     )}
                                   </>
@@ -453,6 +476,73 @@ export default function OfficersPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {!isLoading && filteredOfficers.length > 0 && (
+              <div className="flex items-center justify-between px-4 py-4 border-t">
+                <div className="text-sm text-gray-600">
+                  Showing {startIndex + 1} to {Math.min(endIndex, filteredOfficers.length)} of{" "}
+                  {filteredOfficers.length} officers
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      // Show first page, last page, current page, and pages around current
+                      const showPage =
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+
+                      if (!showPage) {
+                        // Show ellipsis
+                        if (page === currentPage - 2 || page === currentPage + 2) {
+                          return (
+                            <span key={page} className="px-2 text-gray-400">
+                              ...
+                            </span>
+                          )
+                        }
+                        return null
+                      }
+
+                      return (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(page)}
+                          className={
+                            currentPage === page
+                              ? "bg-orange-600 hover:bg-orange-700"
+                              : ""
+                          }
+                        >
+                          {page}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>

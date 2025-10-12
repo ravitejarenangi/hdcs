@@ -45,6 +45,11 @@ interface Secretariat {
   residentCount: number
 }
 
+interface SecretariatAssignment {
+  mandalName: string
+  secName: string
+}
+
 export function OfficerDialog({
   open,
   onOpenChange,
@@ -61,7 +66,7 @@ export function OfficerDialog({
     confirmPassword: "",
     role: "FIELD_OFFICER" as "ADMIN" | "PANCHAYAT_SECRETARY" | "FIELD_OFFICER",
     mandalName: "",
-    assignedSecretariats: [] as string[],
+    assignedSecretariats: [] as SecretariatAssignment[],
     isActive: true,
   })
 
@@ -234,7 +239,7 @@ export function OfficerDialog({
           mobileNumber: string | null
           isActive: boolean
           mandalName?: string | null
-          assignedSecretariats?: string[]
+          assignedSecretariats?: SecretariatAssignment[]
         } = {
           fullName: formData.fullName,
           mobileNumber: formData.mobileNumber.trim() || null,
@@ -269,7 +274,7 @@ export function OfficerDialog({
           password: string
           role: string
           mandalName?: string
-          assignedSecretariats?: string[]
+          assignedSecretariats?: SecretariatAssignment[]
         } = {
           fullName: formData.fullName,
           username: formData.username,
@@ -309,27 +314,38 @@ export function OfficerDialog({
     }
   }
 
-  const toggleSecretariat = (secretariatName: string) => {
+  const toggleSecretariat = (sec: Secretariat) => {
     setFormData((prev) => {
       const current = prev.assignedSecretariats
-      if (current.includes(secretariatName)) {
+      const exists = current.some(
+        (s) => s.mandalName === sec.mandalName && s.secName === sec.name
+      )
+
+      if (exists) {
         return {
           ...prev,
-          assignedSecretariats: current.filter((s) => s !== secretariatName),
+          assignedSecretariats: current.filter(
+            (s) => !(s.mandalName === sec.mandalName && s.secName === sec.name)
+          ),
         }
       } else {
         return {
           ...prev,
-          assignedSecretariats: [...current, secretariatName],
+          assignedSecretariats: [
+            ...current,
+            { mandalName: sec.mandalName, secName: sec.name },
+          ],
         }
       }
     })
   }
 
-  const removeSecretariat = (secretariatName: string) => {
+  const removeSecretariat = (assignment: SecretariatAssignment) => {
     setFormData((prev) => ({
       ...prev,
-      assignedSecretariats: prev.assignedSecretariats.filter((s) => s !== secretariatName),
+      assignedSecretariats: prev.assignedSecretariats.filter(
+        (s) => !(s.mandalName === assignment.mandalName && s.secName === assignment.secName)
+      ),
     }))
   }
 
@@ -459,10 +475,10 @@ export function OfficerDialog({
                 <div className="flex flex-wrap gap-2 p-3 border rounded-md bg-gray-50">
                   {formData.assignedSecretariats.map((sec) => (
                     <div
-                      key={sec}
+                      key={`${sec.mandalName}-${sec.secName}`}
                       className="flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm"
                     >
-                      <span>{sec}</span>
+                      <span>{sec.mandalName} → {sec.secName}</span>
                       <button
                         type="button"
                         onClick={() => removeSecretariat(sec)}
@@ -490,12 +506,14 @@ export function OfficerDialog({
                       >
                         <input
                           type="checkbox"
-                          checked={formData.assignedSecretariats.includes(sec.name)}
-                          onChange={() => toggleSecretariat(sec.name)}
+                          checked={formData.assignedSecretariats.some(
+                            (s) => s.mandalName === sec.mandalName && s.secName === sec.name
+                          )}
+                          onChange={() => toggleSecretariat(sec)}
                           className="h-4 w-4 text-orange-600 rounded"
                         />
                         <span className="text-sm flex-1">
-                          {sec.name} ({sec.mandalName})
+                          {sec.mandalName} → {sec.name}
                         </span>
                         <span className="text-xs text-gray-500">
                           {sec.residentCount.toLocaleString()}

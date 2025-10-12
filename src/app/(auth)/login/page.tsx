@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { signIn, getSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { User, Lock, LogIn, AlertCircle } from "lucide-react"
 
 export default function LoginPage() {
@@ -30,6 +31,8 @@ export default function LoginPage() {
         const session = await getSession()
         if (session?.user?.role === "ADMIN") {
           router.push("/admin")
+        } else if (session?.user?.role === "PANCHAYAT_SECRETARY") {
+          router.push("/panchayat")
         } else {
           router.push("/field-officer")
         }
@@ -54,14 +57,19 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md px-6 animate-fade-in">
         {/* Government Header */}
         <div className="text-center mb-8 space-y-4">
-          {/* Emblem/Logo Placeholder */}
+          {/* Government Emblem */}
           <div className="flex justify-center mb-4">
             <div className="relative">
               <div className="w-24 h-24 bg-gradient-to-br from-orange-500 via-white to-green-600 rounded-full flex items-center justify-center shadow-2xl border-4 border-white animate-scale-in">
-                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center">
-                  <svg className="w-12 h-12 text-blue-900" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5zm0 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm-1-9h2v2h-2v-2zm0 4h2v2h-2v-2z"/>
-                  </svg>
+                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center p-2">
+                  <Image
+                    src="/emblem.png"
+                    alt="Government of India Emblem"
+                    width={64}
+                    height={64}
+                    className="object-contain"
+                    priority
+                  />
                 </div>
               </div>
               {/* Rotating Ring */}

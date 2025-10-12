@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +19,10 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 import {
   BarChart,
@@ -104,11 +108,32 @@ interface AnalyticsData {
   generatedAt: string
 }
 
+type MandalSortColumn = "name" | "total" | "mobile" | "healthId"
+type OfficerSortColumn = "name" | "username" | "role" | "updates"
+type UpdatesSortColumn = "resident" | "field" | "updatedBy" | "date"
+type SortDirection = "asc" | "desc" | null
+
 export default function AdminDashboard() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [expandedMandals, setExpandedMandals] = useState<Set<string>>(new Set())
+
+  // Pagination state for Field Officer Performance table
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+
+  // Sorting state for Mandal table
+  const [mandalSortColumn, setMandalSortColumn] = useState<MandalSortColumn | null>(null)
+  const [mandalSortDirection, setMandalSortDirection] = useState<SortDirection>(null)
+
+  // Sorting state for Field Officer table
+  const [officerSortColumn, setOfficerSortColumn] = useState<OfficerSortColumn | null>(null)
+  const [officerSortDirection, setOfficerSortDirection] = useState<SortDirection>(null)
+
+  // Sorting state for Recent Updates table
+  const [updatesSortColumn, setUpdatesSortColumn] = useState<UpdatesSortColumn | null>(null)
+  const [updatesSortDirection, setUpdatesSortDirection] = useState<SortDirection>(null)
 
   useEffect(() => {
     fetchAnalytics()
@@ -149,6 +174,222 @@ export default function AdminDashboard() {
         newSet.add(mandalName)
       }
       return newSet
+    })
+  }
+
+  // Sorting handlers
+  const handleMandalSort = (column: MandalSortColumn) => {
+    if (mandalSortColumn === column) {
+      if (mandalSortDirection === "asc") {
+        setMandalSortDirection("desc")
+      } else if (mandalSortDirection === "desc") {
+        setMandalSortDirection(null)
+        setMandalSortColumn(null)
+      }
+    } else {
+      setMandalSortColumn(column)
+      setMandalSortDirection("asc")
+    }
+  }
+
+  const handleOfficerSort = (column: OfficerSortColumn) => {
+    if (officerSortColumn === column) {
+      if (officerSortDirection === "asc") {
+        setOfficerSortDirection("desc")
+      } else if (officerSortDirection === "desc") {
+        setOfficerSortDirection(null)
+        setOfficerSortColumn(null)
+      }
+    } else {
+      setOfficerSortColumn(column)
+      setOfficerSortDirection("asc")
+    }
+  }
+
+  const handleUpdatesSort = (column: UpdatesSortColumn) => {
+    if (updatesSortColumn === column) {
+      if (updatesSortDirection === "asc") {
+        setUpdatesSortDirection("desc")
+      } else if (updatesSortDirection === "desc") {
+        setUpdatesSortDirection(null)
+        setUpdatesSortColumn(null)
+      }
+    } else {
+      setUpdatesSortColumn(column)
+      setUpdatesSortDirection("asc")
+    }
+  }
+
+  // Sort icon component
+  const SortIcon = ({
+    column,
+    currentColumn,
+    direction
+  }: {
+    column: string
+    currentColumn: string | null
+    direction: SortDirection
+  }) => {
+    if (currentColumn !== column) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 text-gray-400" />
+    }
+    if (direction === "asc") {
+      return <ArrowUp className="h-4 w-4 ml-1 text-orange-600" />
+    }
+    return <ArrowDown className="h-4 w-4 ml-1 text-orange-600" />
+  }
+
+  // Get sorted mandal data
+  const getSortedMandals = () => {
+    if (!analytics || !mandalSortColumn || !mandalSortDirection) {
+      return analytics?.mandalHierarchy || []
+    }
+
+    return [...analytics.mandalHierarchy].sort((a, b) => {
+      let aValue: number | string
+      let bValue: number | string
+
+      switch (mandalSortColumn) {
+        case "name":
+          aValue = a.mandalName
+          bValue = b.mandalName
+          break
+        case "total":
+          aValue = a.totalResidents
+          bValue = b.totalResidents
+          break
+        case "mobile":
+          aValue = a.mobileCompletionRate
+          bValue = b.mobileCompletionRate
+          break
+        case "healthId":
+          aValue = a.healthIdCompletionRate
+          bValue = b.healthIdCompletionRate
+          break
+        default:
+          return 0
+      }
+
+      if (typeof aValue === "string" && typeof bValue === "string") {
+        return mandalSortDirection === "asc"
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue)
+      }
+
+      return mandalSortDirection === "asc"
+        ? (aValue as number) - (bValue as number)
+        : (bValue as number) - (aValue as number)
+    })
+  }
+
+  // Get sorted officer data
+  const getSortedOfficers = () => {
+    if (!analytics) return []
+
+    let sorted = [...analytics.fieldOfficerPerformance]
+
+    if (officerSortColumn && officerSortDirection) {
+      sorted = sorted.sort((a, b) => {
+        let aValue: number | string
+        let bValue: number | string
+
+        switch (officerSortColumn) {
+          case "name":
+            aValue = a.name
+            bValue = b.name
+            break
+          case "username":
+            aValue = a.username
+            bValue = b.username
+            break
+          case "role":
+            aValue = a.role
+            bValue = b.role
+            break
+          case "updates":
+            aValue = a.updatesCount
+            bValue = b.updatesCount
+            break
+          default:
+            return 0
+        }
+
+        if (typeof aValue === "string" && typeof bValue === "string") {
+          return officerSortDirection === "asc"
+            ? aValue.localeCompare(bValue)
+            : bValue.localeCompare(aValue)
+        }
+
+        return officerSortDirection === "asc"
+          ? (aValue as number) - (bValue as number)
+          : (bValue as number) - (aValue as number)
+      })
+    }
+
+    return sorted
+  }
+
+  // Pagination logic for Field Officer Performance
+  const getPaginatedOfficers = () => {
+    const sorted = getSortedOfficers()
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return sorted.slice(startIndex, endIndex)
+  }
+
+  const totalPages = analytics
+    ? Math.ceil(analytics.fieldOfficerPerformance.length / itemsPerPage)
+    : 0
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handleItemsPerPageChange = (value: number) => {
+    setItemsPerPage(value)
+    setCurrentPage(1) // Reset to first page when changing items per page
+  }
+
+  // Get sorted updates data
+  const getSortedUpdates = () => {
+    if (!analytics || !updatesSortColumn || !updatesSortDirection) {
+      return analytics?.recentUpdates || []
+    }
+
+    return [...analytics.recentUpdates].sort((a, b) => {
+      let aValue: number | string
+      let bValue: number | string
+
+      switch (updatesSortColumn) {
+        case "resident":
+          aValue = a.residentName
+          bValue = b.residentName
+          break
+        case "field":
+          aValue = a.fieldUpdated
+          bValue = b.fieldUpdated
+          break
+        case "updatedBy":
+          aValue = a.updatedBy
+          bValue = b.updatedBy
+          break
+        case "date":
+          aValue = new Date(a.updatedAt).getTime()
+          bValue = new Date(b.updatedAt).getTime()
+          break
+        default:
+          return 0
+      }
+
+      if (typeof aValue === "string" && typeof bValue === "string") {
+        return updatesSortDirection === "asc"
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue)
+      }
+
+      return updatesSortDirection === "asc"
+        ? (aValue as number) - (bValue as number)
+        : (bValue as number) - (aValue as number)
     })
   }
 
@@ -503,18 +744,65 @@ export default function AdminDashboard() {
                     <thead>
                       <tr className="border-b bg-gray-50">
                         <th className="text-left py-2 px-4 w-12"></th>
-                        <th className="text-left py-2 px-4">Name</th>
-                        <th className="text-right py-2 px-4">Total</th>
-                        <th className="text-right py-2 px-4">Mobile %</th>
-                        <th className="text-right py-2 px-4">Health ID %</th>
+                        <th
+                          className="text-left py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("name")}
+                        >
+                          <div className="flex items-center">
+                            Name
+                            <SortIcon
+                              column="name"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("total")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Total
+                            <SortIcon
+                              column="total"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("mobile")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Mobile %
+                            <SortIcon
+                              column="mobile"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("healthId")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Health ID %
+                            <SortIcon
+                              column="healthId"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {analytics.mandalHierarchy.map((mandal, mandalIndex) => (
-                        <>
+                      {getSortedMandals().map((mandal, mandalIndex) => (
+                        <React.Fragment key={`mandal-${mandalIndex}`}>
                           {/* Level 1: Mandal Row */}
                           <tr
-                            key={`mandal-${mandalIndex}`}
                             className="border-b hover:bg-gray-50 cursor-pointer"
                             onClick={() => toggleMandal(mandal.mandalName)}
                           >
@@ -615,7 +903,7 @@ export default function AdminDashboard() {
                                 </td>
                               </tr>
                             ))}
-                        </>
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -635,44 +923,206 @@ export default function AdminDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 px-4">Name</th>
-                        <th className="text-left py-2 px-4">Username</th>
-                        <th className="text-left py-2 px-4">Role</th>
-                        <th className="text-right py-2 px-4">Updates</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analytics.fieldOfficerPerformance.map((officer, index) => (
-                        <tr key={index} className="border-b hover:bg-gray-50">
-                          <td className="py-2 px-4 font-medium">
-                            {officer.name}
-                          </td>
-                          <td className="py-2 px-4 text-gray-600">
-                            @{officer.username}
-                          </td>
-                          <td className="py-2 px-4">
-                            <Badge variant="outline">{officer.role}</Badge>
-                          </td>
-                          <td className="text-right py-2 px-4">
-                            <Badge variant="default" className="bg-cyan-600">
-                              {officer.updatesCount}
-                            </Badge>
-                          </td>
+                <div className="space-y-4">
+                  {/* Items per page selector */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Show</span>
+                      <select
+                        value={itemsPerPage}
+                        onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                        className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      >
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                      <span className="text-sm text-gray-600">entries</span>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      Showing {analytics.fieldOfficerPerformance.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to{" "}
+                      {Math.min(currentPage * itemsPerPage, analytics.fieldOfficerPerformance.length)} of{" "}
+                      {analytics.fieldOfficerPerformance.length} entries
+                    </div>
+                  </div>
+
+                  {/* Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th
+                            className="text-left py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                            onClick={() => handleOfficerSort("name")}
+                          >
+                            <div className="flex items-center">
+                              Name
+                              <SortIcon
+                                column="name"
+                                currentColumn={officerSortColumn}
+                                direction={officerSortDirection}
+                              />
+                            </div>
+                          </th>
+                          <th
+                            className="text-left py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                            onClick={() => handleOfficerSort("username")}
+                          >
+                            <div className="flex items-center">
+                              Username
+                              <SortIcon
+                                column="username"
+                                currentColumn={officerSortColumn}
+                                direction={officerSortDirection}
+                              />
+                            </div>
+                          </th>
+                          <th
+                            className="text-left py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                            onClick={() => handleOfficerSort("role")}
+                          >
+                            <div className="flex items-center">
+                              Role
+                              <SortIcon
+                                column="role"
+                                currentColumn={officerSortColumn}
+                                direction={officerSortDirection}
+                              />
+                            </div>
+                          </th>
+                          <th
+                            className="text-right py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                            onClick={() => handleOfficerSort("updates")}
+                          >
+                            <div className="flex items-center justify-end">
+                              Updates
+                              <SortIcon
+                                column="updates"
+                                currentColumn={officerSortColumn}
+                                direction={officerSortDirection}
+                              />
+                            </div>
+                          </th>
                         </tr>
-                      ))}
-                      {analytics.fieldOfficerPerformance.length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="text-center py-4 text-gray-500">
-                            No updates recorded yet
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {getPaginatedOfficers().map((officer, index) => (
+                          <tr key={index} className="border-b hover:bg-gray-50">
+                            <td className="py-2 px-4 font-medium">
+                              {officer.name}
+                            </td>
+                            <td className="py-2 px-4 text-gray-600">
+                              @{officer.username}
+                            </td>
+                            <td className="py-2 px-4">
+                              <Badge variant="outline">{officer.role}</Badge>
+                            </td>
+                            <td className="text-right py-2 px-4">
+                              <Badge variant="default" className="bg-cyan-600">
+                                {officer.updatesCount}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                        {analytics.fieldOfficerPerformance.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="text-center py-4 text-gray-500">
+                              No updates recorded yet
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="h-8"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+
+                      <div className="flex items-center gap-1">
+                        {/* First page */}
+                        {currentPage > 3 && (
+                          <>
+                            <Button
+                              variant={currentPage === 1 ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageChange(1)}
+                              className="h-8 w-8 p-0"
+                            >
+                              1
+                            </Button>
+                            {currentPage > 4 && (
+                              <span className="px-2 text-gray-500">...</span>
+                            )}
+                          </>
+                        )}
+
+                        {/* Page numbers around current page */}
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter((page) => {
+                            return (
+                              page === currentPage ||
+                              page === currentPage - 1 ||
+                              page === currentPage + 1 ||
+                              page === currentPage - 2 ||
+                              page === currentPage + 2
+                            )
+                          })
+                          .map((page) => (
+                            <Button
+                              key={page}
+                              variant={currentPage === page ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageChange(page)}
+                              className={`h-8 w-8 p-0 ${
+                                currentPage === page ? "bg-cyan-600 hover:bg-cyan-700" : ""
+                              }`}
+                            >
+                              {page}
+                            </Button>
+                          ))}
+
+                        {/* Last page */}
+                        {currentPage < totalPages - 2 && (
+                          <>
+                            {currentPage < totalPages - 3 && (
+                              <span className="px-2 text-gray-500">...</span>
+                            )}
+                            <Button
+                              variant={currentPage === totalPages ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handlePageChange(totalPages)}
+                              className="h-8 w-8 p-0"
+                            >
+                              {totalPages}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="h-8"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -693,16 +1143,64 @@ export default function AdminDashboard() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left py-2 px-4">Resident</th>
-                        <th className="text-left py-2 px-4">Field</th>
+                        <th
+                          className="text-left py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleUpdatesSort("resident")}
+                        >
+                          <div className="flex items-center">
+                            Resident
+                            <SortIcon
+                              column="resident"
+                              currentColumn={updatesSortColumn}
+                              direction={updatesSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-left py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleUpdatesSort("field")}
+                        >
+                          <div className="flex items-center">
+                            Field
+                            <SortIcon
+                              column="field"
+                              currentColumn={updatesSortColumn}
+                              direction={updatesSortDirection}
+                            />
+                          </div>
+                        </th>
                         <th className="text-left py-2 px-4">Old Value</th>
                         <th className="text-left py-2 px-4">New Value</th>
-                        <th className="text-left py-2 px-4">Updated By</th>
-                        <th className="text-left py-2 px-4">Date</th>
+                        <th
+                          className="text-left py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleUpdatesSort("updatedBy")}
+                        >
+                          <div className="flex items-center">
+                            Updated By
+                            <SortIcon
+                              column="updatedBy"
+                              currentColumn={updatesSortColumn}
+                              direction={updatesSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-left py-2 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleUpdatesSort("date")}
+                        >
+                          <div className="flex items-center">
+                            Date
+                            <SortIcon
+                              column="date"
+                              currentColumn={updatesSortColumn}
+                              direction={updatesSortDirection}
+                            />
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {analytics.recentUpdates.slice(0, 10).map((update) => (
+                      {getSortedUpdates().slice(0, 10).map((update) => (
                         <tr key={update.id} className="border-b hover:bg-gray-50">
                           <td className="py-2 px-4">
                             <div>

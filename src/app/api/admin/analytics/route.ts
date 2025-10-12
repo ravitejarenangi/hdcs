@@ -193,6 +193,8 @@ export async function GET(_request: NextRequest) {
         username: true,
         fullName: true,
         role: true,
+        assignedSecretariats: true,
+        mandalName: true,
       },
     })
 
@@ -216,13 +218,46 @@ export async function GET(_request: NextRequest) {
 
     // Combine field officer data with update counts (including 0 updates)
     const fieldOfficerStats = allFieldOfficers
-      .map((officer) => ({
-        userId: officer.id,
-        username: officer.username,
-        name: officer.fullName,
-        role: officer.role,
-        updatesCount: updateCountMap.get(officer.id) || 0,
-      }))
+      .map((officer) => {
+        // Extract mandals from assignedSecretariats for field officers
+        let mandals: string[] = []
+        if (officer.role === "FIELD_OFFICER" && officer.assignedSecretariats) {
+          try {
+            const secretariats = JSON.parse(officer.assignedSecretariats)
+            if (Array.isArray(secretariats)) {
+              // Handle both old and new formats
+              const mandalNames = secretariats.map((s: any) => {
+                if (typeof s === 'string') {
+                  // Old format: "MANDAL -> SECRETARIAT"
+                  const parts = s.split(' -> ')
+                  return parts[0]?.trim()
+                } else if (typeof s === 'object' && s.mandalName) {
+                  // New format: {mandalName: "CHITTOOR", secName: "KONGAREDDYPALLI"}
+                  return s.mandalName
+                }
+                return null
+              }).filter(Boolean)
+
+              // Get unique mandal names
+              mandals = [...new Set(mandalNames)]
+            }
+          } catch (e) {
+            console.error(`Failed to parse assignedSecretariats for officer ${officer.username}:`, e)
+          }
+        } else if (officer.mandalName) {
+          // For Panchayat Secretary
+          mandals = [officer.mandalName]
+        }
+
+        return {
+          userId: officer.id,
+          username: officer.username,
+          name: officer.fullName,
+          role: officer.role,
+          mandals, // Array of mandal names this officer is assigned to
+          updatesCount: updateCountMap.get(officer.id) || 0,
+        }
+      })
       .sort((a, b) => b.updatesCount - a.updatesCount) // Sort by update count descending
 
     // 6a. Count officers who are currently active (made updates in last 15 minutes)

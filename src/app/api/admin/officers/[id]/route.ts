@@ -119,17 +119,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         }
 
         // Verify all secretariats exist
+        // Handle both old format (string[]) and new format (object[])
         const secretariatChecks = await Promise.all(
-          assignedSecretariats.map((secName: string) =>
-            prisma.resident.findFirst({
+          assignedSecretariats.map((sec: any) => {
+            const secName = typeof sec === 'string' ? sec : sec.secName
+            return prisma.resident.findFirst({
               where: { secName },
             })
-          )
+          })
         )
 
         const invalidSecretariats = assignedSecretariats.filter(
-          (_: string, index: number) => !secretariatChecks[index]
-        )
+          (_: any, index: number) => !secretariatChecks[index]
+        ).map((sec: any) => typeof sec === 'string' ? sec : sec.secName)
 
         if (invalidSecretariats.length > 0) {
           return NextResponse.json(

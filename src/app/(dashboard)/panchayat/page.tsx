@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, Activity, TrendingUp, MapPin, UserCheck, BarChart3 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Users, Activity, TrendingUp, MapPin, UserCheck, BarChart3, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import {
   BarChart,
   Bar,
@@ -19,6 +21,7 @@ import {
   Cell,
 } from "recharts"
 import { format } from "date-fns"
+import { toast } from "sonner"
 
 interface Analytics {
   mandalName: string
@@ -69,10 +72,15 @@ interface Analytics {
 
 const COLORS = ["#f97316", "#16a34a", "#3b82f6", "#eab308", "#8b5cf6"]
 
+type SortColumn = "secretariat" | "total" | "mobile" | "healthId" | "avgQuality"
+type SortDirection = "asc" | "desc" | null
+
 export default function PanchayatDashboard() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null)
 
   useEffect(() => {
     fetchAnalytics()
@@ -81,6 +89,7 @@ export default function PanchayatDashboard() {
   const fetchAnalytics = async () => {
     try {
       setLoading(true)
+      setError(null)
       const response = await fetch("/api/panchayat/analytics")
 
       if (!response.ok) {
@@ -89,65 +98,131 @@ export default function PanchayatDashboard() {
 
       const data = await response.json()
       setAnalytics(data)
+      toast.success("Analytics refreshed successfully")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred")
+      const errorMessage = err instanceof Error ? err.message : "An error occurred"
+      setError(errorMessage)
+      toast.error(`Failed to fetch analytics: ${errorMessage}`)
     } finally {
       setLoading(false)
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading mandal analytics...</p>
-        </div>
-      </div>
-    )
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      // Cycle through: asc -> desc -> null
+      if (sortDirection === "asc") {
+        setSortDirection("desc")
+      } else if (sortDirection === "desc") {
+        setSortDirection(null)
+        setSortColumn(null)
+      }
+    } else {
+      setSortColumn(column)
+      setSortDirection("asc")
+    }
   }
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-red-600 font-semibold">Error: {error}</p>
-          <button
-            onClick={fetchAnalytics}
-            className="mt-4 px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    )
+  const getSortedData = () => {
+    if (!analytics || !sortColumn || !sortDirection) {
+      return analytics?.secretariatCompletion || []
+    }
+
+    const sorted = [...analytics.secretariatCompletion].sort((a, b) => {
+      let aValue: number | string
+      let bValue: number | string
+
+      switch (sortColumn) {
+        case "secretariat":
+          aValue = a.secretariatName
+          bValue = b.secretariatName
+          break
+        case "total":
+          aValue = a.totalResidents
+          bValue = b.totalResidents
+          break
+        case "mobile":
+          aValue = a.mobileCompletionRate
+          bValue = b.mobileCompletionRate
+          break
+        case "healthId":
+          aValue = a.healthIdCompletionRate
+          bValue = b.healthIdCompletionRate
+          break
+        case "avgQuality":
+          aValue = (a.mobileCompletionRate + a.healthIdCompletionRate) / 2
+          bValue = (b.mobileCompletionRate + b.healthIdCompletionRate) / 2
+          break
+        default:
+          return 0
+      }
+
+      if (typeof aValue === "string" && typeof bValue === "string") {
+        return sortDirection === "asc"
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue)
+      }
+
+      return sortDirection === "asc"
+        ? (aValue as number) - (bValue as number)
+        : (bValue as number) - (aValue as number)
+    })
+
+    return sorted
   }
 
-  if (!analytics) {
-    return null
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 text-gray-400" />
+    }
+    if (sortDirection === "asc") {
+      return <ArrowUp className="h-4 w-4 ml-1 text-orange-600" />
+    }
+    return <ArrowDown className="h-4 w-4 ml-1 text-orange-600" />
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-green-600 bg-clip-text text-transparent">
-              Panchayat Secretary Dashboard
-            </h1>
-            <p className="text-gray-600 mt-1 flex items-center gap-2">
-              <MapPin className="h-4 w-4" />
-              {analytics.mandalName} Mandal
-            </p>
+    <DashboardLayout requiredRole="PANCHAYAT_SECRETARY">
+      {loading ? (
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading mandal analytics...</p>
           </div>
-          <button
-            onClick={fetchAnalytics}
-            className="px-4 py-2 bg-gradient-to-r from-orange-500 to-green-600 text-white rounded-lg hover:shadow-lg transition-shadow"
-          >
-            Refresh Data
-          </button>
         </div>
+      ) : error ? (
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <p className="text-red-600 font-semibold">Error: {error}</p>
+            <Button
+              onClick={fetchAnalytics}
+              className="mt-4"
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      ) : !analytics ? null : (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-green-600 bg-clip-text text-transparent">
+                Panchayat Secretary Dashboard
+              </h1>
+              <p className="text-gray-600 mt-1 flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                {analytics.mandalName} Mandal
+              </p>
+            </div>
+            <Button
+              onClick={fetchAnalytics}
+              className="bg-gradient-to-r from-orange-500 to-green-600 hover:from-orange-600 hover:to-green-700"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh Data
+            </Button>
+          </div>
 
         {/* Overview Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -234,7 +309,7 @@ export default function PanchayatDashboard() {
               <p className="text-4xl font-bold text-yellow-600">
                 {analytics.overview.recentUpdatesCount.toLocaleString()}
               </p>
-              <p className="text-sm text-gray-600 mt-2">Last 30 days</p>
+              <p className="text-sm text-gray-600 mt-2">Last 6 hours</p>
             </CardContent>
           </Card>
         </div>
@@ -311,15 +386,55 @@ export default function PanchayatDashboard() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-gray-50">
-                    <th className="text-left p-3 font-semibold">Secretariat</th>
-                    <th className="text-right p-3 font-semibold">Total</th>
-                    <th className="text-right p-3 font-semibold">Mobile %</th>
-                    <th className="text-right p-3 font-semibold">Health ID %</th>
-                    <th className="text-right p-3 font-semibold">Avg Quality</th>
+                    <th
+                      className="text-left p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("secretariat")}
+                    >
+                      <div className="flex items-center">
+                        Secretariat
+                        <SortIcon column="secretariat" />
+                      </div>
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("total")}
+                    >
+                      <div className="flex items-center justify-end">
+                        Total
+                        <SortIcon column="total" />
+                      </div>
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("mobile")}
+                    >
+                      <div className="flex items-center justify-end">
+                        Mobile %
+                        <SortIcon column="mobile" />
+                      </div>
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("healthId")}
+                    >
+                      <div className="flex items-center justify-end">
+                        Health ID %
+                        <SortIcon column="healthId" />
+                      </div>
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("avgQuality")}
+                    >
+                      <div className="flex items-center justify-end">
+                        Avg Quality
+                        <SortIcon column="avgQuality" />
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {analytics.secretariatCompletion.map((sec, index) => {
+                  {getSortedData().map((sec, index) => {
                     const avgQuality = Math.round(
                       (sec.mobileCompletionRate + sec.healthIdCompletionRate) / 2
                     )
@@ -423,7 +538,7 @@ export default function PanchayatDashboard() {
         <Card className="border-2 border-green-200">
           <CardHeader>
             <CardTitle>Recent Updates</CardTitle>
-            <CardDescription>Last 50 updates in your mandal (last 30 days)</CardDescription>
+            <CardDescription>Last 50 updates in your mandal (last 6 hours)</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -441,7 +556,7 @@ export default function PanchayatDashboard() {
                   {analytics.recentUpdates.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-6 text-center text-gray-500">
-                        No recent updates in the last 30 days
+                        No recent updates in the last 6 hours
                       </td>
                     </tr>
                   ) : (
@@ -463,7 +578,8 @@ export default function PanchayatDashboard() {
           </CardContent>
         </Card>
       </div>
-    </div>
+      )}
+    </DashboardLayout>
   )
 }
 

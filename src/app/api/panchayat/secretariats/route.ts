@@ -44,9 +44,10 @@ export async function GET(_request: NextRequest) {
       },
     })
 
-    // Format response
+    // Format response - include mandal name in each secretariat
     const secretariatList = secretariats.map((sec) => ({
       name: sec.secName || "",
+      mandalName: mandalName,
       residentCount: sec._count.id,
     }))
 

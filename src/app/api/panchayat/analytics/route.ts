@@ -29,16 +29,49 @@ export async function GET(_request: NextRequest) {
   }
 
   try {
-    // 1. Total residents in mandal
+    // 1. Total residents in mandal (excluding placeholder names)
     const totalResidents = await prisma.resident.count({
-      where: { mandalName },
+      where: {
+        mandalName,
+        name: {
+          not: {
+            startsWith: "UNKNOWN_NAME_",
+          },
+        },
+      },
     })
 
-    // 2. Mobile number completion rate
+    // 2. Mobile number completion rate (excluding placeholders: NULL, "N/A", "0", empty string)
     const residentsWithMobile = await prisma.resident.count({
       where: {
         mandalName,
-        mobileNumber: { not: null },
+        name: {
+          not: {
+            startsWith: "UNKNOWN_NAME_",
+          },
+        },
+        AND: [
+          {
+            mobileNumber: {
+              not: null,
+            },
+          },
+          {
+            mobileNumber: {
+              not: "N/A",
+            },
+          },
+          {
+            mobileNumber: {
+              not: "0",
+            },
+          },
+          {
+            mobileNumber: {
+              not: "",
+            },
+          },
+        ],
       },
     })
     const mobileCompletionRate =
@@ -46,11 +79,37 @@ export async function GET(_request: NextRequest) {
         ? Math.round((residentsWithMobile / totalResidents) * 100)
         : 0
 
-    // 3. Health ID completion rate
+    // 3. Health ID completion rate (excluding placeholders: NULL, "N/A", "0", empty string)
     const residentsWithHealthId = await prisma.resident.count({
       where: {
         mandalName,
-        healthId: { not: null },
+        name: {
+          not: {
+            startsWith: "UNKNOWN_NAME_",
+          },
+        },
+        AND: [
+          {
+            healthId: {
+              not: null,
+            },
+          },
+          {
+            healthId: {
+              not: "N/A",
+            },
+          },
+          {
+            healthId: {
+              not: "0",
+            },
+          },
+          {
+            healthId: {
+              not: "",
+            },
+          },
+        ],
       },
     })
     const healthIdCompletionRate =
@@ -58,24 +117,36 @@ export async function GET(_request: NextRequest) {
         ? Math.round((residentsWithHealthId / totalResidents) * 100)
         : 0
 
-    // 4. Recent updates in mandal (last 30 days)
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    // 4. Recent updates in mandal (last 6 hours, excluding updates to placeholder data)
+    const sixHoursAgo = new Date()
+    sixHoursAgo.setHours(sixHoursAgo.getHours() - 6)
 
     const recentUpdatesCount = await prisma.updateLog.count({
       where: {
-        updateTimestamp: { gte: thirtyDaysAgo },
-        resident: { mandalName },
+        updateTimestamp: { gte: sixHoursAgo },
+        resident: {
+          mandalName,
+          name: {
+            not: {
+              startsWith: "UNKNOWN_NAME_",
+            },
+          },
+        },
       },
     })
 
-    // 5. Secretariat-wise statistics
+    // 5. Secretariat-wise statistics (excluding placeholder names)
     const secretariatStats = await prisma.resident.groupBy({
       by: ["secName"],
       _count: { id: true },
       where: {
         mandalName,
         secName: { not: null },
+        name: {
+          not: {
+            startsWith: "UNKNOWN_NAME_",
+          },
+        },
       },
       orderBy: {
         _count: { id: "desc" },
@@ -87,7 +158,7 @@ export async function GET(_request: NextRequest) {
       residentCount: stat._count.id,
     }))
 
-    // 6. Secretariat completion statistics
+    // 6. Secretariat completion statistics (excluding placeholders)
     const secretariatCompletion = await prisma.$queryRaw<
       Array<{
         secName: string
@@ -96,13 +167,29 @@ export async function GET(_request: NextRequest) {
         withHealthId: bigint
       }>
     >`
-      SELECT 
+      SELECT
         sec_name as secName,
         COUNT(*) as totalResidents,
-        SUM(CASE WHEN mobile_number IS NOT NULL THEN 1 ELSE 0 END) as withMobile,
-        SUM(CASE WHEN health_id IS NOT NULL THEN 1 ELSE 0 END) as withHealthId
+        SUM(CASE
+          WHEN mobile_number IS NOT NULL
+            AND mobile_number != 'N/A'
+            AND mobile_number != '0'
+            AND mobile_number != ''
+          THEN 1
+          ELSE 0
+        END) as withMobile,
+        SUM(CASE
+          WHEN health_id IS NOT NULL
+            AND health_id != 'N/A'
+            AND health_id != '0'
+            AND health_id != ''
+          THEN 1
+          ELSE 0
+        END) as withHealthId
       FROM residents
-      WHERE mandal_name = ${mandalName} AND sec_name IS NOT NULL
+      WHERE mandal_name = ${mandalName}
+        AND sec_name IS NOT NULL
+        AND name NOT LIKE 'UNKNOWN_NAME_%'
       GROUP BY sec_name
       ORDER BY totalResidents DESC
     `
@@ -176,7 +263,7 @@ export async function GET(_request: NextRequest) {
       updateCount: updateCountMap.get(officer.id) || 0,
     }))
 
-    // 8. Updates timeline (last 7 days)
+    // 8. Updates timeline (last 7 days, excluding updates to placeholder data)
     const sevenDaysAgo = new Date()
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
@@ -186,13 +273,14 @@ export async function GET(_request: NextRequest) {
         updateCount: bigint
       }>
     >`
-      SELECT 
+      SELECT
         DATE(update_timestamp) as date,
         COUNT(*) as updateCount
       FROM update_logs ul
       INNER JOIN residents r ON ul.resident_id = r.resident_id
       WHERE r.mandal_name = ${mandalName}
         AND ul.update_timestamp >= ${sevenDaysAgo}
+        AND r.name NOT LIKE 'UNKNOWN_NAME_%'
       GROUP BY DATE(update_timestamp)
       ORDER BY date ASC
     `
@@ -202,11 +290,18 @@ export async function GET(_request: NextRequest) {
       updateCount: Number(item.updateCount),
     }))
 
-    // 9. Recent updates list
+    // 9. Recent updates list (excluding updates to placeholder data)
     const recentUpdates = await prisma.updateLog.findMany({
       where: {
-        updateTimestamp: { gte: thirtyDaysAgo },
-        resident: { mandalName },
+        updateTimestamp: { gte: sixHoursAgo },
+        resident: {
+          mandalName,
+          name: {
+            not: {
+              startsWith: "UNKNOWN_NAME_",
+            },
+          },
+        },
       },
       include: {
         user: {

@@ -26,7 +26,16 @@ model User {
 
   updateLogs  UpdateLog[]
 
+  // Single column indexes
   @@index([mandalName])
+  @@index([role])
+  @@index([isActive])
+  @@index([lastLogin])
+
+  // Composite indexes for common query patterns
+  @@index([role, mandalName])
+  @@index([role, isActive])
+
   @@map("users")
 }
 
@@ -44,9 +53,9 @@ model Resident {
   // Demographic Data Fields (merged from DemographicData table)
   distName      String? @map("dist_name")
   mandalName    String? @map("mandal_name")
-  mandalCode    String? @map("mandal_code")
+  mandalCode    Int?    @map("mandal_code")
   secName       String? @map("sec_name")
-  secCode       String? @map("sec_code")
+  secCode       Int?    @map("sec_code")
   ruralUrban    String? @map("rural_urban")
   clusterName   String? @map("cluster_name")
   qualification         String?
@@ -70,11 +79,25 @@ model Resident {
 
   updateLogs   UpdateLog[]
 
+  // Single column indexes
   @@index([uid])
   @@index([hhId])
   @@index([residentId])
   @@index([mandalName])
   @@index([secName])
+  @@index([phcName])
+  @@index([mobileNumber])
+  @@index([healthId])
+  @@index([name])
+  @@index([gender])
+  @@index([createdAt])
+  @@index([updatedAt])
+
+  // Composite indexes for common query patterns
+  @@index([mandalName, secName])
+  @@index([mandalName, phcName])
+  @@index([secName, phcName])
+
   @@map("residents")
 }
 
@@ -91,7 +114,16 @@ model UpdateLog {
   resident Resident @relation(fields: [residentId], references: [residentId])
   user     User     @relation(fields: [userId], references: [id])
 
+  // Single column indexes
   @@index([updateTimestamp])
+  @@index([residentId])
+  @@index([userId])
+  @@index([fieldUpdated])
+
+  // Composite indexes for common query patterns
+  @@index([residentId, updateTimestamp])
+  @@index([userId, updateTimestamp])
+
   @@map("update_logs")
 }
 
@@ -109,7 +141,12 @@ model ImportLog {
   errorLog         String?  @map("error_log") @db.Text
   importedAt       DateTime @default(now()) @map("imported_at")
 
+  // Indexes for filtering and analytics
   @@index([importedAt])
+  @@index([userId])
+  @@index([status])
+  @@index([importMode])
+
   @@map("import_logs")
 }
 

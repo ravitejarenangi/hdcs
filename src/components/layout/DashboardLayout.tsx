@@ -10,7 +10,7 @@ import { Loader2 } from "lucide-react"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
-  requiredRole?: "ADMIN" | "FIELD_OFFICER"
+  requiredRole?: "ADMIN" | "FIELD_OFFICER" | "PANCHAYAT_SECRETARY"
 }
 
 export function DashboardLayout({
@@ -30,6 +30,12 @@ export function DashboardLayout({
     }
   }, [])
 
+  // Handle sidebar collapse toggle
+  const handleToggleCollapse = (collapsed: boolean) => {
+    setIsCollapsed(collapsed)
+    localStorage.setItem("sidebar-collapsed", String(collapsed))
+  }
+
   // Authentication and authorization check
   useEffect(() => {
     if (status === "loading") return
@@ -43,6 +49,8 @@ export function DashboardLayout({
       // Redirect to appropriate dashboard based on role
       if (session?.user?.role === "ADMIN") {
         router.push("/admin")
+      } else if (session?.user?.role === "PANCHAYAT_SECRETARY") {
+        router.push("/panchayat")
       } else if (session?.user?.role === "FIELD_OFFICER") {
         router.push("/field-officer")
       } else {
@@ -80,6 +88,8 @@ export function DashboardLayout({
       <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={handleToggleCollapse}
       />
 
       {/* Main Content */}
@@ -91,7 +101,7 @@ export function DashboardLayout({
           isCollapsed && "md:ml-16"
         )}
       >
-        <div className="container mx-auto p-4 md:p-6 lg:p-8">
+        <div className="container mx-auto p-4 md:px-6 md:pt-4 md:pb-6 lg:px-8 lg:pt-4 lg:pb-8">
           {children}
         </div>
       </main>

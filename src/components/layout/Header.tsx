@@ -32,6 +32,8 @@ export function Header({ onMenuClick }: HeaderProps) {
     switch (role) {
       case "ADMIN":
         return "bg-gradient-to-r from-red-500 to-orange-500 text-white"
+      case "PANCHAYAT_SECRETARY":
+        return "bg-gradient-to-r from-green-500 to-emerald-500 text-white"
       case "FIELD_OFFICER":
         return "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
       default:
@@ -43,10 +45,25 @@ export function Header({ onMenuClick }: HeaderProps) {
     switch (role) {
       case "ADMIN":
         return <Shield className="h-3 w-3" />
+      case "PANCHAYAT_SECRETARY":
+        return <User className="h-3 w-3" />
       case "FIELD_OFFICER":
         return <User className="h-3 w-3" />
       default:
         return null
+    }
+  }
+
+  const getRoleDisplayName = (role: string) => {
+    switch (role) {
+      case "ADMIN":
+        return "Admin"
+      case "PANCHAYAT_SECRETARY":
+        return "Panchayat Secretary"
+      case "FIELD_OFFICER":
+        return "Field Officer"
+      default:
+        return "User"
     }
   }
 
@@ -100,7 +117,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                 >
                   <span className="flex items-center gap-1">
                     {getRoleIcon(session?.user?.role || "")}
-                    {session?.user?.role === "ADMIN" ? "Admin" : "Field Officer"}
+                    {getRoleDisplayName(session?.user?.role || "")}
                   </span>
                 </Badge>
               </div>
@@ -134,7 +151,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   >
                     <span className="flex items-center gap-1">
                       {getRoleIcon(session?.user?.role || "")}
-                      {session?.user?.role === "ADMIN" ? "Admin" : "Field Officer"}
+                      {getRoleDisplayName(session?.user?.role || "")}
                     </span>
                   </Badge>
                 </div>

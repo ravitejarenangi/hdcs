@@ -37,7 +37,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Parse request body
     const body = await request.json()
-    const { fullName, mobileNumber, assignedSecretariats, isActive } = body
+    // Using 'let' to allow reassignment during format conversion
+    let { fullName, mobileNumber, assignedSecretariats, isActive } = body
 
     // Validate at least one field is provided
     if (
@@ -93,12 +94,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         )
       }
 
+      // Convert string array to object array if needed (backward compatibility)
+      let secretariatObjects: Array<{ mandalName: string; secName: string }>
+
+      if (typeof assignedSecretariats[0] === "string") {
+        // Old format: ["Secretariat1", "Secretariat2"]
+        // Convert to new format: [{ mandalName: "...", secName: "..." }]
+        secretariatObjects = assignedSecretariats.map((secName: string) => ({
+          mandalName,
+          secName,
+        }))
+      } else {
+        // New format: already objects
+        secretariatObjects = assignedSecretariats
+      }
+
       // Validate that all secretariats belong to this mandal
+      const secretariatNames = secretariatObjects.map((s) => s.secName)
+
       const secretariatsInMandal = await prisma.resident.groupBy({
         by: ["secName"],
         where: {
           mandalName,
-          secName: { in: assignedSecretariats },
+          secName: { in: secretariatNames },
         },
       })
 
@@ -106,7 +124,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         .map((s) => s.secName)
         .filter((name): name is string => name !== null)
 
-      const invalidSecretariats = assignedSecretariats.filter(
+      const invalidSecretariats = secretariatNames.filter(
         (sec: string) => !validSecretariats.includes(sec)
       )
 
@@ -118,6 +136,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           { status: 400 }
         )
       }
+
+      // Store the converted format
+      assignedSecretariats = secretariatObjects
     }
 
     // Build update data

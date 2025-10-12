@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ResidentsTable } from "@/components/tables/ResidentsTable"
-import { Search, Filter, Loader2, AlertCircle, Users } from "lucide-react"
+import { Search, Filter, Loader2, AlertCircle, Users, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { toast } from "sonner"
 
 interface Resident {
@@ -46,11 +47,23 @@ interface UIDSearchResult {
 interface AdvancedSearchResult {
   residents: Resident[]
   totalResidents: number
+  pagination: {
+    currentPage: number
+    totalPages: number
+    pageSize: number
+    hasNextPage: boolean
+    hasPreviousPage: boolean
+  }
   filters: {
     mandal: string | null
     secretariat: string | null
     phc: string | null
   }
+}
+
+interface AssignedSecretariat {
+  mandalName: string
+  secName: string
 }
 
 interface LocationOption {
@@ -59,6 +72,8 @@ interface LocationOption {
 }
 
 export default function FieldOfficerDashboard() {
+  const { data: session } = useSession()
+
   // UID Search State
   const [searchUid, setSearchUid] = useState("")
   const [uidSearchResult, setUidSearchResult] = useState<UIDSearchResult | null>(null)
@@ -73,19 +88,43 @@ export default function FieldOfficerDashboard() {
   const [isAdvancedSearching, setIsAdvancedSearching] = useState(false)
   const [advancedError, setAdvancedError] = useState("")
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+
+  // Table Search State (for filtering results)
+  const [tableSearchTerm, setTableSearchTerm] = useState("")
+
   // Location Options State
   const [mandals, setMandals] = useState<LocationOption[]>([])
   const [secretariats, setSecretariats] = useState<LocationOption[]>([])
   const [phcs, setPhcs] = useState<LocationOption[]>([])
   const [isLoadingLocations, setIsLoadingLocations] = useState(false)
 
+  // Assigned Secretariats State (for Field Officers)
+  const [assignedSecretariats, setAssignedSecretariats] = useState<AssignedSecretariat[]>([])
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false)
+
   // Active Tab
   const [activeTab, setActiveTab] = useState("uid")
 
-  // Load mandals on component mount
+  // Load assigned secretariats for Field Officer on component mount
   useEffect(() => {
-    loadMandals()
+    loadAssignedSecretariats()
   }, [])
+
+  // Auto-select mandal and secretariat for Field Officers
+  useEffect(() => {
+    if (assignedSecretariats.length > 0) {
+      // Get unique mandals from assigned secretariats
+      const uniqueMandals = [...new Set(assignedSecretariats.map((s) => s.mandalName))]
+
+      // If only one mandal, auto-select it
+      if (uniqueMandals.length === 1 && !selectedMandal) {
+        setSelectedMandal(uniqueMandals[0])
+      }
+    }
+  }, [assignedSecretariats, selectedMandal])
 
   // Load secretariats when mandal changes
   useEffect(() => {
@@ -99,6 +138,21 @@ export default function FieldOfficerDashboard() {
     }
   }, [selectedMandal])
 
+  // Auto-select secretariat if only one is assigned for the selected mandal
+  useEffect(() => {
+    if (selectedMandal && secretariats.length > 0 && !selectedSecretariat) {
+      // Get assigned secretariats for the selected mandal
+      const assignedForMandal = assignedSecretariats.filter(
+        (s) => s.mandalName === selectedMandal
+      )
+
+      // If only one secretariat is assigned for this mandal, auto-select it
+      if (assignedForMandal.length === 1) {
+        setSelectedSecretariat(assignedForMandal[0].secName)
+      }
+    }
+  }, [secretariats, selectedMandal, assignedSecretariats, selectedSecretariat])
+
   // Load PHCs when secretariat changes
   useEffect(() => {
     if (selectedSecretariat) {
@@ -108,6 +162,48 @@ export default function FieldOfficerDashboard() {
       setPhcs([])
     }
   }, [selectedSecretariat, selectedMandal])
+
+  const loadAssignedSecretariats = async () => {
+    setIsLoadingAssignments(true)
+    try {
+      const response = await fetch("/api/field-officer/assigned-secretariats")
+      const data = await response.json()
+
+      if (response.ok) {
+        // Ensure secretariats is an array of objects with mandalName and secName
+        const secretariats = Array.isArray(data.secretariats) ? data.secretariats : []
+
+        // Validate format
+        const validSecretariats = secretariats.filter(
+          (s: any) =>
+            s &&
+            typeof s === 'object' &&
+            typeof s.mandalName === 'string' &&
+            typeof s.secName === 'string'
+        )
+
+        setAssignedSecretariats(validSecretariats)
+
+        // Set mandals based on assigned secretariats
+        const uniqueMandals = data.uniqueMandals || []
+        setMandals(uniqueMandals.map((m: string) => ({ name: m })))
+      } else {
+        // Clear assignments on error
+        setAssignedSecretariats([])
+        toast.error("Failed to load assigned secretariats", {
+          description: typeof data.error === 'string' ? data.error : "Please contact your administrator",
+        })
+      }
+    } catch (error) {
+      // Clear assignments on error
+      setAssignedSecretariats([])
+      toast.error("Network error", {
+        description: "Failed to load assigned secretariats",
+      })
+    } finally {
+      setIsLoadingAssignments(false)
+    }
+  }
 
   const loadMandals = async () => {
     setIsLoadingLocations(true)
@@ -136,7 +232,20 @@ export default function FieldOfficerDashboard() {
       const response = await fetch(`/api/locations/secretariats?mandal=${encodeURIComponent(mandal)}`)
       const data = await response.json()
       if (response.ok) {
-        setSecretariats(data.secretariats)
+        // Filter secretariats based on assigned secretariats for Field Officers
+        let filteredSecretariats = data.secretariats
+
+        if (assignedSecretariats.length > 0) {
+          const assignedSecNames = assignedSecretariats
+            .filter((s) => s.mandalName === mandal)
+            .map((s) => s.secName)
+
+          filteredSecretariats = data.secretariats.filter((sec: LocationOption) =>
+            assignedSecNames.includes(sec.name)
+          )
+        }
+
+        setSecretariats(filteredSecretariats)
       } else {
         toast.error("Failed to load secretariats", {
           description: data.error || "Please try again",
@@ -222,7 +331,7 @@ export default function FieldOfficerDashboard() {
     }
   }
 
-  const handleAdvancedSearch = async () => {
+  const handleAdvancedSearch = async (page = 1) => {
     if (!selectedMandal && !selectedSecretariat && !selectedPhc) {
       setAdvancedError("Please select at least one filter")
       toast.error("Validation Error", {
@@ -239,6 +348,8 @@ export default function FieldOfficerDashboard() {
       if (selectedMandal) params.append("mandal", selectedMandal)
       if (selectedSecretariat) params.append("secretariat", selectedSecretariat)
       if (selectedPhc) params.append("phc", selectedPhc)
+      params.append("page", page.toString())
+      params.append("limit", pageSize.toString())
 
       const response = await fetch(`/api/residents/search?${params.toString()}`)
       const data = await response.json()
@@ -251,6 +362,7 @@ export default function FieldOfficerDashboard() {
         })
       } else {
         setAdvancedSearchResult(data)
+        setCurrentPage(page)
         toast.success("Search Complete!", {
           description: `Found ${data.totalResidents} resident(s)`,
         })
@@ -264,6 +376,16 @@ export default function FieldOfficerDashboard() {
     } finally {
       setIsAdvancedSearching(false)
     }
+  }
+
+  const handlePageChange = (newPage: number) => {
+    handleAdvancedSearch(newPage)
+  }
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize)
+    setCurrentPage(1)
+    handleAdvancedSearch(1)
   }
 
   const handleUidUpdateSuccess = () => {
@@ -282,6 +404,47 @@ export default function FieldOfficerDashboard() {
     }
   }
 
+  // Filter residents based on table search term
+  const filterResidents = (residents: Resident[]): Resident[] => {
+    if (!tableSearchTerm.trim()) {
+      return residents
+    }
+
+    const searchLower = tableSearchTerm.toLowerCase().trim()
+
+    return residents.filter((resident) => {
+      // Search across multiple fields
+      const searchableFields = [
+        resident.name,
+        resident.uid,
+        resident.hhId,
+        resident.residentId,
+        resident.mobileNumber,
+        resident.healthId,
+        resident.gender,
+        resident.age?.toString(),
+        resident.mandalName,
+        resident.secName,
+        resident.phcName,
+      ]
+
+      return searchableFields.some((field) =>
+        field?.toLowerCase().includes(searchLower)
+      )
+    })
+  }
+
+  // Get filtered residents for display
+  const getFilteredResidents = (): Resident[] => {
+    if (!advancedSearchResult) return []
+    return filterResidents(advancedSearchResult.residents)
+  }
+
+  // Clear table search
+  const clearTableSearch = () => {
+    setTableSearchTerm("")
+  }
+
   const clearUidSearch = () => {
     setSearchUid("")
     setUidSearchResult(null)
@@ -298,12 +461,12 @@ export default function FieldOfficerDashboard() {
 
   return (
     <DashboardLayout requiredRole="FIELD_OFFICER">
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">Field Officer Dashboard</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Field Officer Dashboard</h1>
+            <p className="text-sm md:text-base text-gray-600 mt-1">
               Search and update resident information
             </p>
           </div>
@@ -311,65 +474,68 @@ export default function FieldOfficerDashboard() {
 
         {/* Tabs for Search Methods */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="uid" className="flex items-center gap-2">
-              <Search className="h-4 w-4" />
-              UID Search
+          <TabsList className="grid w-full grid-cols-2 max-w-full md:max-w-md">
+            <TabsTrigger value="uid" className="flex items-center gap-1 md:gap-2 text-sm md:text-base">
+              <Search className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">UID Search</span>
+              <span className="sm:hidden">UID</span>
             </TabsTrigger>
-            <TabsTrigger value="advanced" className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              Advanced Filter
+            <TabsTrigger value="advanced" className="flex items-center gap-1 md:gap-2 text-sm md:text-base">
+              <Filter className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Advanced Filter</span>
+              <span className="sm:hidden">Filter</span>
             </TabsTrigger>
           </TabsList>
 
           {/* UID Search Tab */}
-          <TabsContent value="uid" className="space-y-6">
+          <TabsContent value="uid" className="space-y-4 md:space-y-6">
             {/* Search Section */}
             <Card className="border-2 border-orange-200 shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <Search className="h-6 w-6 text-orange-600" />
+              <CardHeader className="p-4 md:p-6">
+                <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
+                  <Search className="h-5 w-5 md:h-6 md:w-6 text-orange-600" />
                   Search Resident by UID
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-sm">
                   Enter the 12-digit Aadhaar number (UID) to search for a resident and their household members
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 md:p-6">
                 <div className="space-y-4">
-                  <div className="flex gap-4">
+                  <div className="flex flex-col md:flex-row gap-3 md:gap-4">
                     <div className="flex-1 space-y-2">
-                      <Label htmlFor="uid-search">UID (Aadhaar Number)</Label>
+                      <Label htmlFor="uid-search" className="text-sm md:text-base">UID (Aadhaar Number)</Label>
                       <Input
                         id="uid-search"
-                        placeholder="Enter 12-digit UID (e.g., 123456789012)"
+                        placeholder="Enter 12-digit UID"
                         value={searchUid}
                         onChange={(e) => {
                           setSearchUid(e.target.value)
                           setUidError("")
                         }}
                         onKeyPress={handleKeyPress}
-                        className="text-lg"
+                        className="text-base md:text-lg h-11 md:h-auto"
                         maxLength={12}
                         disabled={isUidSearching}
                       />
                     </div>
-                    <div className="flex items-end gap-2">
+                    <div className="flex md:items-end gap-2 w-full md:w-auto">
                       <Button
                         onClick={handleUidSearch}
                         disabled={isUidSearching}
-                        className="bg-orange-600 hover:bg-orange-700"
+                        className="bg-orange-600 hover:bg-orange-700 flex-1 md:flex-none h-11 md:h-11 md:px-6"
                         size="lg"
                       >
                         {isUidSearching ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Searching...
+                            <Loader2 className="mr-2 h-4 w-4 md:h-5 md:w-5 animate-spin" />
+                            <span className="hidden sm:inline text-base">Searching...</span>
+                            <span className="sm:hidden">Search...</span>
                           </>
                         ) : (
                           <>
-                            <Search className="mr-2 h-4 w-4" />
-                            Search
+                            <Search className="mr-2 h-4 w-4 md:h-5 md:w-5" />
+                            <span className="text-base">Search</span>
                           </>
                         )}
                       </Button>
@@ -378,16 +544,17 @@ export default function FieldOfficerDashboard() {
                           onClick={clearUidSearch}
                           variant="outline"
                           size="lg"
+                          className="h-11 md:h-11 md:px-6"
                         >
-                          Clear
+                          <span className="text-base">Clear</span>
                         </Button>
                       )}
                     </div>
                   </div>
 
                   {uidError && (
-                    <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                      <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                    <div className="flex items-center gap-2 p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm md:text-base">
+                      <AlertCircle className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
                       <span>{uidError}</span>
                     </div>
                   )}
@@ -398,13 +565,13 @@ export default function FieldOfficerDashboard() {
             {/* UID Search Results */}
             {uidSearchResult && (
               <Card className="border-2 border-green-200 shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-xl">
-                    <Users className="h-6 w-6 text-green-600" />
+                <CardHeader className="p-4 md:p-6">
+                  <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
+                    <Users className="h-5 w-5 md:h-6 md:w-6 text-green-600" />
                     Household Members
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-4 md:p-6">
                   <ResidentsTable
                     residents={uidSearchResult.householdMembers}
                     searchedResidentId={uidSearchResult.searchedResident.residentId}
@@ -418,12 +585,12 @@ export default function FieldOfficerDashboard() {
             {/* Empty State for UID Search */}
             {!uidSearchResult && !uidError && (
               <Card className="border-dashed border-2 border-gray-300">
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <Search className="h-16 w-16 text-gray-400 mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                <CardContent className="flex flex-col items-center justify-center py-8 md:py-12 px-4 text-center">
+                  <Search className="h-12 w-12 md:h-16 md:w-16 text-gray-400 mb-3 md:mb-4" />
+                  <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-2">
                     No Search Results
                   </h3>
-                  <p className="text-gray-500 max-w-md">
+                  <p className="text-sm md:text-base text-gray-500 max-w-md">
                     Enter a UID (Aadhaar number) in the search box above to find residents and update their information.
                   </p>
                 </CardContent>
@@ -432,75 +599,122 @@ export default function FieldOfficerDashboard() {
           </TabsContent>
 
           {/* Advanced Filter Tab */}
-          <TabsContent value="advanced" className="space-y-6">
+          <TabsContent value="advanced" className="space-y-4 md:space-y-6">
             {/* Filter Section */}
             <Card className="border-2 border-green-200 shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <Filter className="h-6 w-6 text-green-600" />
+              <CardHeader className="p-4 md:p-6">
+                <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
+                  <Filter className="h-5 w-5 md:h-6 md:w-6 text-green-600" />
                   Advanced Filter Search
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-sm">
                   Select filters to search for residents by location (Mandal → Secretariat → PHC)
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 md:p-6">
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Mandal Filter */}
                     <div className="space-y-2">
-                      <Label htmlFor="mandal-filter">Mandal</Label>
+                      <Label htmlFor="mandal-filter" className="text-sm md:text-base">
+                        Mandal
+                        {assignedSecretariats.length > 0 && (
+                          <span className="ml-2 text-xs text-gray-500">(Assigned)</span>
+                        )}
+                      </Label>
                       <Select
                         value={selectedMandal}
                         onValueChange={setSelectedMandal}
-                        disabled={isLoadingLocations || isAdvancedSearching}
+                        disabled={
+                          isLoadingLocations ||
+                          isAdvancedSearching ||
+                          assignedSecretariats.length > 0
+                        }
                       >
-                        <SelectTrigger id="mandal-filter">
+                        <SelectTrigger
+                          id="mandal-filter"
+                          className={`h-11 md:h-auto ${
+                            assignedSecretariats.length > 0
+                              ? "bg-gray-100 cursor-not-allowed"
+                              : ""
+                          }`}
+                        >
                           <SelectValue placeholder="Select Mandal" />
                         </SelectTrigger>
                         <SelectContent>
                           {mandals.map((mandal) => (
                             <SelectItem key={mandal.name} value={mandal.name}>
-                              {mandal.name} ({mandal.residentCount} residents)
+                              {mandal.name}
+                              {mandal.residentCount && ` (${mandal.residentCount} residents)`}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      {assignedSecretariats.length > 0 && (
+                        <p className="text-xs text-blue-600">
+                          This is your assigned mandal and cannot be changed
+                        </p>
+                      )}
                     </div>
 
                     {/* Secretariat Filter */}
                     <div className="space-y-2">
-                      <Label htmlFor="secretariat-filter">Secretariat</Label>
+                      <Label htmlFor="secretariat-filter" className="text-sm md:text-base">
+                        Secretariat
+                        {assignedSecretariats.length > 0 && (
+                          <span className="ml-2 text-xs text-gray-500">(Assigned)</span>
+                        )}
+                      </Label>
                       <Select
                         value={selectedSecretariat}
                         onValueChange={setSelectedSecretariat}
-                        disabled={!selectedMandal || isLoadingLocations || isAdvancedSearching}
+                        disabled={
+                          !selectedMandal ||
+                          isLoadingLocations ||
+                          isAdvancedSearching ||
+                          (assignedSecretariats.length > 0 && secretariats.length === 1)
+                        }
                       >
-                        <SelectTrigger id="secretariat-filter">
+                        <SelectTrigger
+                          id="secretariat-filter"
+                          className={`h-11 md:h-auto ${
+                            assignedSecretariats.length > 0 && secretariats.length === 1
+                              ? "bg-gray-100 cursor-not-allowed"
+                              : ""
+                          }`}
+                        >
                           <SelectValue placeholder="Select Secretariat" />
                         </SelectTrigger>
                         <SelectContent>
                           {secretariats.map((sec) => (
                             <SelectItem key={sec.name} value={sec.name}>
-                              {sec.name} ({sec.residentCount} residents)
+                              {sec.name}
+                              {sec.residentCount && ` (${sec.residentCount} residents)`}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      {!selectedMandal && (
+                      {!selectedMandal && assignedSecretariats.length === 0 && (
                         <p className="text-xs text-gray-500">Select a mandal first</p>
+                      )}
+                      {assignedSecretariats.length > 0 && secretariats.length > 0 && (
+                        <p className="text-xs text-blue-600">
+                          {secretariats.length === 1
+                            ? "This is your assigned secretariat"
+                            : `You can select from ${secretariats.length} assigned secretariats`}
+                        </p>
                       )}
                     </div>
 
                     {/* PHC Filter */}
                     <div className="space-y-2">
-                      <Label htmlFor="phc-filter">PHC (Primary Health Center)</Label>
+                      <Label htmlFor="phc-filter" className="text-sm md:text-base">PHC (Primary Health Center)</Label>
                       <Select
                         value={selectedPhc}
                         onValueChange={setSelectedPhc}
                         disabled={!selectedSecretariat || isLoadingLocations || isAdvancedSearching}
                       >
-                        <SelectTrigger id="phc-filter">
+                        <SelectTrigger id="phc-filter" className="h-11 md:h-auto">
                           <SelectValue placeholder="Select PHC" />
                         </SelectTrigger>
                         <SelectContent>
@@ -517,22 +731,23 @@ export default function FieldOfficerDashboard() {
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Button
-                      onClick={handleAdvancedSearch}
+                      onClick={() => handleAdvancedSearch()}
                       disabled={isAdvancedSearching || (!selectedMandal && !selectedSecretariat && !selectedPhc)}
-                      className="bg-green-600 hover:bg-green-700"
+                      className="bg-green-600 hover:bg-green-700 w-full sm:w-auto h-11 md:h-11 md:px-6"
                       size="lg"
                     >
                       {isAdvancedSearching ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Searching...
+                          <Loader2 className="mr-2 h-4 w-4 md:h-5 md:w-5 animate-spin" />
+                          <span className="hidden sm:inline text-base">Searching...</span>
+                          <span className="sm:hidden">Search...</span>
                         </>
                       ) : (
                         <>
-                          <Search className="mr-2 h-4 w-4" />
-                          Search Residents
+                          <Search className="mr-2 h-4 w-4 md:h-5 md:w-5" />
+                          <span className="text-base">Search Residents</span>
                         </>
                       )}
                     </Button>
@@ -541,15 +756,16 @@ export default function FieldOfficerDashboard() {
                         onClick={clearAdvancedSearch}
                         variant="outline"
                         size="lg"
+                        className="w-full sm:w-auto h-11 md:h-11 md:px-6"
                       >
-                        Clear Filters
+                        <span className="text-base">Clear Filters</span>
                       </Button>
                     )}
                   </div>
 
                   {advancedError && (
-                    <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                      <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                    <div className="flex items-center gap-2 p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm md:text-base">
+                      <AlertCircle className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
                       <span>{advancedError}</span>
                     </div>
                   )}
@@ -560,15 +776,15 @@ export default function FieldOfficerDashboard() {
             {/* Advanced Search Results */}
             {advancedSearchResult && (
               <Card className="border-2 border-orange-200 shadow-lg">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="flex items-center gap-2 text-xl">
-                        <Users className="h-6 w-6 text-orange-600" />
+                <CardHeader className="p-4 md:p-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-3 sm:gap-0">
+                    <div className="flex-1">
+                      <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
+                        <Users className="h-5 w-5 md:h-6 md:w-6 text-orange-600" />
                         Search Results
                       </CardTitle>
                       <CardDescription className="mt-2">
-                        <div className="space-y-1 text-sm">
+                        <div className="space-y-1 text-xs md:text-sm">
                           {advancedSearchResult.filters.mandal && (
                             <div>
                               <strong>Mandal:</strong> {advancedSearchResult.filters.mandal}
@@ -587,21 +803,182 @@ export default function FieldOfficerDashboard() {
                         </div>
                       </CardDescription>
                     </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-orange-600">
+                    <div className="text-left sm:text-right">
+                      <div className="text-xl md:text-2xl font-bold text-orange-600">
                         {advancedSearchResult.totalResidents}
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-xs md:text-sm text-gray-600">
                         {advancedSearchResult.totalResidents === 1 ? "Resident" : "Residents"}
                       </div>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <ResidentsTable
-                    residents={advancedSearchResult.residents}
-                    onUpdateSuccess={handleAdvancedUpdateSuccess}
-                  />
+                <CardContent className="space-y-4 p-4 md:p-6">
+                  {/* Search and Page Size Controls */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+                    {/* Search Input */}
+                    <div className="flex-1 w-full sm:max-w-md">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          type="text"
+                          placeholder="Search by name, UID, phone..."
+                          value={tableSearchTerm}
+                          onChange={(e) => setTableSearchTerm(e.target.value)}
+                          className="pl-10 pr-10 h-11 md:h-auto text-sm md:text-base"
+                        />
+                        {tableSearchTerm && (
+                          <button
+                            onClick={clearTableSearch}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 w-11 h-11 flex items-center justify-center"
+                            aria-label="Clear search"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Page Size Selector */}
+                    <div className="flex items-center gap-2 justify-end sm:justify-start">
+                      <Label htmlFor="page-size" className="text-xs md:text-sm whitespace-nowrap">
+                        Show:
+                      </Label>
+                      <Select
+                        value={pageSize.toString()}
+                        onValueChange={(value) => handlePageSizeChange(parseInt(value))}
+                      >
+                        <SelectTrigger id="page-size" className="w-20 md:w-24 h-11 md:h-auto">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="25">25</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                          <SelectItem value="100">100</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <span className="text-xs md:text-sm text-gray-600 whitespace-nowrap">per page</span>
+                    </div>
+                  </div>
+
+                  {/* Result Count */}
+                  <div className="text-xs md:text-sm text-gray-600">
+                    {(() => {
+                      const filteredResidents = getFilteredResidents()
+                      const totalOnPage = filteredResidents.length
+                      const totalAll = advancedSearchResult.totalResidents
+
+                      if (tableSearchTerm) {
+                        return `Showing ${totalOnPage} of ${totalAll} residents (filtered)`
+                      }
+                      return `Showing ${((currentPage - 1) * pageSize) + 1} to ${Math.min(currentPage * pageSize, totalAll)} of ${totalAll} results`
+                    })()}
+                  </div>
+
+                  {/* Results Table */}
+                  {(() => {
+                    const filteredResidents = getFilteredResidents()
+
+                    if (filteredResidents.length === 0 && tableSearchTerm) {
+                      return (
+                        <div className="text-center py-8 text-gray-500">
+                          <Search className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                          <p className="font-medium">No residents found</p>
+                          <p className="text-sm">Try adjusting your search term</p>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <ResidentsTable
+                        residents={filteredResidents}
+                        onUpdateSuccess={handleAdvancedUpdateSuccess}
+                      />
+                    )
+                  })()}
+
+                  {/* Pagination Controls */}
+                  {advancedSearchResult.pagination.totalPages > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t">
+                      <div className="text-xs md:text-sm text-gray-600 order-2 sm:order-1">
+                        Page {advancedSearchResult.pagination.currentPage} of{" "}
+                        {advancedSearchResult.pagination.totalPages}
+                      </div>
+                      <div className="flex items-center gap-1 md:gap-2 order-1 sm:order-2 w-full sm:w-auto justify-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(currentPage - 1)}
+                          disabled={
+                            !advancedSearchResult.pagination.hasPreviousPage ||
+                            isAdvancedSearching
+                          }
+                          className="h-11 md:h-auto px-2 md:px-4"
+                        >
+                          <ChevronLeft className="h-4 w-4 md:mr-1" />
+                          <span className="hidden md:inline">Previous</span>
+                        </Button>
+
+                        {/* Page Numbers */}
+                        <div className="hidden sm:flex items-center gap-1">
+                          {Array.from(
+                            { length: advancedSearchResult.pagination.totalPages },
+                            (_, i) => i + 1
+                          )
+                            .filter((page) => {
+                              // Show first page, last page, current page, and pages around current
+                              const current = advancedSearchResult.pagination.currentPage
+                              return (
+                                page === 1 ||
+                                page === advancedSearchResult.pagination.totalPages ||
+                                (page >= current - 1 && page <= current + 1)
+                              )
+                            })
+                            .map((page, index, array) => {
+                              // Add ellipsis if there's a gap
+                              const prevPage = array[index - 1]
+                              const showEllipsis = prevPage && page - prevPage > 1
+
+                              return (
+                                <div key={page} className="flex items-center gap-1">
+                                  {showEllipsis && (
+                                    <span className="px-1 md:px-2 text-gray-400 text-sm">...</span>
+                                  )}
+                                  <Button
+                                    variant={
+                                      page === advancedSearchResult.pagination.currentPage
+                                        ? "default"
+                                        : "outline"
+                                    }
+                                    size="sm"
+                                    onClick={() => handlePageChange(page)}
+                                    disabled={isAdvancedSearching}
+                                    className="min-w-[2rem] md:min-w-[2.5rem] h-11 md:h-auto"
+                                  >
+                                    {page}
+                                  </Button>
+                                </div>
+                              )
+                            })}
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(currentPage + 1)}
+                          disabled={
+                            !advancedSearchResult.pagination.hasNextPage ||
+                            isAdvancedSearching
+                          }
+                          className="h-11 md:h-auto px-2 md:px-4"
+                        >
+                          <span className="hidden md:inline">Next</span>
+                          <ChevronRight className="h-4 w-4 md:ml-1" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -609,12 +986,12 @@ export default function FieldOfficerDashboard() {
             {/* Empty State for Advanced Search */}
             {!advancedSearchResult && !advancedError && (
               <Card className="border-dashed border-2 border-gray-300">
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <Filter className="h-16 w-16 text-gray-400 mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                <CardContent className="flex flex-col items-center justify-center py-8 md:py-12 px-4 text-center">
+                  <Filter className="h-12 w-12 md:h-16 md:w-16 text-gray-400 mb-3 md:mb-4" />
+                  <h3 className="text-base md:text-lg font-semibold text-gray-700 mb-2">
                     No Search Results
                   </h3>
-                  <p className="text-gray-500 max-w-md">
+                  <p className="text-sm md:text-base text-gray-500 max-w-md">
                     Select filters above (Mandal, Secretariat, or PHC) to search for residents in specific locations.
                   </p>
                 </CardContent>

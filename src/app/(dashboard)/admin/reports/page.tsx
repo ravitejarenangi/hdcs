@@ -5,6 +5,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { ExportFilterDialog, ExportFilters } from "@/components/reports/ExportFilterDialog"
@@ -20,6 +21,12 @@ import {
   Loader2,
   RefreshCw,
   Filter as FilterIcon,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import {
   BarChart,
@@ -72,6 +79,7 @@ interface AnalyticsData {
     username: string
     name: string
     role: string
+    mandals: string[] // Array of mandal names this officer is assigned to
     updatesCount: number
   }>
   recentUpdates: Array<{
@@ -104,6 +112,20 @@ export default function ReportsPage() {
   const [exportFormat, setExportFormat] = useState<"excel" | "csv" | null>(null)
   const [activeFilters, setActiveFilters] = useState<ExportFilters | null>(null)
 
+  // Sorting state for Mandal Statistics table
+  type MandalSortColumn = "name" | "total" | "mobile" | "mobilePercent" | "healthId" | "healthIdPercent"
+  type SortDirection = "asc" | "desc" | null
+  const [mandalSortColumn, setMandalSortColumn] = useState<MandalSortColumn | null>(null)
+  const [mandalSortDirection, setMandalSortDirection] = useState<SortDirection>(null)
+
+  // Officer table state (search, pagination, sorting)
+  type OfficerSortColumn = "name" | "username" | "role" | "updates"
+  const [officerSearchQuery, setOfficerSearchQuery] = useState("")
+  const [officerCurrentPage, setOfficerCurrentPage] = useState(1)
+  const officerItemsPerPage = 10
+  const [officerSortColumn, setOfficerSortColumn] = useState<OfficerSortColumn | null>("updates")
+  const [officerSortDirection, setOfficerSortDirection] = useState<SortDirection>("desc")
+
   useEffect(() => {
     fetchAnalytics()
   }, [])
@@ -126,6 +148,195 @@ export default function ReportsPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Sorting functions for Mandal Statistics table
+  const handleMandalSort = (column: MandalSortColumn) => {
+    if (mandalSortColumn === column) {
+      // Cycle through: asc -> desc -> null
+      if (mandalSortDirection === "asc") {
+        setMandalSortDirection("desc")
+      } else if (mandalSortDirection === "desc") {
+        setMandalSortDirection(null)
+        setMandalSortColumn(null)
+      }
+    } else {
+      setMandalSortColumn(column)
+      setMandalSortDirection("asc")
+    }
+  }
+
+  const getSortedMandalData = () => {
+    if (!analytics) return []
+
+    let sorted = [...analytics.mandalCompletion]
+
+    if (mandalSortColumn && mandalSortDirection) {
+      sorted.sort((a, b) => {
+        let aVal: string | number
+        let bVal: string | number
+
+        switch (mandalSortColumn) {
+          case "name":
+            aVal = a.mandalName.toLowerCase()
+            bVal = b.mandalName.toLowerCase()
+            break
+          case "total":
+            aVal = a.totalResidents
+            bVal = b.totalResidents
+            break
+          case "mobile":
+            aVal = a.withMobile
+            bVal = b.withMobile
+            break
+          case "mobilePercent":
+            aVal = a.mobileCompletionRate
+            bVal = b.mobileCompletionRate
+            break
+          case "healthId":
+            aVal = a.withHealthId
+            bVal = b.withHealthId
+            break
+          case "healthIdPercent":
+            aVal = a.healthIdCompletionRate
+            bVal = b.healthIdCompletionRate
+            break
+          default:
+            return 0
+        }
+
+        if (aVal < bVal) return mandalSortDirection === "asc" ? -1 : 1
+        if (aVal > bVal) return mandalSortDirection === "asc" ? 1 : -1
+        return 0
+      })
+    }
+
+    return sorted
+  }
+
+  // Sort icon component for Mandal table
+  const SortIcon = ({
+    column,
+    currentColumn,
+    direction
+  }: {
+    column: MandalSortColumn
+    currentColumn: MandalSortColumn | null
+    direction: SortDirection
+  }) => {
+    if (currentColumn !== column) {
+      return <ArrowUpDown className="ml-1 h-4 w-4 text-gray-400" />
+    }
+    if (direction === "asc") {
+      return <ArrowUp className="ml-1 h-4 w-4 text-orange-600" />
+    }
+    if (direction === "desc") {
+      return <ArrowDown className="ml-1 h-4 w-4 text-orange-600" />
+    }
+    return <ArrowUpDown className="ml-1 h-4 w-4 text-gray-400" />
+  }
+
+  // Officer table functions
+  const handleOfficerSort = (column: OfficerSortColumn) => {
+    if (officerSortColumn === column) {
+      // Cycle through: asc -> desc -> null
+      if (officerSortDirection === "asc") {
+        setOfficerSortDirection("desc")
+      } else if (officerSortDirection === "desc") {
+        setOfficerSortDirection(null)
+        setOfficerSortColumn(null)
+      }
+    } else {
+      setOfficerSortColumn(column)
+      setOfficerSortDirection("asc")
+    }
+  }
+
+  const getFilteredAndSortedOfficers = () => {
+    if (!analytics) return []
+
+    let filtered = [...analytics.fieldOfficerPerformance]
+
+    // Apply search filter
+    if (officerSearchQuery) {
+      const query = officerSearchQuery.toLowerCase()
+      filtered = filtered.filter(
+        (officer) =>
+          officer.name.toLowerCase().includes(query) ||
+          officer.username.toLowerCase().includes(query) ||
+          officer.role.toLowerCase().includes(query)
+      )
+    }
+
+    // Apply sorting
+    if (officerSortColumn && officerSortDirection) {
+      filtered.sort((a, b) => {
+        let aVal: string | number
+        let bVal: string | number
+
+        switch (officerSortColumn) {
+          case "name":
+            aVal = a.name.toLowerCase()
+            bVal = b.name.toLowerCase()
+            break
+          case "username":
+            aVal = a.username.toLowerCase()
+            bVal = b.username.toLowerCase()
+            break
+          case "role":
+            aVal = a.role.toLowerCase()
+            bVal = b.role.toLowerCase()
+            break
+          case "updates":
+            aVal = a.updatesCount
+            bVal = b.updatesCount
+            break
+          default:
+            return 0
+        }
+
+        if (aVal < bVal) return officerSortDirection === "asc" ? -1 : 1
+        if (aVal > bVal) return officerSortDirection === "asc" ? 1 : -1
+        return 0
+      })
+    }
+
+    return filtered
+  }
+
+  // Sort icon component for Officer table
+  const OfficerSortIcon = ({
+    column,
+    currentColumn,
+    direction
+  }: {
+    column: OfficerSortColumn
+    currentColumn: OfficerSortColumn | null
+    direction: SortDirection
+  }) => {
+    if (currentColumn !== column) {
+      return <ArrowUpDown className="ml-1 h-4 w-4 text-gray-400" />
+    }
+    if (direction === "asc") {
+      return <ArrowUp className="ml-1 h-4 w-4 text-orange-600" />
+    }
+    if (direction === "desc") {
+      return <ArrowDown className="ml-1 h-4 w-4 text-orange-600" />
+    }
+    return <ArrowUpDown className="ml-1 h-4 w-4 text-gray-400" />
+  }
+
+  // Pagination for officer table
+  const filteredOfficers = getFilteredAndSortedOfficers()
+  const officerTotalPages = Math.ceil(filteredOfficers.length / officerItemsPerPage)
+  const officerStartIndex = (officerCurrentPage - 1) * officerItemsPerPage
+  const officerEndIndex = officerStartIndex + officerItemsPerPage
+  const paginatedOfficers = filteredOfficers.slice(officerStartIndex, officerEndIndex)
+
+  // Reset to page 1 when search query changes
+  const handleOfficerSearch = (query: string) => {
+    setOfficerSearchQuery(query)
+    setOfficerCurrentPage(1)
   }
 
   const handleExportClick = (format: "excel" | "csv") => {
@@ -348,7 +559,15 @@ export default function ReportsPage() {
             onOpenChange={setShowFilterDialog}
             onApplyFilters={handleApplyFilters}
             availableMandals={analytics.mandalStatistics.map((m) => m.mandalName)}
-            availableOfficers={analytics.fieldOfficerPerformance.map((o) => o.name)}
+            availableOfficers={analytics.fieldOfficerPerformance.map((o) => {
+              const officer = {
+                userId: o.userId,
+                username: o.username,
+                name: o.name,
+                mandals: Array.isArray(o.mandals) ? o.mandals : [], // Ensure it's an array
+              }
+              return officer
+            })}
             exportFormat={exportFormat}
           />
         )}
@@ -550,16 +769,88 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
-                        <th className="text-left p-3 font-semibold">Mandal</th>
-                        <th className="text-right p-3 font-semibold">Total Residents</th>
-                        <th className="text-right p-3 font-semibold">With Mobile</th>
-                        <th className="text-right p-3 font-semibold">Mobile %</th>
-                        <th className="text-right p-3 font-semibold">With Health ID</th>
-                        <th className="text-right p-3 font-semibold">Health ID %</th>
+                        <th
+                          className="text-left p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("name")}
+                        >
+                          <div className="flex items-center">
+                            Mandal
+                            <SortIcon
+                              column="name"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("total")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Total Residents
+                            <SortIcon
+                              column="total"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("mobile")}
+                        >
+                          <div className="flex items-center justify-end">
+                            With Mobile
+                            <SortIcon
+                              column="mobile"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("mobilePercent")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Mobile %
+                            <SortIcon
+                              column="mobilePercent"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("healthId")}
+                        >
+                          <div className="flex items-center justify-end">
+                            With Health ID
+                            <SortIcon
+                              column="healthId"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("healthIdPercent")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Health ID %
+                            <SortIcon
+                              column="healthIdPercent"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {analytics.mandalCompletion.map((mandal, index) => (
+                      {getSortedMandalData().map((mandal, index) => (
                         <tr key={index} className="border-b hover:bg-gray-50">
                           <td className="p-3 font-medium">{mandal.mandalName}</td>
                           <td className="p-3 text-right">{mandal.totalResidents.toLocaleString()}</td>
@@ -697,21 +988,90 @@ export default function ReportsPage() {
                 <CardDescription>Individual officer statistics</CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Search Input */}
+                <div className="mb-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      type="text"
+                      placeholder="Search by name, username, or role..."
+                      value={officerSearchQuery}
+                      onChange={(e) => handleOfficerSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
-                        <th className="text-left p-3 font-semibold">Officer Name</th>
-                        <th className="text-left p-3 font-semibold">Username</th>
-                        <th className="text-left p-3 font-semibold">Role</th>
-                        <th className="text-right p-3 font-semibold">Total Updates</th>
+                        <th
+                          className="text-left p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleOfficerSort("name")}
+                        >
+                          <div className="flex items-center">
+                            Officer Name
+                            <OfficerSortIcon
+                              column="name"
+                              currentColumn={officerSortColumn}
+                              direction={officerSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-left p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleOfficerSort("username")}
+                        >
+                          <div className="flex items-center">
+                            Username
+                            <OfficerSortIcon
+                              column="username"
+                              currentColumn={officerSortColumn}
+                              direction={officerSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-left p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleOfficerSort("role")}
+                        >
+                          <div className="flex items-center">
+                            Role
+                            <OfficerSortIcon
+                              column="role"
+                              currentColumn={officerSortColumn}
+                              direction={officerSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleOfficerSort("updates")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Total Updates
+                            <OfficerSortIcon
+                              column="updates"
+                              currentColumn={officerSortColumn}
+                              direction={officerSortDirection}
+                            />
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {[...analytics.fieldOfficerPerformance]
-                        .sort((a, b) => b.updatesCount - a.updatesCount)
-                        .map((officer, index) => (
-                          <tr key={index} className="border-b hover:bg-gray-50">
+                      {paginatedOfficers.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-gray-500">
+                            {officerSearchQuery
+                              ? "No officers found matching your search"
+                              : "No officer data available"}
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedOfficers.map((officer) => (
+                          <tr key={officer.userId} className="border-b hover:bg-gray-50">
                             <td className="p-3 font-medium">{officer.name}</td>
                             <td className="p-3 text-gray-600">{officer.username}</td>
                             <td className="p-3">
@@ -723,10 +1083,78 @@ export default function ReportsPage() {
                               {officer.updatesCount.toLocaleString()}
                             </td>
                           </tr>
-                        ))}
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {filteredOfficers.length > 0 && (
+                  <div className="flex items-center justify-between px-4 py-4 border-t mt-4">
+                    <div className="text-sm text-gray-600">
+                      Showing {officerStartIndex + 1} to {Math.min(officerEndIndex, filteredOfficers.length)} of{" "}
+                      {filteredOfficers.length} officers
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setOfficerCurrentPage((prev) => Math.max(1, prev - 1))}
+                        disabled={officerCurrentPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: officerTotalPages }, (_, i) => i + 1).map((page) => {
+                          // Show first page, last page, current page, and pages around current
+                          const showPage =
+                            page === 1 ||
+                            page === officerTotalPages ||
+                            (page >= officerCurrentPage - 1 && page <= officerCurrentPage + 1)
+
+                          if (!showPage) {
+                            // Show ellipsis
+                            if (page === officerCurrentPage - 2 || page === officerCurrentPage + 2) {
+                              return (
+                                <span key={page} className="px-2 text-gray-400">
+                                  ...
+                                </span>
+                              )
+                            }
+                            return null
+                          }
+
+                          return (
+                            <Button
+                              key={page}
+                              variant={officerCurrentPage === page ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setOfficerCurrentPage(page)}
+                              className={
+                                officerCurrentPage === page
+                                  ? "bg-orange-600 hover:bg-orange-700"
+                                  : ""
+                              }
+                            >
+                              {page}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setOfficerCurrentPage((prev) => Math.min(officerTotalPages, prev + 1))}
+                        disabled={officerCurrentPage === officerTotalPages}
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Users, UserCheck, UserX, Activity, Plus, Search, Edit, Key, Power } from "lucide-react"
+import { Users, UserCheck, UserX, Activity, Plus, Search, Edit, Key, Power, Loader2 } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import OfficerDialog from "@/components/panchayat/OfficerDialog"
@@ -141,36 +142,33 @@ export default function PanchayatOfficersPage() {
   const inactiveOfficers = officers.filter((o) => !o.isActive).length
   const totalUpdates = officers.reduce((sum, o) => sum + o.updateCount, 0)
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading field officers...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-green-600 bg-clip-text text-transparent">
-              Field Officers Management
-            </h1>
-            <p className="text-gray-600 mt-1">Manage field officers in your mandal</p>
+    <DashboardLayout requiredRole="PANCHAYAT_SECRETARY">
+      {loading ? (
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-orange-600 mx-auto" />
+            <p className="mt-4 text-gray-600">Loading field officers...</p>
           </div>
-          <Button
-            onClick={handleAddOfficer}
-            className="bg-gradient-to-r from-orange-500 to-green-600 text-white"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add New Officer
-          </Button>
         </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-green-600 bg-clip-text text-transparent">
+                Field Officers Management
+              </h1>
+              <p className="text-gray-600 mt-1">Manage field officers in your mandal</p>
+            </div>
+            <Button
+              onClick={handleAddOfficer}
+              className="bg-gradient-to-r from-orange-500 to-green-600 hover:from-orange-600 hover:to-green-700"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add New Officer
+            </Button>
+          </div>
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -302,6 +300,16 @@ export default function PanchayatOfficersPage() {
                         ? JSON.parse(officer.assignedSecretariats)
                         : []
 
+                      // Handle both old format (string[]) and new format (object[])
+                      const displaySecretariats = assignedSecs.map((sec: any) => {
+                        if (typeof sec === 'string') {
+                          return sec
+                        } else if (sec && typeof sec === 'object' && sec.secName) {
+                          return `${sec.mandalName} → ${sec.secName}`
+                        }
+                        return 'Unknown'
+                      })
+
                       return (
                         <tr key={officer.id} className="border-b hover:bg-gray-50">
                           <td className="p-3 font-medium">{officer.fullName}</td>
@@ -313,8 +321,8 @@ export default function PanchayatOfficersPage() {
                           </td>
                           <td className="p-3">
                             <div className="flex flex-wrap gap-1">
-                              {assignedSecs.length > 0 ? (
-                                assignedSecs.slice(0, 2).map((sec: string, idx: number) => (
+                              {displaySecretariats.length > 0 ? (
+                                displaySecretariats.slice(0, 2).map((sec: string, idx: number) => (
                                   <span
                                     key={idx}
                                     className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs"
@@ -325,9 +333,9 @@ export default function PanchayatOfficersPage() {
                               ) : (
                                 <span className="text-gray-400 italic text-xs">None</span>
                               )}
-                              {assignedSecs.length > 2 && (
+                              {displaySecretariats.length > 2 && (
                                 <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
-                                  +{assignedSecs.length - 2} more
+                                  +{displaySecretariats.length - 2} more
                                 </span>
                               )}
                             </div>
@@ -423,8 +431,9 @@ export default function PanchayatOfficersPage() {
           officer={resetPasswordOfficer}
           onSuccess={handleDialogSuccess}
         />
-      </div>
-    </div>
+        </div>
+      )}
+    </DashboardLayout>
   )
 }
 

@@ -65,7 +65,29 @@ export async function GET(_request: NextRequest) {
       if (!officer.assignedSecretariats) return false
       try {
         const assignedSecs = JSON.parse(officer.assignedSecretariats)
-        return assignedSecs.some((sec: string) => secretariatNames.includes(sec))
+
+        // Handle multiple formats
+        if (Array.isArray(assignedSecs) && assignedSecs.length > 0) {
+          if (typeof assignedSecs[0] === "string") {
+            // Check if it's the "MANDAL -> SECRETARIAT" format
+            if (assignedSecs[0].includes(" -> ")) {
+              // Format: ["MANDAL -> SECRETARIAT"]
+              return assignedSecs.some((sec: string) => {
+                const [secMandal, secName] = sec.split(" -> ")
+                return secMandal === mandalName && secretariatNames.includes(secName)
+              })
+            } else {
+              // Old format: ["Secretariat1", "Secretariat2"]
+              return assignedSecs.some((sec: string) => secretariatNames.includes(sec))
+            }
+          } else {
+            // Object format: [{ mandalName: "...", secName: "..." }]
+            return assignedSecs.some((sec: { mandalName: string; secName: string }) =>
+              sec.mandalName === mandalName && secretariatNames.includes(sec.secName)
+            )
+          }
+        }
+        return false
       } catch {
         return false
       }
@@ -241,12 +263,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Convert string array to object array if needed (backward compatibility)
+    let secretariatObjects: Array<{ mandalName: string; secName: string }>
+
+    if (typeof assignedSecretariats[0] === "string") {
+      // Old format: ["Secretariat1", "Secretariat2"]
+      // Convert to new format: [{ mandalName: "...", secName: "..." }]
+      secretariatObjects = assignedSecretariats.map((secName: string) => ({
+        mandalName,
+        secName,
+      }))
+    } else {
+      // New format: already objects
+      secretariatObjects = assignedSecretariats
+    }
+
     // Validate that all secretariats belong to this mandal
+    const secretariatNames = secretariatObjects.map((s) => s.secName)
+
     const secretariatsInMandal = await prisma.resident.groupBy({
       by: ["secName"],
       where: {
         mandalName,
-        secName: { in: assignedSecretariats },
+        secName: { in: secretariatNames },
       },
     })
 
@@ -254,7 +293,7 @@ export async function POST(request: NextRequest) {
       .map((s) => s.secName)
       .filter((name): name is string => name !== null)
 
-    const invalidSecretariats = assignedSecretariats.filter(
+    const invalidSecretariats = secretariatNames.filter(
       (sec: string) => !validSecretariats.includes(sec)
     )
 
@@ -270,14 +309,14 @@ export async function POST(request: NextRequest) {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10)
 
-    // Create field officer
+    // Create field officer with correct secretariat format
     const officer = await prisma.user.create({
       data: {
         username,
         passwordHash,
         fullName,
         mobileNumber: mobileNumber || null,
-        assignedSecretariats: JSON.stringify(assignedSecretariats),
+        assignedSecretariats: JSON.stringify(secretariatObjects),
         role: "FIELD_OFFICER",
         isActive: true,
       },

@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Edit2, Save, X, Phone, CreditCard, User, MapPin, Calendar, Users, Home } from "lucide-react"
+import { Edit2, Save, X, Phone, CreditCard, User, MapPin, Calendar, Users, Home, Loader2, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 
 // Validation schema
@@ -63,6 +63,332 @@ interface ResidentsTableProps {
   onUpdateSuccess: () => void
 }
 
+// Searched Person Details Component
+interface SearchedPersonDetailsProps {
+  person: Resident
+}
+
+function SearchedPersonDetails({ person }: SearchedPersonDetailsProps) {
+  return (
+    <Card className="border-2 border-blue-500 bg-blue-50/30 mb-6">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <User className="h-5 w-5 text-blue-600" />
+          Searched Person Details
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Column 1 - Basic Info */}
+          <div className="space-y-2">
+            <div className="flex items-start gap-2">
+              <User className="h-4 w-4 text-gray-600 mt-0.5" />
+              <div>
+                <div className="text-xs text-gray-600 font-medium">Name</div>
+                <div className="font-semibold text-base">{person.name}</div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <CreditCard className="h-4 w-4 text-gray-600 mt-0.5" />
+              <div>
+                <div className="text-xs text-gray-600 font-medium">Resident ID</div>
+                <div className="font-mono text-sm">{person.residentId}</div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <CreditCard className="h-4 w-4 text-gray-600 mt-0.5" />
+              <div>
+                <div className="text-xs text-gray-600 font-medium">UID</div>
+                <div className="font-mono text-sm">{person.uid || <span className="text-gray-400">Not set</span>}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2 - Personal Details */}
+          <div className="space-y-2">
+            <div className="flex items-start gap-2">
+              <User className="h-4 w-4 text-gray-600 mt-0.5" />
+              <div>
+                <div className="text-xs text-gray-600 font-medium">Age</div>
+                <div className="text-sm">{person.age || <span className="text-gray-400">N/A</span>}</div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <User className="h-4 w-4 text-gray-600 mt-0.5" />
+              <div>
+                <div className="text-xs text-gray-600 font-medium">Gender</div>
+                <div className="text-sm">{person.gender || <span className="text-gray-400">N/A</span>}</div>
+              </div>
+            </div>
+
+            {person.dob && (
+              <div className="flex items-start gap-2">
+                <User className="h-4 w-4 text-gray-600 mt-0.5" />
+                <div>
+                  <div className="text-xs text-gray-600 font-medium">Date of Birth</div>
+                  <div className="text-sm">{new Date(person.dob).toLocaleDateString("en-IN")}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Column 3 - Contact & Health Info */}
+          <div className="space-y-2">
+            <div className="flex items-start gap-2">
+              <Phone className="h-4 w-4 text-green-600 mt-0.5" />
+              <div>
+                <div className="text-xs text-gray-600 font-medium">Mobile Number</div>
+                <div className="text-sm font-medium">
+                  {person.mobileNumber || <span className="text-gray-400">Not set</span>}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <CreditCard className="h-4 w-4 text-blue-600 mt-0.5" />
+              <div>
+                <div className="text-xs text-gray-600 font-medium">Health ID</div>
+                <div className="text-sm font-medium">
+                  {person.healthId || <span className="text-gray-400">Not set</span>}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2">
+              <Home className="h-4 w-4 text-gray-600 mt-0.5" />
+              <div>
+                <div className="text-xs text-gray-600 font-medium">Household ID</div>
+                <div className="font-mono text-sm">{person.hhId}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Location Info - Full Width */}
+        {(person.mandalName || person.secName || person.phcName) && (
+          <div className="mt-4 pt-4 border-t border-blue-200">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {person.mandalName && (
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 text-gray-600 mt-0.5" />
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">Mandal</div>
+                    <div className="text-sm">{person.mandalName}</div>
+                  </div>
+                </div>
+              )}
+
+              {person.secName && (
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 text-gray-600 mt-0.5" />
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">Secretariat</div>
+                    <div className="text-sm">{person.secName}</div>
+                  </div>
+                </div>
+              )}
+
+              {person.phcName && (
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 text-gray-600 mt-0.5" />
+                  <div>
+                    <div className="text-xs text-gray-600 font-medium">PHC</div>
+                    <div className="text-sm">{person.phcName}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// Household Member Card Component
+interface HouseholdMemberCardProps {
+  member: Resident
+  isSelected: boolean
+  isEditing: boolean
+  isUpdating: boolean
+  onEdit: () => void
+  onCancelEdit: () => void
+  onUpdate: (residentId: string, data: { mobileNumber?: string | null; healthId?: string | null }) => Promise<void>
+}
+
+function HouseholdMemberCard({
+  member,
+  isSelected,
+  isEditing,
+  isUpdating,
+  onEdit,
+  onCancelEdit,
+  onUpdate,
+}: HouseholdMemberCardProps) {
+  const [mobileNumber, setMobileNumber] = useState(member.mobileNumber || "")
+  const [healthId, setHealthId] = useState(member.healthId || "")
+  const [errors, setErrors] = useState<{ mobileNumber?: string; healthId?: string }>({})
+
+  const validateMobileNumber = (value: string): boolean => {
+    if (!value) return true // Empty is valid
+    const regex = /^[6-9]\d{9}$/
+    return regex.test(value)
+  }
+
+  const handleSave = async () => {
+    const newErrors: { mobileNumber?: string; healthId?: string } = {}
+
+    if (mobileNumber && !validateMobileNumber(mobileNumber)) {
+      newErrors.mobileNumber = "Mobile number must be 10 digits starting with 6-9"
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+
+    await onUpdate(member.residentId, {
+      mobileNumber: mobileNumber || null,
+      healthId: healthId || null,
+    })
+  }
+
+  const handleCancel = () => {
+    setMobileNumber(member.mobileNumber || "")
+    setHealthId(member.healthId || "")
+    setErrors({})
+    onCancelEdit()
+  }
+
+  return (
+    <Card
+      className={`${
+        isSelected
+          ? "border-2 border-orange-500 bg-orange-50/50"
+          : "border border-gray-200"
+      }`}
+    >
+      <CardContent className="pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Left Column - Basic Info */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-gray-600" />
+              <div>
+                <div className="font-semibold text-base">{member.name}</div>
+                {isSelected && (
+                  <Badge className="mt-1 bg-orange-600">Selected Resident</Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="text-sm space-y-1 text-gray-700">
+              <div><strong>UID:</strong> {member.uid || "N/A"}</div>
+              <div><strong>Age:</strong> {member.age || "N/A"}</div>
+              <div><strong>Gender:</strong> {member.gender || "N/A"}</div>
+              {member.dob && (
+                <div><strong>DOB:</strong> {new Date(member.dob).toLocaleDateString("en-IN")}</div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column - Editable Fields */}
+          <div className="space-y-3">
+            {/* Mobile Number */}
+            <div className="space-y-1">
+              <Label htmlFor={`mobile-${member.residentId}`} className="flex items-center gap-2 text-sm">
+                <Phone className="h-3 w-3 text-green-600" />
+                Mobile Number
+              </Label>
+              {isEditing ? (
+                <div>
+                  <Input
+                    id={`mobile-${member.residentId}`}
+                    value={mobileNumber}
+                    onChange={(e) => {
+                      setMobileNumber(e.target.value)
+                      setErrors({ ...errors, mobileNumber: undefined })
+                    }}
+                    placeholder="Enter 10-digit mobile number"
+                    disabled={isUpdating}
+                    className={errors.mobileNumber ? "border-red-500" : ""}
+                  />
+                  {errors.mobileNumber && (
+                    <p className="text-xs text-red-600 mt-1">{errors.mobileNumber}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm font-medium">
+                  {member.mobileNumber || <span className="text-gray-400">Not set</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Health ID */}
+            <div className="space-y-1">
+              <Label htmlFor={`health-${member.residentId}`} className="flex items-center gap-2 text-sm">
+                <CreditCard className="h-3 w-3 text-blue-600" />
+                Health ID
+              </Label>
+              {isEditing ? (
+                <Input
+                  id={`health-${member.residentId}`}
+                  value={healthId}
+                  onChange={(e) => setHealthId(e.target.value)}
+                  placeholder="Enter Health ID"
+                  disabled={isUpdating}
+                />
+              ) : (
+                <div className="text-sm font-medium">
+                  {member.healthId || <span className="text-gray-400">Not set</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-2">
+              {isEditing ? (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={handleSave}
+                    disabled={isUpdating}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <Save className="h-3 w-3 mr-1" />
+                    {isUpdating ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCancel}
+                    disabled={isUpdating}
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={onEdit}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  <Edit2 className="h-3 w-3 mr-1" />
+                  Edit
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function ResidentsTable({
   residents,
   searchedResidentId,
@@ -72,6 +398,10 @@ export function ResidentsTable({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
   const [selectedResident, setSelectedResident] = useState<Resident | null>(null)
+  const [householdMembers, setHouseholdMembers] = useState<Resident[]>([])
+  const [isLoadingHousehold, setIsLoadingHousehold] = useState(false)
+  const [householdError, setHouseholdError] = useState("")
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null)
 
   const {
     register,
@@ -139,6 +469,93 @@ export function ResidentsTable({
     return new Date(date).toLocaleDateString("en-IN")
   }
 
+  // Fetch household members when resident details is clicked
+  const fetchHouseholdMembers = async (hhId: string) => {
+    setIsLoadingHousehold(true)
+    setHouseholdError("")
+
+    try {
+      const response = await fetch(`/api/residents/household/${hhId}`)
+      const data = await response.json()
+
+      if (response.ok) {
+        setHouseholdMembers(data.members)
+      } else {
+        setHouseholdError(data.error || "Failed to load household members")
+        toast.error("Failed to load household members", {
+          description: data.error || "Please try again",
+        })
+      }
+    } catch (error) {
+      setHouseholdError("Network error")
+      toast.error("Network error", {
+        description: "Please check your connection and try again",
+      })
+    } finally {
+      setIsLoadingHousehold(false)
+    }
+  }
+
+  // Handle opening resident details modal
+  const handleOpenResidentDetails = (resident: Resident) => {
+    setSelectedResident(resident)
+    fetchHouseholdMembers(resident.hhId)
+  }
+
+  // Handle closing resident details modal
+  const handleCloseResidentDetails = () => {
+    setSelectedResident(null)
+    setHouseholdMembers([])
+    setEditingMemberId(null)
+    setHouseholdError("")
+  }
+
+  // Update a household member
+  const updateHouseholdMember = async (
+    residentId: string,
+    data: { mobileNumber?: string | null; healthId?: string | null }
+  ) => {
+    setIsUpdating(true)
+
+    try {
+      const response = await fetch(`/api/residents/${residentId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        toast.success("Updated successfully!", {
+          description: `${result.changesLogged} field(s) updated`,
+        })
+
+        // Refresh household members
+        if (selectedResident) {
+          await fetchHouseholdMembers(selectedResident.hhId)
+        }
+
+        // Refresh main table
+        onUpdateSuccess()
+
+        setEditingMemberId(null)
+      } else {
+        toast.error("Update failed", {
+          description: result.error || "Please try again",
+        })
+      }
+    } catch {
+      toast.error("Network error", {
+        description: "Please check your connection and try again",
+      })
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
   // Mobile view - Card layout
   const MobileView = () => (
     <div className="md:hidden space-y-4">
@@ -149,7 +566,13 @@ export function ResidentsTable({
             resident.residentId === searchedResidentId
               ? "border-2 border-orange-500 bg-orange-50/50"
               : "border border-gray-200"
-          }`}
+          } ${editingId !== resident.residentId ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+          onClick={() => {
+            // Only open details if not in edit mode
+            if (editingId !== resident.residentId) {
+              handleOpenResidentDetails(resident)
+            }
+          }}
         >
           <CardHeader className="pb-3">
             <div className="flex justify-between items-start">
@@ -177,7 +600,7 @@ export function ResidentsTable({
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent onClick={(e) => e.stopPropagation()}>
             {editingId === resident.residentId ? (
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
                 <div className="space-y-2">
@@ -244,7 +667,10 @@ export function ResidentsTable({
                 </div>
                 <Button
                   size="sm"
-                  onClick={() => startEditing(resident)}
+                  onClick={(e) => {
+                    e.stopPropagation() // Prevent card click
+                    startEditing(resident)
+                  }}
                   className="w-full bg-orange-600 hover:bg-orange-700"
                 >
                   <Edit2 className="h-3 w-3 mr-1" />
@@ -366,15 +792,17 @@ export function ResidentsTable({
                       size="sm"
                       onClick={() => startEditing(resident)}
                       className="bg-orange-600 hover:bg-orange-700"
+                      title="Edit Details"
                     >
                       <Edit2 className="h-3 w-3" />
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setSelectedResident(resident)}
+                      onClick={() => handleOpenResidentDetails(resident)}
+                      title="View Household Members"
                     >
-                      <User className="h-3 w-3" />
+                      <Users className="h-3 w-3" />
                     </Button>
                   </div>
                 )}
@@ -403,56 +831,62 @@ export function ResidentsTable({
       <MobileView />
       <DesktopView />
 
-      {/* Resident Details Dialog */}
-      <Dialog open={!!selectedResident} onOpenChange={() => setSelectedResident(null)}>
-        <DialogContent className="max-w-2xl">
+      {/* Household Members Dialog */}
+      <Dialog open={!!selectedResident} onOpenChange={handleCloseResidentDetails}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Resident Details</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Home className="h-5 w-5 text-orange-600" />
+              Household Information
+            </DialogTitle>
+            {selectedResident && (
+              <div className="text-sm text-gray-600 mt-2">
+                <div><strong>Household ID:</strong> {selectedResident.hhId}</div>
+                <div><strong>Total Members:</strong> {householdMembers.length}</div>
+              </div>
+            )}
           </DialogHeader>
-          {selectedResident && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <strong>Name:</strong> {selectedResident.name}
+
+          {isLoadingHousehold ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+              <span className="ml-3 text-gray-600">Loading household members...</span>
+            </div>
+          ) : householdError ? (
+            <div className="flex items-center justify-center py-12 text-red-600">
+              <AlertCircle className="h-8 w-8 mr-3" />
+              <span>{householdError}</span>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Searched Person Details Section */}
+              {selectedResident && (
+                <SearchedPersonDetails person={selectedResident} />
+              )}
+
+              {/* Household Members Section */}
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Users className="h-5 w-5 text-orange-600" />
+                  <h3 className="text-lg font-semibold">All Household Members</h3>
+                  <Badge variant="secondary" className="ml-2">
+                    {householdMembers.length} {householdMembers.length === 1 ? 'Member' : 'Members'}
+                  </Badge>
                 </div>
-                <div>
-                  <strong>UID:</strong> {selectedResident.uid || "N/A"}
-                </div>
-                <div>
-                  <strong>Resident ID:</strong> {selectedResident.residentId}
-                </div>
-                <div>
-                  <strong>Household ID:</strong> {selectedResident.hhId}
-                </div>
-                <div>
-                  <strong>DOB:</strong> {formatDate(selectedResident.dob)}
-                </div>
-                <div>
-                  <strong>Age:</strong> {selectedResident.age || "N/A"}
-                </div>
-                <div>
-                  <strong>Gender:</strong> {selectedResident.gender || "N/A"}
-                </div>
-                <div>
-                  <strong>Mobile:</strong> {selectedResident.mobileNumber || "N/A"}
-                </div>
-                <div>
-                  <strong>Health ID:</strong> {selectedResident.healthId || "N/A"}
-                </div>
-                <div>
-                  <strong>District:</strong> {selectedResident.distName || "N/A"}
-                </div>
-                <div>
-                  <strong>Mandal:</strong> {selectedResident.mandalName || "N/A"}
-                </div>
-                <div>
-                  <strong>Secretariat:</strong> {selectedResident.secName || "N/A"}
-                </div>
-                <div>
-                  <strong>PHC:</strong> {selectedResident.phcName || "N/A"}
-                </div>
-                <div>
-                  <strong>Area Type:</strong> {selectedResident.ruralUrban === "R" ? "Rural" : selectedResident.ruralUrban === "U" ? "Urban" : "N/A"}
+
+                <div className="space-y-4">
+                  {householdMembers.map((member) => (
+                    <HouseholdMemberCard
+                      key={member.residentId}
+                      member={member}
+                      isSelected={member.residentId === selectedResident?.residentId}
+                      isEditing={editingMemberId === member.residentId}
+                      isUpdating={isUpdating}
+                      onEdit={() => setEditingMemberId(member.residentId)}
+                      onCancelEdit={() => setEditingMemberId(null)}
+                      onUpdate={updateHouseholdMember}
+                    />
+                  ))}
                 </div>
               </div>
             </div>

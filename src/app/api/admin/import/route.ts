@@ -22,9 +22,9 @@ interface ResidentData {
   healthId?: string
   distName?: string
   mandalName?: string
-  mandalCode?: string
+  mandalCode?: number
   secName?: string
-  secCode?: string
+  secCode?: number
   ruralUrban?: string
   clusterName?: string
   qualification?: string
@@ -194,6 +194,14 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        // Helper function to parse code values (convert to integer, handle .0 suffix)
+        const parseCode = (value: string | undefined): number | undefined => {
+          if (!value) return undefined
+          const cleaned = value.replace(".0", "").trim()
+          const parsed = parseInt(cleaned, 10)
+          return isNaN(parsed) ? undefined : parsed
+        }
+
         const record: ResidentData = {
           residentId,
           uid: getValue(row, "uid"),
@@ -205,9 +213,9 @@ export async function POST(request: NextRequest) {
           healthId: getValue(row, "health_id") || getValue(row, "healthid"),
           distName: getValue(row, "dist_name") || getValue(row, "district"),
           mandalName: getValue(row, "mandal_name") || getValue(row, "mandal"),
-          mandalCode: getValue(row, "mandal_code"),
+          mandalCode: parseCode(getValue(row, "mandal_code")),
           secName: getValue(row, "sec_name") || getValue(row, "secretariat"),
-          secCode: getValue(row, "sec_code"),
+          secCode: parseCode(getValue(row, "sec_code")),
           ruralUrban: getValue(row, "rural_urban") || getValue(row, "area_type"),
           clusterName: getValue(row, "cluster_name") || getValue(row, "cluster"),
           qualification: getValue(row, "qualification"),

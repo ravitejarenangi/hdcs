@@ -27,7 +27,13 @@ interface OfficerDialogProps {
 
 interface Secretariat {
   name: string
+  mandalName: string
   residentCount: number
+}
+
+interface SecretariatAssignment {
+  mandalName: string
+  secName: string
 }
 
 export default function OfficerDialog({
@@ -44,7 +50,7 @@ export default function OfficerDialog({
     mobileNumber: "",
     password: "",
     confirmPassword: "",
-    assignedSecretariats: [] as string[],
+    assignedSecretariats: [] as SecretariatAssignment[],
     isActive: true,
   })
 
@@ -52,11 +58,13 @@ export default function OfficerDialog({
   const [loadingSecretariats, setLoadingSecretariats] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  const [mandalName, setMandalName] = useState<string>("")
 
-  // Fetch secretariats
+  // Fetch secretariats and mandal name
   useEffect(() => {
     if (open) {
       fetchSecretariats()
+      fetchMandalName()
     }
   }, [open])
 
@@ -64,9 +72,30 @@ export default function OfficerDialog({
   useEffect(() => {
     if (open) {
       if (officer) {
-        const assignedSecs = officer.assignedSecretariats
-          ? JSON.parse(officer.assignedSecretariats)
-          : []
+        let assignedSecs: SecretariatAssignment[] = []
+
+        if (officer.assignedSecretariats) {
+          try {
+            const parsed = JSON.parse(officer.assignedSecretariats)
+
+            // Handle both old format (string[]) and new format (SecretariatAssignment[])
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              if (typeof parsed[0] === "string") {
+                // Old format: convert to new format
+                assignedSecs = parsed.map((secName: string) => ({
+                  mandalName: mandalName || "",
+                  secName,
+                }))
+              } else {
+                // New format
+                assignedSecs = parsed
+              }
+            }
+          } catch (error) {
+            console.error("Error parsing assignedSecretariats:", error)
+          }
+        }
+
         setFormData({
           fullName: officer.fullName,
           username: officer.username,
@@ -89,7 +118,19 @@ export default function OfficerDialog({
       }
       setErrors({})
     }
-  }, [open, officer])
+  }, [open, officer, mandalName])
+
+  const fetchMandalName = async () => {
+    try {
+      const response = await fetch("/api/panchayat/analytics")
+      if (response.ok) {
+        const data = await response.json()
+        setMandalName(data.mandalName || "")
+      }
+    } catch (error) {
+      console.error("Error fetching mandal name:", error)
+    }
+  }
 
   const fetchSecretariats = async () => {
     try {
@@ -226,28 +267,45 @@ export default function OfficerDialog({
     }
   }
 
-  const toggleSecretariat = (secretariatName: string) => {
+  const toggleSecretariat = (secretariat: Secretariat) => {
     setFormData((prev) => {
       const current = prev.assignedSecretariats
-      if (current.includes(secretariatName)) {
+      const exists = current.some(
+        (s) => s.mandalName === secretariat.mandalName && s.secName === secretariat.name
+      )
+
+      if (exists) {
         return {
           ...prev,
-          assignedSecretariats: current.filter((s) => s !== secretariatName),
+          assignedSecretariats: current.filter(
+            (s) => !(s.mandalName === secretariat.mandalName && s.secName === secretariat.name)
+          ),
         }
       } else {
         return {
           ...prev,
-          assignedSecretariats: [...current, secretariatName],
+          assignedSecretariats: [
+            ...current,
+            { mandalName: secretariat.mandalName, secName: secretariat.name },
+          ],
         }
       }
     })
   }
 
-  const removeSecretariat = (secretariatName: string) => {
+  const removeSecretariat = (assignment: SecretariatAssignment) => {
     setFormData((prev) => ({
       ...prev,
-      assignedSecretariats: prev.assignedSecretariats.filter((s) => s !== secretariatName),
+      assignedSecretariats: prev.assignedSecretariats.filter(
+        (s) => !(s.mandalName === assignment.mandalName && s.secName === assignment.secName)
+      ),
     }))
+  }
+
+  const isSecretariatSelected = (secretariat: Secretariat): boolean => {
+    return formData.assignedSecretariats.some(
+      (s) => s.mandalName === secretariat.mandalName && s.secName === secretariat.name
+    )
   }
 
   return (
@@ -360,19 +418,33 @@ export default function OfficerDialog({
               Assigned Secretariats <span className="text-red-500">*</span>
             </Label>
 
+            {/* Mandal Info */}
+            {mandalName && (
+              <div className="p-2 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-800">
+                  <strong>Mandal:</strong> {mandalName}
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  Field Officers can only be assigned secretariats from this mandal
+                </p>
+              </div>
+            )}
+
             {/* Selected Secretariats */}
             {formData.assignedSecretariats.length > 0 && (
               <div className="flex flex-wrap gap-2 p-3 border rounded-md bg-gray-50">
-                {formData.assignedSecretariats.map((sec) => (
+                {formData.assignedSecretariats.map((assignment, index) => (
                   <div
-                    key={sec}
+                    key={`${assignment.mandalName}-${assignment.secName}-${index}`}
                     className="flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm"
                   >
-                    <span>{sec}</span>
+                    <span className="font-medium">{assignment.mandalName}</span>
+                    <span className="text-orange-400">→</span>
+                    <span>{assignment.secName}</span>
                     <button
                       type="button"
-                      onClick={() => removeSecretariat(sec)}
-                      className="hover:bg-orange-200 rounded-full p-0.5"
+                      onClick={() => removeSecretariat(assignment)}
+                      className="hover:bg-orange-200 rounded-full p-0.5 ml-1"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -382,7 +454,7 @@ export default function OfficerDialog({
             )}
 
             {/* Secretariat Selection */}
-            <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
+            <div className="border rounded-md p-3 max-h-64 overflow-y-auto">
               {loadingSecretariats ? (
                 <p className="text-sm text-gray-500">Loading secretariats...</p>
               ) : secretariats.length === 0 ? (
@@ -391,18 +463,22 @@ export default function OfficerDialog({
                 <div className="space-y-2">
                   {secretariats.map((sec) => (
                     <label
-                      key={sec.name}
+                      key={`${sec.mandalName}-${sec.name}`}
                       className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer"
                     >
                       <input
                         type="checkbox"
-                        checked={formData.assignedSecretariats.includes(sec.name)}
-                        onChange={() => toggleSecretariat(sec.name)}
+                        checked={isSecretariatSelected(sec)}
+                        onChange={() => toggleSecretariat(sec)}
                         className="h-4 w-4 text-orange-600 rounded"
                       />
-                      <span className="text-sm flex-1">{sec.name}</span>
-                      <span className="text-xs text-gray-500">
-                        ({sec.residentCount.toLocaleString()} residents)
+                      <span className="flex-1 text-sm">
+                        <span className="font-medium text-gray-700">{sec.mandalName}</span>
+                        <span className="text-gray-400 mx-1">→</span>
+                        <span>{sec.name}</span>
+                        <span className="text-gray-500 ml-2">
+                          ({sec.residentCount.toLocaleString()} residents)
+                        </span>
                       </span>
                     </label>
                   ))}
@@ -414,7 +490,7 @@ export default function OfficerDialog({
               <p className="text-sm text-red-500">{errors.assignedSecretariats}</p>
             )}
             <p className="text-xs text-gray-500">
-              Select one or more secretariats to assign to this officer
+              Select one or more secretariats to assign to this officer. Each secretariat includes its mandal name.
             </p>
           </div>
 

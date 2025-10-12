@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -15,11 +14,14 @@ import {
   ChevronRight,
   History,
   UserCog,
+  Settings,
 } from "lucide-react"
 
 interface SidebarProps {
   isOpen: boolean
   onClose: () => void
+  isCollapsed: boolean
+  onToggleCollapse: (collapsed: boolean) => void
 }
 
 interface MenuItem {
@@ -83,27 +85,24 @@ const menuItems: MenuItem[] = [
     href: "/field-officer",
     roles: ["FIELD_OFFICER"],
   },
+
+  // SETTINGS - Available to all roles
+  {
+    title: "Settings",
+    icon: <Settings className="h-5 w-5" />,
+    href: "/settings",
+    roles: ["ADMIN", "PANCHAYAT_SECRETARY", "FIELD_OFFICER"],
+  },
 ]
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: SidebarProps) {
   const { data: session } = useSession()
   const pathname = usePathname()
   const router = useRouter()
-  const [isCollapsed, setIsCollapsed] = useState(false)
 
-  // Load sidebar state from localStorage
-  useEffect(() => {
-    const savedState = localStorage.getItem("sidebar-collapsed")
-    if (savedState !== null) {
-      setIsCollapsed(savedState === "true")
-    }
-  }, [])
-
-  // Save sidebar state to localStorage
+  // Toggle collapse handler
   const toggleCollapse = () => {
-    const newState = !isCollapsed
-    setIsCollapsed(newState)
-    localStorage.setItem("sidebar-collapsed", String(newState))
+    onToggleCollapse(!isCollapsed)
   }
 
   // Filter menu items based on user role
