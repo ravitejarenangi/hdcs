@@ -83,7 +83,7 @@ export default function LoginPage() {
               Government of Andhra Pradesh
             </h1>
             <h2 className="text-xs font-medium text-gray-600">
-              Department of Health, Medical & Family Welfare
+              Department of Health, Medical & Family Welfare, A.P
             </h2>
             <div className="h-1 w-32 mx-auto bg-gradient-to-r from-orange-500 via-white to-green-600 rounded-full"></div>
           </div>
