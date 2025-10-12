@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { cache, CacheKeys } from "@/lib/cache"
+
+// Performance monitoring helper
+function logTiming(label: string, startTime: number) {
+  const duration = Date.now() - startTime
+  console.log(`[Analytics] ${label}: ${duration}ms`)
+  return duration
+}
 
 export async function GET(_request: NextRequest) {
+  const requestStart = Date.now()
+
   // Check authentication
   const session = await auth()
 
@@ -18,207 +28,205 @@ export async function GET(_request: NextRequest) {
     )
   }
 
-  try {
-    // 1. Total residents count
-    const totalResidents = await prisma.resident.count()
+  // Check cache first
+  const cacheKey = CacheKeys.adminAnalytics()
+  const cachedData = cache.get<any>(cacheKey)
 
-    // 2. Mobile number completion rate (excluding placeholders: NULL, "N/A", "0", empty string)
-    const residentsWithMobile = await prisma.resident.count({
-      where: {
-        AND: [
-          {
-            mobileNumber: {
-              not: null,
-            },
-          },
-          {
-            mobileNumber: {
-              not: "N/A",
-            },
-          },
-          {
-            mobileNumber: {
-              not: "0",
-            },
-          },
-          {
-            mobileNumber: {
-              not: "",
-            },
-          },
-        ],
-      },
+  if (cachedData) {
+    console.log('[Analytics] Returning cached data')
+    return NextResponse.json({
+      ...cachedData,
+      cached: true,
     })
+  }
+
+  try {
+    console.log('[Analytics] Generating fresh analytics data...')
+
+    // Execute all independent queries in parallel for better performance
+    const [
+      totalResidents,
+      residentsWithMobile,
+      residentsWithHealthId,
+      residentsWithNamePlaceholder,
+      residentsWithHhIdPlaceholder,
+      residentsWithMobilePlaceholder,
+      residentsWithHealthIdPlaceholder,
+    ] = await Promise.all([
+      // 1. Total residents count
+      prisma.resident.count(),
+
+      // 2. Mobile number completion rate (excluding placeholders)
+      prisma.resident.count({
+        where: {
+          AND: [
+            { mobileNumber: { not: null } },
+            { mobileNumber: { not: "N/A" } },
+            { mobileNumber: { not: "0" } },
+            { mobileNumber: { not: "" } },
+          ],
+        },
+      }),
+
+      // 3. Health ID completion rate (excluding placeholders)
+      prisma.resident.count({
+        where: {
+          AND: [
+            { healthId: { not: null } },
+            { healthId: { not: "N/A" } },
+            { healthId: { not: "" } },
+          ],
+        },
+      }),
+
+      // 3a. Count records with placeholder values
+      prisma.resident.count({
+        where: { name: { startsWith: "UNKNOWN_NAME_" } },
+      }),
+
+      prisma.resident.count({
+        where: { hhId: { startsWith: "HH_UNKNOWN_" } },
+      }),
+
+      prisma.resident.count({
+        where: {
+          OR: [
+            { mobileNumber: null },
+            { mobileNumber: "N/A" },
+            { mobileNumber: "0" },
+            { mobileNumber: "" },
+          ],
+        },
+      }),
+
+      prisma.resident.count({
+        where: {
+          OR: [
+            { healthId: null },
+            { healthId: "N/A" },
+            { healthId: "" },
+          ],
+        },
+      }),
+    ])
+
+    logTiming('Basic counts', requestStart)
+
     const mobileCompletionRate =
       totalResidents > 0
         ? Math.round((residentsWithMobile / totalResidents) * 100)
         : 0
 
-    // 3. Health ID completion rate (excluding placeholders: NULL, "N/A", empty string)
-    const residentsWithHealthId = await prisma.resident.count({
-      where: {
-        AND: [
-          {
-            healthId: {
-              not: null,
-            },
-          },
-          {
-            healthId: {
-              not: "N/A",
-            },
-          },
-          {
-            healthId: {
-              not: "",
-            },
-          },
-        ],
-      },
-    })
     const healthIdCompletionRate =
       totalResidents > 0
         ? Math.round((residentsWithHealthId / totalResidents) * 100)
         : 0
 
-    // 3a. Count records with placeholder values
-    const residentsWithNamePlaceholder = await prisma.resident.count({
-      where: {
-        name: {
-          startsWith: "UNKNOWN_NAME_",
-        },
-      },
-    })
-
-    const residentsWithHhIdPlaceholder = await prisma.resident.count({
-      where: {
-        hhId: {
-          startsWith: "HH_UNKNOWN_",
-        },
-      },
-    })
-
-    const residentsWithMobilePlaceholder = await prisma.resident.count({
-      where: {
-        OR: [
-          { mobileNumber: null },
-          { mobileNumber: "N/A" },
-          { mobileNumber: "0" },
-          { mobileNumber: "" },
-        ],
-      },
-    })
-
-    const residentsWithHealthIdPlaceholder = await prisma.resident.count({
-      where: {
-        OR: [
-          { healthId: null },
-          { healthId: "N/A" },
-          { healthId: "" },
-        ],
-      },
-    })
-
-    // 4. Recent updates (last 30 days)
+    // 4. Recent updates (last 30 days) - Execute in parallel
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    const recentUpdates = await prisma.updateLog.findMany({
-      where: {
-        updateTimestamp: {
-          gte: thirtyDaysAgo,
+    const [recentUpdates, recentUpdatesCount] = await Promise.all([
+      prisma.updateLog.findMany({
+        where: {
+          updateTimestamp: { gte: thirtyDaysAgo },
         },
-      },
-      include: {
-        user: {
-          select: {
-            username: true,
-            fullName: true,
+        include: {
+          user: {
+            select: {
+              username: true,
+              fullName: true,
+            },
+          },
+          resident: {
+            select: {
+              name: true,
+              residentId: true,
+            },
           },
         },
-        resident: {
-          select: {
-            name: true,
-            residentId: true,
-          },
+        orderBy: {
+          updateTimestamp: "desc",
         },
-      },
-      orderBy: {
-        updateTimestamp: "desc",
-      },
-      take: 50, // Limit to 50 most recent updates
-    })
+        take: 50, // Limit to 50 most recent updates
+      }),
 
-    const recentUpdatesCount = await prisma.updateLog.count({
-      where: {
-        updateTimestamp: {
-          gte: thirtyDaysAgo,
+      prisma.updateLog.count({
+        where: {
+          updateTimestamp: { gte: thirtyDaysAgo },
         },
-      },
-    })
+      }),
+    ])
+
+    logTiming('Recent updates', requestStart)
 
     // 5. Mandal-wise statistics (using consolidated schema - no JOINs)
     const mandalStats = await prisma.resident.groupBy({
-      by: ["mandalName"],
+      by: ["mandalName" as any],
       _count: {
         id: true,
       },
       where: {
         mandalName: {
           not: null,
-        },
+        } as any,
       },
       orderBy: {
         _count: {
           id: "desc",
         },
       },
-    })
+    }) as any[]
 
     // Format mandal stats for easier consumption
-    const mandalStatistics = mandalStats.map((stat) => ({
+    const mandalStatistics = mandalStats.map((stat: any) => ({
       mandalName: stat.mandalName || "Unknown",
-      residentCount: stat._count.id,
+      residentCount: stat._count?.id || 0,
     }))
 
-    // 6. Field officer performance metrics
-    // Get ALL active field officers (not just those with updates)
-    const allFieldOfficers = await prisma.user.findMany({
-      where: {
-        role: "FIELD_OFFICER",
-        isActive: true,
-      },
-      select: {
-        id: true,
-        username: true,
-        fullName: true,
-        role: true,
-        assignedSecretariats: true,
-        mandalName: true,
-      },
-    })
-
-    // Get update counts for each field officer
-    const updateCounts = await prisma.updateLog.groupBy({
-      by: ["userId"],
-      _count: {
-        id: true,
-      },
-      where: {
-        userId: {
-          in: allFieldOfficers.map((officer) => officer.id),
+    // 6. Field officer performance metrics - Execute in parallel
+    const [allFieldOfficers, updateCounts] = await Promise.all([
+      // Get ALL active field officers (not just those with updates)
+      prisma.user.findMany({
+        where: {
+          role: "FIELD_OFFICER",
+          isActive: true,
         },
-      },
-    })
+        select: {
+          id: true,
+          username: true,
+          fullName: true,
+          role: true,
+          assignedSecretariats: true as any,
+          mandalName: true as any,
+        },
+      }) as any,
+
+      // Get update counts for all field officers
+      prisma.updateLog.groupBy({
+        by: ["userId"],
+        _count: {
+          id: true,
+        },
+        where: {
+          user: {
+            role: "FIELD_OFFICER",
+            isActive: true,
+          },
+        },
+      }),
+    ])
+
+    logTiming('Field officer data', requestStart)
 
     // Create a map of userId to update count
     const updateCountMap = new Map(
-      updateCounts.map((count) => [count.userId, count._count.id])
+      updateCounts.map((count: any) => [count.userId, count._count?.id || 0])
     )
 
     // Combine field officer data with update counts (including 0 updates)
     const fieldOfficerStats = allFieldOfficers
-      .map((officer) => {
+      .map((officer: any) => {
         // Extract mandals from assignedSecretariats for field officers
         let mandals: string[] = []
         if (officer.role === "FIELD_OFFICER" && officer.assignedSecretariats) {
@@ -258,41 +266,41 @@ export async function GET(_request: NextRequest) {
           updatesCount: updateCountMap.get(officer.id) || 0,
         }
       })
-      .sort((a, b) => b.updatesCount - a.updatesCount) // Sort by update count descending
+      .sort((a: any, b: any) => b.updatesCount - a.updatesCount) // Sort by update count descending
 
     // 6a. Count officers who are currently active (made updates in last 15 minutes)
+    // 7. Updates over time (last 7 days for chart)
+    // Execute in parallel
     const fifteenMinutesAgo = new Date()
     fifteenMinutesAgo.setMinutes(fifteenMinutesAgo.getMinutes() - 15)
-
-    const activeOfficersInLast15Min = await prisma.updateLog.groupBy({
-      by: ["userId"],
-      where: {
-        updateTimestamp: {
-          gte: fifteenMinutesAgo,
-        },
-        user: {
-          role: "FIELD_OFFICER",
-          isActive: true,
-        },
-      },
-    })
-
-    const currentlyActiveOfficersCount = activeOfficersInLast15Min.length
-
-    // 7. Updates over time (last 7 days for chart)
     const sevenDaysAgo = new Date()
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
-    const updatesOverTime = await prisma.updateLog.findMany({
-      where: {
-        updateTimestamp: {
-          gte: sevenDaysAgo,
+    const [activeOfficersInLast15Min, updatesOverTime] = await Promise.all([
+      prisma.updateLog.groupBy({
+        by: ["userId"],
+        where: {
+          updateTimestamp: { gte: fifteenMinutesAgo },
+          user: {
+            role: "FIELD_OFFICER",
+            isActive: true,
+          },
         },
-      },
-      select: {
-        updateTimestamp: true,
-      },
-    })
+      }),
+
+      prisma.updateLog.findMany({
+        where: {
+          updateTimestamp: { gte: sevenDaysAgo },
+        },
+        select: {
+          updateTimestamp: true,
+        },
+      }),
+    ])
+
+    const currentlyActiveOfficersCount = activeOfficersInLast15Min.length
+
+    logTiming('Activity metrics', requestStart)
 
     // Group by date (not datetime)
     const updatesByDate: { [key: string]: number } = {}
@@ -308,38 +316,78 @@ export async function GET(_request: NextRequest) {
       })
     )
 
-    // 8. Completion statistics by mandal (excluding placeholder values)
-    const mandalCompletionStats = await prisma.$queryRaw<
-      Array<{
-        mandalName: string
-        totalResidents: bigint
-        withMobile: bigint
-        withHealthId: bigint
-      }>
-    >`
-      SELECT
-        mandal_name as mandalName,
-        COUNT(*) as totalResidents,
-        SUM(CASE
-          WHEN mobile_number IS NOT NULL
-            AND mobile_number != 'N/A'
-            AND mobile_number != '0'
-            AND mobile_number != ''
-          THEN 1
-          ELSE 0
-        END) as withMobile,
-        SUM(CASE
-          WHEN health_id IS NOT NULL
-            AND health_id != 'N/A'
-            AND health_id != ''
-          THEN 1
-          ELSE 0
-        END) as withHealthId
-      FROM residents
-      WHERE mandal_name IS NOT NULL
-      GROUP BY mandal_name
-      ORDER BY totalResidents DESC
-    `
+    // 8 & 9. Completion statistics - Execute both raw queries in parallel
+    const [mandalCompletionStats, hierarchicalStats] = await Promise.all([
+      // 8. Mandal-level completion statistics
+      prisma.$queryRaw<
+        Array<{
+          mandalName: string
+          totalResidents: bigint
+          withMobile: bigint
+          withHealthId: bigint
+        }>
+      >`
+        SELECT
+          mandal_name as mandalName,
+          COUNT(*) as totalResidents,
+          SUM(CASE
+            WHEN mobile_number IS NOT NULL
+              AND mobile_number != 'N/A'
+              AND mobile_number != '0'
+              AND mobile_number != ''
+            THEN 1
+            ELSE 0
+          END) as withMobile,
+          SUM(CASE
+            WHEN health_id IS NOT NULL
+              AND health_id != 'N/A'
+              AND health_id != ''
+            THEN 1
+            ELSE 0
+          END) as withHealthId
+        FROM residents
+        WHERE mandal_name IS NOT NULL
+        GROUP BY mandal_name
+        ORDER BY totalResidents DESC
+      `,
+
+      // 9. Hierarchical completion statistics (Mandal → Secretariat)
+      prisma.$queryRaw<
+        Array<{
+          mandalName: string
+          secName: string | null
+          totalResidents: bigint
+          withMobile: bigint
+          withHealthId: bigint
+        }>
+      >`
+        SELECT
+          mandal_name as mandalName,
+          sec_name as secName,
+          COUNT(*) as totalResidents,
+          SUM(CASE
+            WHEN mobile_number IS NOT NULL
+              AND mobile_number != 'N/A'
+              AND mobile_number != '0'
+              AND mobile_number != ''
+            THEN 1
+            ELSE 0
+          END) as withMobile,
+          SUM(CASE
+            WHEN health_id IS NOT NULL
+              AND health_id != 'N/A'
+              AND health_id != ''
+            THEN 1
+            ELSE 0
+          END) as withHealthId
+        FROM residents
+        WHERE mandal_name IS NOT NULL AND sec_name IS NOT NULL
+        GROUP BY mandal_name, sec_name
+        ORDER BY mandal_name, sec_name
+      `,
+    ])
+
+    logTiming('Completion statistics', requestStart)
 
     const mandalCompletion = mandalCompletionStats.map((stat) => ({
       mandalName: stat.mandalName,
@@ -359,41 +407,6 @@ export async function GET(_request: NextRequest) {
             )
           : 0,
     }))
-
-    // 9. Hierarchical completion statistics (Mandal → Secretariat)
-    const hierarchicalStats = await prisma.$queryRaw<
-      Array<{
-        mandalName: string
-        secName: string | null
-        totalResidents: bigint
-        withMobile: bigint
-        withHealthId: bigint
-      }>
-    >`
-      SELECT
-        mandal_name as mandalName,
-        sec_name as secName,
-        COUNT(*) as totalResidents,
-        SUM(CASE
-          WHEN mobile_number IS NOT NULL
-            AND mobile_number != 'N/A'
-            AND mobile_number != '0'
-            AND mobile_number != ''
-          THEN 1
-          ELSE 0
-        END) as withMobile,
-        SUM(CASE
-          WHEN health_id IS NOT NULL
-            AND health_id != 'N/A'
-            AND health_id != ''
-          THEN 1
-          ELSE 0
-        END) as withHealthId
-      FROM residents
-      WHERE mandal_name IS NOT NULL AND sec_name IS NOT NULL
-      GROUP BY mandal_name, sec_name
-      ORDER BY mandal_name, sec_name
-    `
 
     // Build hierarchical structure (2 levels: Mandal → Secretariat)
     const mandalHierarchy = mandalCompletion.map((mandal) => {
@@ -421,8 +434,8 @@ export async function GET(_request: NextRequest) {
       }
     })
 
-    // Return comprehensive analytics
-    return NextResponse.json({
+    // Build final response
+    const responseData = {
       overview: {
         totalResidents,
         residentsWithMobile,
@@ -456,6 +469,17 @@ export async function GET(_request: NextRequest) {
       })),
       updatesTimeline,
       generatedAt: new Date().toISOString(),
+    }
+
+    // Cache the response for 5 minutes (300 seconds)
+    cache.set(cacheKey, responseData, 300)
+
+    const totalTime = logTiming('Total analytics generation', requestStart)
+    console.log(`[Analytics] Total time: ${totalTime}ms`)
+
+    return NextResponse.json({
+      ...responseData,
+      cached: false,
     })
   } catch (error) {
     console.error("Analytics error:", error)

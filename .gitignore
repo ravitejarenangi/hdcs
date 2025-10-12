@@ -43,6 +43,8 @@ next-env.d.ts
 /src/generated/prisma
 
 # Documentation files (generated during development)
-# Keep only README.md for repository documentation
+# Keep documentation in docs/ folder and README.md
 *.md
+*.csv
+*.xlsx
 !README.md
