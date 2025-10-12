@@ -1,0 +1,126 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String   @id @default(cuid())
+  username             String   @unique
+  passwordHash         String   @map("password_hash")
+  role                 Role
+  fullName             String   @map("full_name")
+  mobileNumber         String?  @map("mobile_number")
+  mandalName           String?  @map("mandal_name")
+  assignedSecretariats String?  @map("assigned_secretariats") @db.Text
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  lastLogin            DateTime? @map("last_login")
+
+  updateLogs  UpdateLog[]
+
+  @@index([mandalName])
+  @@map("users")
+}
+
+model Resident {
+  id           String   @id @default(cuid())
+  residentId   String   @unique @map("resident_id")
+  uid          String?  @unique
+  hhId         String   @map("hh_id")
+  name         String
+  dob          DateTime?
+  gender       Gender?
+  mobileNumber String?  @map("mobile_number")
+  healthId     String?  @map("health_id")
+
+  // Demographic Data Fields (merged from DemographicData table)
+  distName      String? @map("dist_name")
+  mandalName    String? @map("mandal_name")
+  mandalCode    String? @map("mandal_code")
+  secName       String? @map("sec_name")
+  secCode       String? @map("sec_code")
+  ruralUrban    String? @map("rural_urban")
+  clusterName   String? @map("cluster_name")
+  qualification         String?
+  occupation            String?
+  caste                 String?
+  subCaste              String? @map("sub_caste")
+  casteCategory         String? @map("caste_category")
+  casteCategoryDetailed String? @map("caste_category_detailed")
+  hofMember             String? @map("hof_member")
+  doorNumber            String? @map("door_number")
+  addressEkyc           String? @map("address_ekyc") @db.Text
+  addressHh             String? @map("address_hh") @db.Text
+
+  // Health Data Fields (merged from HealthData table)
+  citizenMobile String? @map("citizen_mobile")
+  age           Int?
+  phcName       String? @map("phc_name")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  updateLogs   UpdateLog[]
+
+  @@index([uid])
+  @@index([hhId])
+  @@index([residentId])
+  @@index([mandalName])
+  @@index([secName])
+  @@map("residents")
+}
+
+model UpdateLog {
+  id              String   @id @default(cuid())
+  residentId      String   @map("resident_id")
+  userId          String   @map("user_id")
+  fieldUpdated    String   @map("field_updated")
+  oldValue        String?  @map("old_value") @db.Text
+  newValue        String?  @map("new_value") @db.Text
+  updateTimestamp DateTime @default(now()) @map("update_timestamp")
+  ipAddress       String?  @map("ip_address")
+
+  resident Resident @relation(fields: [residentId], references: [residentId])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([updateTimestamp])
+  @@map("update_logs")
+}
+
+model ImportLog {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  fileName         String   @map("file_name")
+  fileSize         Int      @map("file_size")
+  totalRecords     Int      @map("total_records")
+  successRecords   Int      @map("success_records")
+  failedRecords    Int      @map("failed_records")
+  duplicateRecords Int      @map("duplicate_records")
+  importMode       String   @map("import_mode") // "add", "update", "add_update"
+  status           String   @map("status") // "success", "partial", "failed"
+  errorLog         String?  @map("error_log") @db.Text
+  importedAt       DateTime @default(now()) @map("imported_at")
+
+  @@index([importedAt])
+  @@map("import_logs")
+}
+
+enum Role {
+  ADMIN
+  PANCHAYAT_SECRETARY
+  FIELD_OFFICER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
