@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Header } from "./Header"
 import { Sidebar } from "./Sidebar"
+import { Footer } from "./Footer"
 import { cn } from "@/lib/utils"
 import { Loader2 } from "lucide-react"
 
@@ -80,7 +81,7 @@ export function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50 flex flex-col">
       {/* Header */}
       <Header onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
 
@@ -95,7 +96,7 @@ export function DashboardLayout({
       {/* Main Content */}
       <main
         className={cn(
-          "pt-16 transition-all duration-300",
+          "pt-16 transition-all duration-300 flex-1",
           // Desktop margin based on sidebar state
           "md:ml-64",
           isCollapsed && "md:ml-16"
@@ -105,6 +106,18 @@ export function DashboardLayout({
           {children}
         </div>
       </main>
+
+      {/* Footer */}
+      <div
+        className={cn(
+          "transition-all duration-300",
+          // Desktop margin based on sidebar state
+          "md:ml-64",
+          isCollapsed && "md:ml-16"
+        )}
+      >
+        <Footer />
+      </div>
     </div>
   )
 }

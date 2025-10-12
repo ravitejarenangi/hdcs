@@ -190,9 +190,14 @@ export default function LoginPage() {
         </div>
 
         {/* Bottom Credits */}
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center space-y-1">
           <p className="text-xs text-gray-600">
-            © 2025 Government of Andhra Pradesh. All rights reserved.
+            © {new Date().getFullYear()} All rights reserved by{" "}
+            <span className="font-semibold">HEALTH, MEDICAL & FAMILY WELFARE DEPARTMENT</span>
+          </p>
+          <p className="text-xs text-gray-600">
+            Developed and maintained by{" "}
+            <span className="font-semibold">DRDA Technical Team, Chittoor</span>
           </p>
         </div>
       </div>
