@@ -81,7 +81,7 @@ export function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-green-50 flex flex-col md:block">
       {/* Header */}
       <Header onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
 
@@ -96,7 +96,7 @@ export function DashboardLayout({
       {/* Main Content */}
       <main
         className={cn(
-          "pt-16 pb-8 transition-all duration-300",
+          "pt-16 md:pb-8 transition-all duration-300 flex-1 md:flex-none",
           // Desktop margin based on sidebar state
           "md:ml-64",
           isCollapsed && "md:ml-16"
@@ -107,10 +107,14 @@ export function DashboardLayout({
         </div>
       </main>
 
-      {/* Sticky Footer */}
+      {/* Footer - Scrollable on mobile, sticky on desktop */}
       <div
         className={cn(
-          "fixed bottom-0 left-0 right-0 transition-all duration-300 z-10",
+          "transition-all duration-300",
+          // Mobile: relative (scrollable)
+          "relative",
+          // Desktop: fixed (sticky)
+          "md:fixed md:bottom-0 md:left-0 md:right-0 md:z-10",
           // Desktop margin based on sidebar state
           "md:ml-64",
           isCollapsed && "md:ml-16"
