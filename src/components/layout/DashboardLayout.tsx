@@ -96,7 +96,7 @@ export function DashboardLayout({
       {/* Main Content */}
       <main
         className={cn(
-          "pt-16 pb-12 transition-all duration-300",
+          "pt-16 pb-8 transition-all duration-300",
           // Desktop margin based on sidebar state
           "md:ml-64",
           isCollapsed && "md:ml-16"

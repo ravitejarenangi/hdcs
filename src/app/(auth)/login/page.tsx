@@ -83,7 +83,7 @@ export default function LoginPage() {
               Government of Andhra Pradesh
             </h1>
             <h2 className="text-xs font-medium text-gray-600">
-              Department of Health, Medical & Family Welfare, A.P
+              Department of Health, Medical & Family Welfare
             </h2>
             <div className="h-1 w-32 mx-auto bg-gradient-to-r from-orange-500 via-white to-green-600 rounded-full"></div>
           </div>
@@ -193,7 +193,7 @@ export default function LoginPage() {
         <div className="mt-6 text-center space-y-1">
           <p className="text-xs text-gray-600">
             © {new Date().getFullYear()} All rights reserved by{" "}
-            <span className="font-semibold">HEALTH, MEDICAL & FAMILY WELFARE DEPARTMENT</span>
+            <span className="font-semibold">HEALTH, MEDICAL & FAMILY WELFARE DEPARTMENT, A.P</span>
           </p>
           <p className="text-xs text-gray-600">
             Developed and maintained by{" "}

@@ -5,14 +5,14 @@ export function Footer() {
 
   return (
     <footer className="bg-white border-t border-gray-200 mt-auto">
-      <div className="container mx-auto px-4 py-3 md:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-2 text-xs md:text-sm text-gray-600">
+      <div className="container mx-auto px-3 py-1.5 md:px-4 lg:px-6">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-1 text-[10px] md:text-xs text-gray-600">
           {/* Copyright Section */}
           <div className="text-center md:text-left">
             <p>
               © {currentYear} All rights reserved by{" "}
               <span className="font-semibold text-gray-800">
-                HEALTH, MEDICAL & FAMILY WELFARE DEPARTMENT
+                HEALTH, MEDICAL & FAMILY WELFARE DEPARTMENT, A.P
               </span>
             </p>
           </div>
