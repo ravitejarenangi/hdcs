@@ -395,7 +395,7 @@ export default function FieldOfficerDashboard() {
   }
 
   // Real-time text search with debouncing
-  // If Advanced Filter is active, search is scoped to those filters
+  // If Advanced Filter is active, search is scoped to those filters (mandal, secretariat, PHC)
   // Otherwise, search the entire database (with role-based access control)
   const performTextSearch = useCallback(async (searchQuery: string, page = 1) => {
     if (!searchQuery || searchQuery.trim().length < 2) {
@@ -416,6 +416,8 @@ export default function FieldOfficerDashboard() {
       })
 
       // If Advanced Filter is active, add location filters to scope the search
+      // This ensures we search within the filtered subset (e.g., 2631 residents)
+      // instead of searching the entire database
       if (advancedSearchResult) {
         if (selectedMandal) {
           params.append("mandal", selectedMandal)
@@ -712,11 +714,64 @@ export default function FieldOfficerDashboard() {
                   Advanced Filter Search
                 </CardTitle>
                 <CardDescription className="text-sm">
-                  Select filters to search for residents by location (Mandal → Secretariat → PHC)
+                  Search by text (name, UID, mobile) OR use location filters (Mandal → Secretariat → PHC)
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4 md:p-6">
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  {/* Real-time Text Search Section */}
+                  <div className="space-y-2">
+                    <Label htmlFor="text-search" className="text-sm md:text-base font-semibold">
+                      Quick Search (Real-time)
+                    </Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="text-search"
+                        type="text"
+                        placeholder="Type name, UID, or mobile number... (min 2 characters)"
+                        value={textSearchQuery}
+                        onChange={(e) => setTextSearchQuery(e.target.value)}
+                        className="pl-10 pr-10 h-11 md:h-auto text-sm md:text-base"
+                        disabled={isTextSearching}
+                      />
+                      {isTextSearching && (
+                        <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-orange-600" />
+                      )}
+                      {textSearchQuery && !isTextSearching && (
+                        <button
+                          onClick={() => setTextSearchQuery("")}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          aria-label="Clear search"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    {textSearchError && (
+                      <p className="text-xs text-red-600 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {textSearchError}
+                      </p>
+                    )}
+                    {textSearchQuery && textSearchQuery.trim().length < 2 && (
+                      <p className="text-xs text-gray-500">
+                        Type at least 2 characters to search
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-gray-500">OR use location filters</span>
+                    </div>
+                  </div>
+
+                  {/* Location Filters Section */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Mandal Filter */}
                     <div className="space-y-2">
@@ -1027,7 +1082,11 @@ export default function FieldOfficerDashboard() {
                         <div className="text-center py-8 text-gray-500">
                           <Loader2 className="h-12 w-12 mx-auto mb-3 text-orange-600 animate-spin" />
                           <p className="font-medium">Searching...</p>
-                          <p className="text-sm">Please wait</p>
+                          <p className="text-sm">
+                            {advancedSearchResult
+                              ? "Searching within filtered results"
+                              : "Please wait"}
+                          </p>
                         </div>
                       )
                     }
@@ -1039,7 +1098,9 @@ export default function FieldOfficerDashboard() {
                           <p className="font-medium">No residents found</p>
                           <p className="text-sm">
                             {isTextSearch
-                              ? `No results matching "${textSearchQuery}". Try a different search term.`
+                              ? (advancedSearchResult
+                                  ? `No results matching "${textSearchQuery}" within the filtered ${advancedSearchResult.totalResidents} residents. Try a different search term.`
+                                  : `No results matching "${textSearchQuery}". Try a different search term.`)
                               : "Try adjusting your search filters"}
                           </p>
                         </div>
