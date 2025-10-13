@@ -100,7 +100,7 @@ interface AnalyticsData {
   generatedAt: string
 }
 
-const COLORS = ["#f97316", "#16a34a", "#3b82f6", "#eab308", "#ef4444", "#8b5cf6"]
+// Removed unused COLORS constant
 
 export default function ReportsPage() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
@@ -169,7 +169,7 @@ export default function ReportsPage() {
   const getSortedMandalData = () => {
     if (!analytics) return []
 
-    let sorted = [...analytics.mandalCompletion]
+    const sorted = [...analytics.mandalCompletion]
 
     if (mandalSortColumn && mandalSortDirection) {
       sorted.sort((a, b) => {

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { cache, CacheKeys } from "@/lib/cache"
@@ -10,7 +10,7 @@ function logTiming(label: string, startTime: number) {
   return duration
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const requestStart = Date.now()
 
   // Check authentication
@@ -40,7 +40,7 @@ export async function GET(_request: NextRequest) {
 
   // Check cache first
   const cacheKey = CacheKeys.panchayatAnalytics(mandalName)
-  const cachedData = cache.get<any>(cacheKey)
+  const cachedData = cache.get<Record<string, unknown>>(cacheKey)
 
   if (cachedData) {
     console.log(`[Panchayat Analytics] Returning cached data for ${mandalName}`)
@@ -128,12 +128,14 @@ export async function GET(_request: NextRequest) {
     // 5 & 6. Secretariat statistics - Execute in parallel
     const [secretariatStats, secretariatCompletion] = await Promise.all([
       // 5. Secretariat-wise statistics
-      prisma.resident.groupBy({
-        by: ["secName" as any],
+      // Note: Using type assertion as secName/mandalName exist in DB but not in Prisma schema
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (prisma.resident.groupBy as any)({
+        by: ["secName"],
         _count: { id: true },
         where: {
-          mandalName: mandalName as any,
-          secName: { not: null } as any,
+          mandalName: mandalName,
+          secName: { not: null },
           name: {
             not: {
               startsWith: "UNKNOWN_NAME_",
@@ -143,7 +145,7 @@ export async function GET(_request: NextRequest) {
         orderBy: {
           _count: { id: "desc" },
         },
-      }) as any,
+      }),
 
       // 6. Secretariat completion statistics
       prisma.$queryRaw<
@@ -184,9 +186,9 @@ export async function GET(_request: NextRequest) {
 
     logTiming('Secretariat statistics', requestStart)
 
-    const secretariatStatistics = secretariatStats.map((stat: any) => ({
-      secretariatName: stat.secName || "Unknown",
-      residentCount: stat._count?.id || 0,
+    const secretariatStatistics = secretariatStats.map((stat: Record<string, unknown>) => ({
+      secretariatName: (stat.secName as string) || "Unknown",
+      residentCount: ((stat._count as Record<string, number>)?.id) || 0,
     }))
 
     const secretariatCompletionFormatted = secretariatCompletion.map((stat) => ({
@@ -206,25 +208,28 @@ export async function GET(_request: NextRequest) {
 
     // 7. Field officer performance in mandal - Execute in parallel
     const [fieldOfficers, allUpdateCounts] = await Promise.all([
-      prisma.user.findMany({
+      // Note: Using type assertion as assignedSecretariats exists in DB but not in Prisma schema
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (prisma.user.findMany as any)({
         where: {
           role: "FIELD_OFFICER",
           isActive: true,
-          assignedSecretariats: { not: null } as any,
+          assignedSecretariats: { not: null },
         },
         select: {
           id: true,
           username: true,
           fullName: true,
-          assignedSecretariats: true as any,
+          assignedSecretariats: true,
         },
-      }) as any,
+      }),
 
       // Get all update counts for this mandal
-      prisma.updateLog.groupBy({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (prisma.updateLog.groupBy as any)({
         by: ["userId"],
         where: {
-          resident: { mandalName: mandalName as any },
+          resident: { mandalName: mandalName },
         },
         _count: { id: true },
       }),
@@ -233,12 +238,12 @@ export async function GET(_request: NextRequest) {
     logTiming('Field officer data', requestStart)
 
     // Filter field officers who have secretariats in this mandal
-    const mandalFieldOfficers = fieldOfficers.filter((officer: any) => {
+    const mandalFieldOfficers = fieldOfficers.filter((officer: Record<string, unknown>) => {
       if (!officer.assignedSecretariats) return false
       try {
-        const secretariats = JSON.parse(officer.assignedSecretariats)
+        const secretariats = JSON.parse(officer.assignedSecretariats as string)
         // Check if any assigned secretariat belongs to this mandal
-        return secretariatStatistics.some((stat) =>
+        return secretariatStatistics.some((stat: { secretariatName: string }) =>
           secretariats.includes(stat.secretariatName)
         )
       } catch {
@@ -247,17 +252,17 @@ export async function GET(_request: NextRequest) {
     })
 
     const updateCountMap = new Map(
-      allUpdateCounts.map((uc: any) => [uc.userId, uc._count?.id || 0])
+      allUpdateCounts.map((uc: { userId: string; _count?: { id: number } }) => [uc.userId, uc._count?.id || 0])
     )
 
-    const fieldOfficerPerformance = mandalFieldOfficers.map((officer: any) => ({
-      id: officer.id,
-      username: officer.username,
-      fullName: officer.fullName,
+    const fieldOfficerPerformance = mandalFieldOfficers.map((officer: Record<string, unknown>) => ({
+      id: officer.id as string,
+      username: officer.username as string,
+      fullName: officer.fullName as string,
       assignedSecretariats: officer.assignedSecretariats
-        ? JSON.parse(officer.assignedSecretariats)
+        ? JSON.parse(officer.assignedSecretariats as string)
         : [],
-      updateCount: updateCountMap.get(officer.id) || 0,
+      updateCount: updateCountMap.get(officer.id as string) || 0,
     }))
 
     // 8 & 9. Updates timeline and recent updates - Execute in parallel
@@ -285,11 +290,12 @@ export async function GET(_request: NextRequest) {
       `,
 
       // 9. Recent updates list
-      prisma.updateLog.findMany({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (prisma.updateLog.findMany as any)({
         where: {
           updateTimestamp: { gte: sixHoursAgo },
           resident: {
-            mandalName: mandalName as any,
+            mandalName: mandalName,
             name: {
               not: {
                 startsWith: "UNKNOWN_NAME_",
@@ -308,7 +314,7 @@ export async function GET(_request: NextRequest) {
             select: {
               name: true,
               residentId: true,
-              secName: true as any,
+              secName: true,
             },
           },
         },
@@ -341,7 +347,15 @@ export async function GET(_request: NextRequest) {
       secretariatCompletion: secretariatCompletionFormatted,
       fieldOfficerPerformance,
       updatesTimeline: updatesTimelineFormatted,
-      recentUpdates: recentUpdates.map((update) => ({
+      recentUpdates: recentUpdates.map((update: {
+        id: string;
+        resident: { name: string; residentId: string; secName: string };
+        fieldUpdated: string;
+        oldValue: string | null;
+        newValue: string | null;
+        user: { fullName: string; username: string };
+        updateTimestamp: Date;
+      }) => ({
         id: update.id,
         residentName: update.resident.name,
         residentId: update.resident.residentId,

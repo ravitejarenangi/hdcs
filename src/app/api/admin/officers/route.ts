@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse, NextRequest } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import bcrypt from "bcryptjs"
 
 // GET /api/admin/officers - Fetch all officers (all roles)
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     // Check authentication
     const session = await auth()
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
       // Verify all secretariats exist in residents table
       // Handle both old format (string[]) and new format (object[])
       const secretariatChecks = await Promise.all(
-        assignedSecretariats.map((sec: any) => {
+        assignedSecretariats.map((sec: string | { secName: string }) => {
           const secName = typeof sec === 'string' ? sec : sec.secName
           return prisma.resident.findFirst({
             where: { secName },
@@ -219,8 +219,8 @@ export async function POST(request: NextRequest) {
       )
 
       const invalidSecretariats = assignedSecretariats.filter(
-        (_: any, index: number) => !secretariatChecks[index]
-      ).map((sec: any) => typeof sec === 'string' ? sec : sec.secName)
+        (_: unknown, index: number) => !secretariatChecks[index]
+      ).map((sec: string | { secName: string }) => typeof sec === 'string' ? sec : sec.secName)
 
       if (invalidSecretariats.length > 0) {
         return NextResponse.json(

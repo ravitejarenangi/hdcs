@@ -16,9 +16,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
 } from "recharts"
 import { format } from "date-fns"
 import { toast } from "sonner"
@@ -70,7 +67,7 @@ interface Analytics {
   }>
 }
 
-const COLORS = ["#f97316", "#16a34a", "#3b82f6", "#eab308", "#8b5cf6"]
+// Removed unused COLORS constant
 
 type SortColumn = "secretariat" | "total" | "mobile" | "healthId" | "avgQuality"
 type SortDirection = "asc" | "desc" | null

@@ -37,8 +37,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Parse request body
     const body = await request.json()
-    // Using 'let' to allow reassignment during format conversion
-    let { fullName, mobileNumber, assignedSecretariats, isActive } = body
+    const { fullName, mobileNumber, isActive } = body
+    let { assignedSecretariats } = body
 
     // Validate at least one field is provided
     if (

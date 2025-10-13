@@ -93,11 +93,7 @@ async function getMySQLConnection() {
     database,
     multipleStatements: true,
     infileStreamFactory: (filePath: string) => fs.createReadStream(filePath),
-    flags: '+LOCAL_FILES', // Enable LOAD DATA LOCAL INFILE
     connectTimeout: 60000, // 60 seconds
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
     enableKeepAlive: true,
     keepAliveInitialDelay: 0,
   })

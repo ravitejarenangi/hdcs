@@ -121,7 +121,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         // Verify all secretariats exist
         // Handle both old format (string[]) and new format (object[])
         const secretariatChecks = await Promise.all(
-          assignedSecretariats.map((sec: any) => {
+          assignedSecretariats.map((sec: string | { secName: string }) => {
             const secName = typeof sec === 'string' ? sec : sec.secName
             return prisma.resident.findFirst({
               where: { secName },
@@ -130,8 +130,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         )
 
         const invalidSecretariats = assignedSecretariats.filter(
-          (_: any, index: number) => !secretariatChecks[index]
-        ).map((sec: any) => typeof sec === 'string' ? sec : sec.secName)
+          (_: unknown, index: number) => !secretariatChecks[index]
+        ).map((sec: string | { secName: string }) => typeof sec === 'string' ? sec : sec.secName)
 
         if (invalidSecretariats.length > 0) {
           return NextResponse.json(

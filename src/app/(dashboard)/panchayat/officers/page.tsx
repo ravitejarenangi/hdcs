@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -44,17 +44,7 @@ export default function PanchayatOfficersPage() {
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false)
   const [resetPasswordOfficer, setResetPasswordOfficer] = useState<Officer | null>(null)
 
-  useEffect(() => {
-    fetchOfficers()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    filterOfficers()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [officers, searchQuery, statusFilter])
-
-  const fetchOfficers = async () => {
+  const fetchOfficers = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch("/api/panchayat/officers")
@@ -71,7 +61,16 @@ export default function PanchayatOfficersPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchOfficers()
+  }, [fetchOfficers])
+
+  useEffect(() => {
+    filterOfficers()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [officers, searchQuery, statusFilter])
 
   const filterOfficers = () => {
     let filtered = [...officers]
@@ -301,7 +300,7 @@ export default function PanchayatOfficersPage() {
                         : []
 
                       // Handle both old format (string[]) and new format (object[])
-                      const displaySecretariats = assignedSecs.map((sec: any) => {
+                      const displaySecretariats = assignedSecs.map((sec: string | { mandalName: string; secName: string }) => {
                         if (typeof sec === 'string') {
                           return sec
                         } else if (sec && typeof sec === 'object' && sec.secName) {

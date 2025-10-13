@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -72,7 +71,7 @@ interface LocationOption {
 }
 
 export default function FieldOfficerDashboard() {
-  const { data: session } = useSession()
+  // Removed unused session variable
 
   // UID Search State
   const [searchUid, setSearchUid] = useState("")
@@ -103,7 +102,7 @@ export default function FieldOfficerDashboard() {
 
   // Assigned Secretariats State (for Field Officers)
   const [assignedSecretariats, setAssignedSecretariats] = useState<AssignedSecretariat[]>([])
-  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false)
+  const [, setIsLoadingAssignments] = useState(false)
 
   // Active Tab
   const [activeTab, setActiveTab] = useState("uid")
@@ -136,6 +135,7 @@ export default function FieldOfficerDashboard() {
       setSecretariats([])
       setPhcs([])
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMandal])
 
   // Auto-select secretariat if only one is assigned for the selected mandal
@@ -175,11 +175,13 @@ export default function FieldOfficerDashboard() {
 
         // Validate format
         const validSecretariats = secretariats.filter(
-          (s: any) =>
-            s &&
+          (s: unknown): s is AssignedSecretariat =>
             typeof s === 'object' &&
-            typeof s.mandalName === 'string' &&
-            typeof s.secName === 'string'
+            s !== null &&
+            'mandalName' in s &&
+            'secName' in s &&
+            typeof (s as AssignedSecretariat).mandalName === 'string' &&
+            typeof (s as AssignedSecretariat).secName === 'string'
         )
 
         setAssignedSecretariats(validSecretariats)
@@ -194,7 +196,7 @@ export default function FieldOfficerDashboard() {
           description: typeof data.error === 'string' ? data.error : "Please contact your administrator",
         })
       }
-    } catch (error) {
+    } catch {
       // Clear assignments on error
       setAssignedSecretariats([])
       toast.error("Network error", {
@@ -205,26 +207,7 @@ export default function FieldOfficerDashboard() {
     }
   }
 
-  const loadMandals = async () => {
-    setIsLoadingLocations(true)
-    try {
-      const response = await fetch("/api/locations/mandals")
-      const data = await response.json()
-      if (response.ok) {
-        setMandals(data.mandals)
-      } else {
-        toast.error("Failed to load mandals", {
-          description: data.error || "Please try again",
-        })
-      }
-    } catch {
-      toast.error("Network error", {
-        description: "Failed to load mandals",
-      })
-    } finally {
-      setIsLoadingLocations(false)
-    }
-  }
+  // Removed unused loadMandals function
 
   const loadSecretariats = async (mandal: string) => {
     setIsLoadingLocations(true)

@@ -25,12 +25,12 @@ async function checkCodeUniqueness() {
     })
 
     // Group by mandal name to check if each mandal has unique code
-    const mandalsByName = new Map<string, Set<string>>()
-    const mandalsByCode = new Map<string, Set<string>>()
+    const mandalsByName = new Map<string, Set<string | number>>()
+    const mandalsByCode = new Map<string | number, Set<string>>()
 
     for (const item of mandalData) {
       const name = item.mandalName || "NULL"
-      const code = item.mandalCode || "NULL"
+      const code = item.mandalCode ?? "NULL"
 
       // Track codes per mandal name
       if (!mandalsByName.has(name)) {
@@ -39,10 +39,11 @@ async function checkCodeUniqueness() {
       mandalsByName.get(name)!.add(code)
 
       // Track names per mandal code
-      if (!mandalsByCode.has(code)) {
-        mandalsByCode.set(code, new Set())
+      const codeKey = code.toString()
+      if (!mandalsByCode.has(codeKey)) {
+        mandalsByCode.set(codeKey, new Set())
       }
-      mandalsByCode.get(code)!.add(name)
+      mandalsByCode.get(codeKey)!.add(name)
     }
 
     console.log(`\n📊 Total Unique Mandals: ${mandalsByName.size}`)
@@ -119,12 +120,12 @@ async function checkCodeUniqueness() {
     })
 
     // Group by secretariat name to check if each has unique code
-    const secsByName = new Map<string, Set<string>>()
-    const secsByCode = new Map<string, Set<string>>()
+    const secsByName = new Map<string, Set<string | number>>()
+    const secsByCode = new Map<string | number, Set<string>>()
 
     for (const item of secData) {
       const name = item.secName || "NULL"
-      const code = item.secCode || "NULL"
+      const code = item.secCode ?? "NULL"
 
       // Track codes per secretariat name
       if (!secsByName.has(name)) {
@@ -133,10 +134,11 @@ async function checkCodeUniqueness() {
       secsByName.get(name)!.add(code)
 
       // Track names per secretariat code
-      if (!secsByCode.has(code)) {
-        secsByCode.set(code, new Set())
+      const codeKey = code.toString()
+      if (!secsByCode.has(codeKey)) {
+        secsByCode.set(codeKey, new Set())
       }
-      secsByCode.get(code)!.add(name)
+      secsByCode.get(codeKey)!.add(name)
     }
 
     console.log(`\n📊 Total Unique Secretariats: ${secsByName.size}`)

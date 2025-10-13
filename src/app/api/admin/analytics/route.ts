@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { cache, CacheKeys } from "@/lib/cache"
@@ -10,7 +10,7 @@ function logTiming(label: string, startTime: number) {
   return duration
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const requestStart = Date.now()
 
   // Check authentication
@@ -30,7 +30,7 @@ export async function GET(_request: NextRequest) {
 
   // Check cache first
   const cacheKey = CacheKeys.adminAnalytics()
-  const cachedData = cache.get<any>(cacheKey)
+  const cachedData = cache.get<Record<string, unknown>>(cacheKey)
 
   if (cachedData) {
     console.log('[Analytics] Returning cached data')
@@ -161,33 +161,37 @@ export async function GET(_request: NextRequest) {
     logTiming('Recent updates', requestStart)
 
     // 5. Mandal-wise statistics (using consolidated schema - no JOINs)
-    const mandalStats = await prisma.resident.groupBy({
-      by: ["mandalName" as any],
+    // Note: Using type assertion as mandalName exists in DB but not in Prisma schema
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mandalStats = await (prisma.resident.groupBy as any)({
+      by: ["mandalName"],
       _count: {
         id: true,
       },
       where: {
         mandalName: {
           not: null,
-        } as any,
+        },
       },
       orderBy: {
         _count: {
           id: "desc",
         },
       },
-    }) as any[]
+    })
 
     // Format mandal stats for easier consumption
-    const mandalStatistics = mandalStats.map((stat: any) => ({
-      mandalName: stat.mandalName || "Unknown",
-      residentCount: stat._count?.id || 0,
+    const mandalStatistics = mandalStats.map((stat: Record<string, unknown>) => ({
+      mandalName: (stat.mandalName as string) || "Unknown",
+      residentCount: ((stat._count as Record<string, number>)?.id) || 0,
     }))
 
     // 6. Field officer performance metrics - Execute in parallel
     const [allFieldOfficers, updateCounts] = await Promise.all([
       // Get ALL active field officers (not just those with updates)
-      prisma.user.findMany({
+      // Note: Using type assertion as assignedSecretariats/mandalName exist in DB but not in Prisma schema
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (prisma.user.findMany as any)({
         where: {
           role: "FIELD_OFFICER",
           isActive: true,
@@ -197,10 +201,10 @@ export async function GET(_request: NextRequest) {
           username: true,
           fullName: true,
           role: true,
-          assignedSecretariats: true as any,
-          mandalName: true as any,
+          assignedSecretariats: true,
+          mandalName: true,
         },
-      }) as any,
+      }),
 
       // Get update counts for all field officers
       prisma.updateLog.groupBy({
@@ -221,20 +225,20 @@ export async function GET(_request: NextRequest) {
 
     // Create a map of userId to update count
     const updateCountMap = new Map(
-      updateCounts.map((count: any) => [count.userId, count._count?.id || 0])
+      updateCounts.map((count) => [count.userId, count._count?.id || 0])
     )
 
     // Combine field officer data with update counts (including 0 updates)
     const fieldOfficerStats = allFieldOfficers
-      .map((officer: any) => {
+      .map((officer: Record<string, unknown>) => {
         // Extract mandals from assignedSecretariats for field officers
         let mandals: string[] = []
         if (officer.role === "FIELD_OFFICER" && officer.assignedSecretariats) {
           try {
-            const secretariats = JSON.parse(officer.assignedSecretariats)
+            const secretariats = JSON.parse(officer.assignedSecretariats as string)
             if (Array.isArray(secretariats)) {
               // Handle both old and new formats
-              const mandalNames = secretariats.map((s: any) => {
+              const mandalNames = secretariats.map((s: string | { mandalName?: string }) => {
                 if (typeof s === 'string') {
                   // Old format: "MANDAL -> SECRETARIAT"
                   const parts = s.split(' -> ')
@@ -247,26 +251,26 @@ export async function GET(_request: NextRequest) {
               }).filter(Boolean)
 
               // Get unique mandal names
-              mandals = [...new Set(mandalNames)]
+              mandals = [...new Set(mandalNames)] as string[]
             }
           } catch (e) {
             console.error(`Failed to parse assignedSecretariats for officer ${officer.username}:`, e)
           }
         } else if (officer.mandalName) {
           // For Panchayat Secretary
-          mandals = [officer.mandalName]
+          mandals = [officer.mandalName as string]
         }
 
         return {
-          userId: officer.id,
-          username: officer.username,
-          name: officer.fullName,
-          role: officer.role,
+          userId: officer.id as string,
+          username: officer.username as string,
+          name: officer.fullName as string,
+          role: officer.role as string,
           mandals, // Array of mandal names this officer is assigned to
-          updatesCount: updateCountMap.get(officer.id) || 0,
+          updatesCount: updateCountMap.get(officer.id as string) || 0,
         }
       })
-      .sort((a: any, b: any) => b.updatesCount - a.updatesCount) // Sort by update count descending
+      .sort((a: { updatesCount: number }, b: { updatesCount: number }) => b.updatesCount - a.updatesCount) // Sort by update count descending
 
     // 6a. Count officers who are currently active (made updates in last 15 minutes)
     // 7. Updates over time (last 7 days for chart)

@@ -110,12 +110,12 @@ export async function GET(request: NextRequest) {
       }
 
       // Build where clause based on filters and access control
-      const whereClause: any = {}
+      const whereClause: Record<string, unknown> = {}
 
       // Apply access filter
       if (accessFilter.OR) {
         // For Field Officers with OR clause, we need to combine with user filters
-        const userFilters: any = {}
+        const userFilters: Record<string, unknown> = {}
         if (mandal) userFilters.mandalName = mandal
         if (secretariat) userFilters.secName = secretariat
         if (phc) userFilters.phcName = phc

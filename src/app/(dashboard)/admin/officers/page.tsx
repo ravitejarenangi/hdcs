@@ -23,7 +23,6 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
-import { format } from "date-fns"
 
 interface Officer {
   id: string
@@ -151,31 +150,7 @@ export default function OfficersPage() {
     }
   }
 
-  const handleDeactivate = async (officer: Officer) => {
-    if (
-      !confirm(
-        `Are you sure you want to deactivate ${officer.fullName}? They will no longer be able to log in.`
-      )
-    ) {
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/admin/officers/${officer.id}`, {
-        method: "DELETE",
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to deactivate officer")
-      }
-
-      toast.success("Officer deactivated successfully")
-      fetchOfficers()
-    } catch (error) {
-      console.error("Deactivate error:", error)
-      toast.error("Failed to deactivate officer")
-    }
-  }
+  // Removed unused handleDeactivate function - status toggle is handled by handleToggleStatus
 
   const getStatusBadge = (isActive: boolean) => {
     if (isActive) {
@@ -368,7 +343,7 @@ export default function OfficersPage() {
                         : []
 
                       // Handle both old format (string[]) and new format (object[])
-                      const displaySecretariats = assignedSecs.map((sec: any) => {
+                      const displaySecretariats = assignedSecs.map((sec: string | { mandalName: string; secName: string }) => {
                         if (typeof sec === 'string') {
                           return sec
                         } else if (sec && typeof sec === 'object' && sec.secName) {
