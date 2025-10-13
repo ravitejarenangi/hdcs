@@ -251,10 +251,10 @@ export async function GET(request: NextRequest) {
       const textSearchConditions = []
 
       // Search by name (case-insensitive partial match)
+      // Note: MySQL/MariaDB performs case-insensitive search by default for VARCHAR/TEXT fields
       textSearchConditions.push({
         name: {
           contains: searchTerm,
-          mode: 'insensitive' as const,
         },
       })
 
@@ -280,7 +280,6 @@ export async function GET(request: NextRequest) {
       textSearchConditions.push({
         residentId: {
           contains: searchTerm,
-          mode: 'insensitive' as const,
         },
       })
 
@@ -288,7 +287,6 @@ export async function GET(request: NextRequest) {
       textSearchConditions.push({
         healthId: {
           contains: searchTerm,
-          mode: 'insensitive' as const,
         },
       })
 
