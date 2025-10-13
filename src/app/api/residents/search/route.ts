@@ -240,7 +240,6 @@ export async function GET(request: NextRequest) {
       textSearchConditions.push({
         name: {
           contains: searchTerm,
-          mode: 'insensitive' as const,
         },
       })
 
@@ -266,7 +265,6 @@ export async function GET(request: NextRequest) {
       textSearchConditions.push({
         residentId: {
           contains: searchTerm,
-          mode: 'insensitive' as const,
         },
       })
 
@@ -274,7 +272,6 @@ export async function GET(request: NextRequest) {
       textSearchConditions.push({
         healthId: {
           contains: searchTerm,
-          mode: 'insensitive' as const,
         },
       })
 
