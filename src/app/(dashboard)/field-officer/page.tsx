@@ -398,7 +398,7 @@ export default function FieldOfficerDashboard() {
   // If Advanced Filter is active, search is scoped to those filters (mandal, secretariat, PHC)
   // Otherwise, search the entire database (with role-based access control)
   const performTextSearch = useCallback(async (searchQuery: string, page = 1) => {
-    if (!searchQuery || searchQuery.trim().length < 2) {
+    if (!searchQuery || searchQuery.trim().length < 4) {
       setTextSearchResult(null)
       setTextSearchError("")
       return
@@ -463,17 +463,17 @@ export default function FieldOfficerDashboard() {
       clearTimeout(searchTimeoutRef.current)
     }
 
-    // If search query is empty or less than 2 characters, clear results
-    if (!textSearchQuery || textSearchQuery.trim().length < 2) {
+    // If search query is empty or less than 4 characters, clear results
+    if (!textSearchQuery || textSearchQuery.trim().length < 4) {
       setTextSearchResult(null)
       setTextSearchError("")
       return
     }
 
-    // Set a new timeout for debounced search (500ms delay)
+    // Set a new timeout for debounced search (1500ms delay)
     searchTimeoutRef.current = setTimeout(() => {
       performTextSearch(textSearchQuery, 1)
-    }, 500)
+    }, 1500)
 
     // Cleanup function
     return () => {
@@ -516,7 +516,7 @@ export default function FieldOfficerDashboard() {
   // Get filtered residents for display
   const getFilteredResidents = (): Resident[] => {
     // If text search is active (user is typing in search box)
-    if (textSearchQuery && textSearchQuery.trim().length >= 2) {
+    if (textSearchQuery && textSearchQuery.trim().length >= 4) {
       // If we have text search results, use those
       if (textSearchResult) {
         return textSearchResult.residents
@@ -533,11 +533,11 @@ export default function FieldOfficerDashboard() {
   // Get the current search result for pagination and counts
   const getCurrentSearchResult = (): AdvancedSearchResult | null => {
     // If text search is active and has results, use those
-    if (textSearchQuery && textSearchQuery.trim().length >= 2 && textSearchResult) {
+    if (textSearchQuery && textSearchQuery.trim().length >= 4 && textSearchResult) {
       return textSearchResult
     }
     // If text search is active but no results, return null (will show "no results")
-    if (textSearchQuery && textSearchQuery.trim().length >= 2 && !textSearchResult && !isTextSearching) {
+    if (textSearchQuery && textSearchQuery.trim().length >= 4 && !textSearchResult && !isTextSearching) {
       return null
     }
     // Otherwise use advanced search results
@@ -988,7 +988,7 @@ export default function FieldOfficerDashboard() {
                   {/* Result Count */}
                   <div className="text-xs md:text-sm text-gray-600">
                     {(() => {
-                      const isTextSearch = textSearchQuery && textSearchQuery.trim().length >= 2
+                      const isTextSearch = textSearchQuery && textSearchQuery.trim().length >= 4
 
                       // If text search is active
                       if (isTextSearch) {
@@ -1023,7 +1023,7 @@ export default function FieldOfficerDashboard() {
                   {/* Results Table */}
                   {(() => {
                     const filteredResidents = getFilteredResidents()
-                    const isTextSearch = textSearchQuery && textSearchQuery.trim().length >= 2
+                    const isTextSearch = textSearchQuery && textSearchQuery.trim().length >= 4
 
                     if (isTextSearching) {
                       return (

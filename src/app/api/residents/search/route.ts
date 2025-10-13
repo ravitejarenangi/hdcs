@@ -211,9 +211,9 @@ export async function GET(request: NextRequest) {
     // Can optionally be scoped to specific location filters (mandal, secretariat, PHC)
     if (searchMode === "text") {
       // Validate search text parameter
-      if (!searchText || searchText.trim().length < 2) {
+      if (!searchText || searchText.trim().length < 4) {
         return NextResponse.json(
-          { error: "Search text must be at least 2 characters" },
+          { error: "Search text must be at least 4 characters" },
           { status: 400 }
         )
       }
