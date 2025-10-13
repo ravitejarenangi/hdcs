@@ -395,6 +395,8 @@ export default function FieldOfficerDashboard() {
   }
 
   // Real-time text search with debouncing
+  // If Advanced Filter is active, search is scoped to those filters
+  // Otherwise, search the entire database (with role-based access control)
   const performTextSearch = useCallback(async (searchQuery: string, page = 1) => {
     if (!searchQuery || searchQuery.trim().length < 2) {
       setTextSearchResult(null)
@@ -412,6 +414,19 @@ export default function FieldOfficerDashboard() {
         page: page.toString(),
         limit: pageSize.toString(),
       })
+
+      // If Advanced Filter is active, add location filters to scope the search
+      if (advancedSearchResult) {
+        if (selectedMandal) {
+          params.append("mandal", selectedMandal)
+        }
+        if (selectedSecretariat) {
+          params.append("secretariat", selectedSecretariat)
+        }
+        if (selectedPhc) {
+          params.append("phc", selectedPhc)
+        }
+      }
 
       const response = await fetch(`/api/residents/search?${params.toString()}`)
       const data = await response.json()
@@ -437,7 +452,7 @@ export default function FieldOfficerDashboard() {
     } finally {
       setIsTextSearching(false)
     }
-  }, [pageSize])
+  }, [pageSize, advancedSearchResult, selectedMandal, selectedSecretariat, selectedPhc])
 
   // Debounced text search effect
   useEffect(() => {
@@ -912,7 +927,11 @@ export default function FieldOfficerDashboard() {
                           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                           <Input
                             type="text"
-                            placeholder="Search by name, UID, phone... (min 2 chars)"
+                            placeholder={
+                              advancedSearchResult
+                                ? "Search within filtered results..."
+                                : "Search by name, UID, phone..."
+                            }
                             value={textSearchQuery}
                             onChange={(e) => setTextSearchQuery(e.target.value)}
                             className="pl-10 pr-10 h-11 md:h-auto text-sm md:text-base"
@@ -971,13 +990,16 @@ export default function FieldOfficerDashboard() {
                       // If text search is active
                       if (isTextSearch) {
                         if (isTextSearching) {
-                          return `Searching for "${textSearchQuery}"...`
+                          const scope = advancedSearchResult ? " within filtered results" : ""
+                          return `Searching${scope} for "${textSearchQuery}"...`
                         }
                         if (textSearchResult) {
-                          return `Found ${textSearchResult.totalResidents} resident(s) matching "${textSearchQuery}"`
+                          const scope = advancedSearchResult ? " (within filtered results)" : ""
+                          return `Found ${textSearchResult.totalResidents} resident(s) matching "${textSearchQuery}"${scope}`
                         }
                         // No results found
-                        return `No residents found matching "${textSearchQuery}"`
+                        const scope = advancedSearchResult ? " within filtered results" : ""
+                        return `No residents found${scope} matching "${textSearchQuery}"`
                       }
 
                       // Advanced search results

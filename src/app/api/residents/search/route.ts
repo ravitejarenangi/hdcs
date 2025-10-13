@@ -208,6 +208,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Mode 3: Text Search (real-time incremental search by name, UID, mobile)
+    // Can optionally be scoped to specific location filters (mandal, secretariat, PHC)
     if (searchMode === "text") {
       // Validate search text parameter
       if (!searchText || searchText.trim().length < 2) {
@@ -222,18 +223,31 @@ export async function GET(request: NextRequest) {
       // Build where clause with text search conditions
       const whereClause: Record<string, unknown> = {}
 
-      // Apply access filter first
+      // Step 1: Apply access filter first (role-based restrictions)
+      const accessConditions = []
       if (accessFilter.OR) {
         // For Field Officers with OR clause
-        whereClause.OR = accessFilter.OR
+        accessConditions.push({ OR: accessFilter.OR })
       } else if (accessFilter.mandalName) {
         // For Panchayat Secretary
-        whereClause.mandalName = accessFilter.mandalName
+        accessConditions.push({ mandalName: accessFilter.mandalName })
       }
-      // ADMIN has no restrictions
+      // ADMIN has no access restrictions
 
-      // Add text search conditions
-      // Search across name, UID (partial), mobile number, resident ID
+      // Step 2: Apply optional location filters (for scoped search within Advanced Filter results)
+      const locationConditions: Record<string, unknown> = {}
+      if (mandal) {
+        locationConditions.mandalName = mandal
+      }
+      if (secretariat) {
+        locationConditions.secName = secretariat
+      }
+      if (phc) {
+        locationConditions.phcName = phc
+      }
+
+      // Step 3: Build text search conditions
+      // Search across name, UID (partial), mobile number, resident ID, health ID
       const textSearchConditions = []
 
       // Search by name (case-insensitive partial match)
@@ -275,21 +289,28 @@ export async function GET(request: NextRequest) {
         },
       })
 
-      // Combine access filter with text search using AND
-      if (whereClause.OR || whereClause.mandalName) {
-        // If there's an access filter, combine it with text search
-        const accessCondition = whereClause.OR
-          ? { OR: whereClause.OR }
-          : { mandalName: whereClause.mandalName }
+      // Step 4: Combine all conditions using AND logic
+      // Final query: (access filter) AND (location filters) AND (text search)
+      const allConditions = []
 
-        whereClause.AND = [
-          accessCondition,
-          { OR: textSearchConditions },
-        ]
-        delete whereClause.OR
-        delete whereClause.mandalName
+      // Add access conditions
+      if (accessConditions.length > 0) {
+        allConditions.push(...accessConditions)
+      }
+
+      // Add location filters
+      if (Object.keys(locationConditions).length > 0) {
+        allConditions.push(locationConditions)
+      }
+
+      // Add text search (at least one field must match)
+      allConditions.push({ OR: textSearchConditions })
+
+      // Build final where clause
+      if (allConditions.length > 0) {
+        whereClause.AND = allConditions
       } else {
-        // No access filter (ADMIN), just use text search
+        // Fallback: just text search (shouldn't happen, but safe)
         whereClause.OR = textSearchConditions
       }
 
@@ -333,6 +354,11 @@ export async function GET(request: NextRequest) {
           hasPreviousPage: validatedPage > 1,
         },
         searchText: searchTerm,
+        filters: {
+          mandal: mandal || null,
+          secretariat: secretariat || null,
+          phc: phc || null,
+        },
         searchMode: "text",
       })
     }
