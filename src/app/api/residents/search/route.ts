@@ -29,7 +29,8 @@ export async function GET(request: NextRequest) {
   const mandal = searchParams.get("mandal")
   const secretariat = searchParams.get("secretariat")
   const phc = searchParams.get("phc")
-  const searchMode = searchParams.get("mode") || "uid" // "uid" or "advanced"
+  const searchText = searchParams.get("q") || searchParams.get("search") // Text search query
+  const searchMode = searchParams.get("mode") || "uid" // "uid", "advanced", or "text"
   const page = parseInt(searchParams.get("page") || "1")
   const limit = parseInt(searchParams.get("limit") || "25")
 
@@ -206,9 +207,142 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // Mode 3: Text Search (real-time incremental search by name, UID, mobile)
+    if (searchMode === "text") {
+      // Validate search text parameter
+      if (!searchText || searchText.trim().length < 2) {
+        return NextResponse.json(
+          { error: "Search text must be at least 2 characters" },
+          { status: 400 }
+        )
+      }
+
+      const searchTerm = searchText.trim()
+
+      // Build where clause with text search conditions
+      const whereClause: Record<string, unknown> = {}
+
+      // Apply access filter first
+      if (accessFilter.OR) {
+        // For Field Officers with OR clause
+        whereClause.OR = accessFilter.OR
+      } else if (accessFilter.mandalName) {
+        // For Panchayat Secretary
+        whereClause.mandalName = accessFilter.mandalName
+      }
+      // ADMIN has no restrictions
+
+      // Add text search conditions
+      // Search across name, UID (partial), mobile number, resident ID
+      const textSearchConditions = []
+
+      // Search by name (case-insensitive partial match)
+      textSearchConditions.push({
+        name: {
+          contains: searchTerm,
+          mode: 'insensitive' as const,
+        },
+      })
+
+      // Search by UID (partial match - useful for incremental typing)
+      if (/^\d+$/.test(searchTerm)) {
+        textSearchConditions.push({
+          uid: {
+            contains: searchTerm,
+          },
+        })
+      }
+
+      // Search by mobile number (partial match)
+      if (/^\d+$/.test(searchTerm)) {
+        textSearchConditions.push({
+          mobileNumber: {
+            contains: searchTerm,
+          },
+        })
+      }
+
+      // Search by resident ID (partial match)
+      textSearchConditions.push({
+        residentId: {
+          contains: searchTerm,
+          mode: 'insensitive' as const,
+        },
+      })
+
+      // Search by health ID (partial match)
+      textSearchConditions.push({
+        healthId: {
+          contains: searchTerm,
+          mode: 'insensitive' as const,
+        },
+      })
+
+      // Combine access filter with text search using AND
+      if (whereClause.OR || whereClause.mandalName) {
+        // If there's an access filter, combine it with text search
+        const accessCondition = whereClause.OR
+          ? { OR: whereClause.OR }
+          : { mandalName: whereClause.mandalName }
+
+        whereClause.AND = [
+          accessCondition,
+          { OR: textSearchConditions },
+        ]
+        delete whereClause.OR
+        delete whereClause.mandalName
+      } else {
+        // No access filter (ADMIN), just use text search
+        whereClause.OR = textSearchConditions
+      }
+
+      // Validate pagination parameters
+      const validatedPage = Math.max(1, page)
+      const validatedLimit = Math.min(Math.max(1, limit), 100) // Max 100 per page
+      const skip = (validatedPage - 1) * validatedLimit
+
+      // Get total count
+      const totalResidents = await prisma.resident.count({
+        where: whereClause,
+      })
+
+      if (totalResidents === 0) {
+        return NextResponse.json(
+          { error: "No residents found matching your search" },
+          { status: 404 }
+        )
+      }
+
+      // Find residents matching the search with pagination
+      const residents = await prisma.resident.findMany({
+        where: whereClause,
+        orderBy: [
+          { name: "asc" },
+        ],
+        skip,
+        take: validatedLimit,
+      })
+
+      const totalPages = Math.ceil(totalResidents / validatedLimit)
+
+      return NextResponse.json({
+        residents,
+        totalResidents,
+        pagination: {
+          currentPage: validatedPage,
+          totalPages,
+          pageSize: validatedLimit,
+          hasNextPage: validatedPage < totalPages,
+          hasPreviousPage: validatedPage > 1,
+        },
+        searchText: searchTerm,
+        searchMode: "text",
+      })
+    }
+
     // Invalid search mode
     return NextResponse.json(
-      { error: "Invalid search mode. Use 'uid' or 'advanced'" },
+      { error: "Invalid search mode. Use 'uid', 'advanced', or 'text'" },
       { status: 400 }
     )
   } catch (error) {

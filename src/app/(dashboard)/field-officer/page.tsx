@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -91,8 +91,15 @@ export default function FieldOfficerDashboard() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
 
-  // Table Search State (for filtering results)
-  const [tableSearchTerm, setTableSearchTerm] = useState("")
+  // Table Search State (for client-side filtering of results)
+  const [tableSearchTerm] = useState("")
+
+  // Real-time Text Search State (searches entire database)
+  const [textSearchQuery, setTextSearchQuery] = useState("")
+  const [textSearchResult, setTextSearchResult] = useState<AdvancedSearchResult | null>(null)
+  const [isTextSearching, setIsTextSearching] = useState(false)
+  const [textSearchError, setTextSearchError] = useState("")
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Location Options State
   const [mandals, setMandals] = useState<LocationOption[]>([])
@@ -368,7 +375,13 @@ export default function FieldOfficerDashboard() {
   const handlePageSizeChange = (newSize: number) => {
     setPageSize(newSize)
     setCurrentPage(1)
-    handleAdvancedSearch(1)
+
+    // If text search is active, re-run text search with new page size
+    if (textSearchQuery && textSearchQuery.trim().length >= 2) {
+      performTextSearch(textSearchQuery, 1)
+    } else {
+      handleAdvancedSearch(1)
+    }
   }
 
   const handleUidUpdateSuccess = () => {
@@ -381,13 +394,79 @@ export default function FieldOfficerDashboard() {
     handleAdvancedSearch()
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleUidSearch()
+  // Real-time text search with debouncing
+  const performTextSearch = useCallback(async (searchQuery: string, page = 1) => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setTextSearchResult(null)
+      setTextSearchError("")
+      return
     }
-  }
 
-  // Filter residents based on table search term
+    setIsTextSearching(true)
+    setTextSearchError("")
+
+    try {
+      const params = new URLSearchParams({
+        mode: "text",
+        q: searchQuery.trim(),
+        page: page.toString(),
+        limit: pageSize.toString(),
+      })
+
+      const response = await fetch(`/api/residents/search?${params.toString()}`)
+      const data = await response.json()
+
+      if (!response.ok) {
+        setTextSearchError(data.error || "Search failed")
+        setTextSearchResult(null)
+        if (data.error !== "No residents found matching your search") {
+          toast.error("Search Failed", {
+            description: data.error || "No residents found",
+          })
+        }
+      } else {
+        setTextSearchResult(data)
+        setCurrentPage(page)
+      }
+    } catch {
+      setTextSearchError("Network error. Please try again.")
+      setTextSearchResult(null)
+      toast.error("Network Error", {
+        description: "Please check your connection and try again",
+      })
+    } finally {
+      setIsTextSearching(false)
+    }
+  }, [pageSize])
+
+  // Debounced text search effect
+  useEffect(() => {
+    // Clear any existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    // If search query is empty or less than 2 characters, clear results
+    if (!textSearchQuery || textSearchQuery.trim().length < 2) {
+      setTextSearchResult(null)
+      setTextSearchError("")
+      return
+    }
+
+    // Set a new timeout for debounced search (500ms delay)
+    searchTimeoutRef.current = setTimeout(() => {
+      performTextSearch(textSearchQuery, 1)
+    }, 500)
+
+    // Cleanup function
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [textSearchQuery, performTextSearch])
+
+  // Filter residents based on table search term (client-side filtering)
   const filterResidents = (residents: Resident[]): Resident[] => {
     if (!tableSearchTerm.trim()) {
       return residents
@@ -419,13 +498,22 @@ export default function FieldOfficerDashboard() {
 
   // Get filtered residents for display
   const getFilteredResidents = (): Resident[] => {
+    // If text search is active and has results, use those
+    if (textSearchQuery && textSearchQuery.trim().length >= 2 && textSearchResult) {
+      return textSearchResult.residents
+    }
+
+    // Otherwise use advanced search results with client-side filtering
     if (!advancedSearchResult) return []
     return filterResidents(advancedSearchResult.residents)
   }
 
-  // Clear table search
-  const clearTableSearch = () => {
-    setTableSearchTerm("")
+  // Get the current search result for pagination and counts
+  const getCurrentSearchResult = (): AdvancedSearchResult | null => {
+    if (textSearchQuery && textSearchQuery.trim().length >= 2 && textSearchResult) {
+      return textSearchResult
+    }
+    return advancedSearchResult
   }
 
   const clearUidSearch = () => {
@@ -440,6 +528,9 @@ export default function FieldOfficerDashboard() {
     setSelectedPhc("")
     setAdvancedSearchResult(null)
     setAdvancedError("")
+    setTextSearchQuery("") // Also clear text search
+    setTextSearchResult(null)
+    setTextSearchError("")
   }
 
   return (
@@ -496,7 +587,11 @@ export default function FieldOfficerDashboard() {
                           setSearchUid(e.target.value)
                           setUidError("")
                         }}
-                        onKeyPress={handleKeyPress}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            handleUidSearch()
+                          }
+                        }}
                         className="text-base md:text-lg h-11 md:h-auto"
                         maxLength={12}
                         disabled={isUidSearching}
@@ -591,11 +686,64 @@ export default function FieldOfficerDashboard() {
                   Advanced Filter Search
                 </CardTitle>
                 <CardDescription className="text-sm">
-                  Select filters to search for residents by location (Mandal → Secretariat → PHC)
+                  Search by text (name, UID, mobile) OR use location filters (Mandal → Secretariat → PHC)
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4 md:p-6">
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  {/* Real-time Text Search Section */}
+                  <div className="space-y-2">
+                    <Label htmlFor="text-search" className="text-sm md:text-base font-semibold">
+                      Quick Search (Real-time)
+                    </Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="text-search"
+                        type="text"
+                        placeholder="Type name, UID, or mobile number... (min 2 characters)"
+                        value={textSearchQuery}
+                        onChange={(e) => setTextSearchQuery(e.target.value)}
+                        className="pl-10 pr-10 h-11 md:h-auto text-sm md:text-base"
+                        disabled={isTextSearching}
+                      />
+                      {isTextSearching && (
+                        <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-orange-600" />
+                      )}
+                      {textSearchQuery && !isTextSearching && (
+                        <button
+                          onClick={() => setTextSearchQuery("")}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          aria-label="Clear search"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                    {textSearchError && (
+                      <p className="text-xs text-red-600 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {textSearchError}
+                      </p>
+                    )}
+                    {textSearchQuery && textSearchQuery.trim().length < 2 && (
+                      <p className="text-xs text-gray-500">
+                        Type at least 2 characters to search
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-gray-500">OR use location filters</span>
+                    </div>
+                  </div>
+
+                  {/* Location Filters Section */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Mandal Filter */}
                     <div className="space-y-2">
@@ -799,20 +947,24 @@ export default function FieldOfficerDashboard() {
                 <CardContent className="space-y-4 p-4 md:p-6">
                   {/* Search and Page Size Controls */}
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-                    {/* Search Input */}
+                    {/* Real-time Search Input */}
                     <div className="flex-1 w-full sm:max-w-md">
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
                           type="text"
-                          placeholder="Search by name, UID, phone..."
-                          value={tableSearchTerm}
-                          onChange={(e) => setTableSearchTerm(e.target.value)}
+                          placeholder="Search by name, UID, phone... (min 2 chars)"
+                          value={textSearchQuery}
+                          onChange={(e) => setTextSearchQuery(e.target.value)}
                           className="pl-10 pr-10 h-11 md:h-auto text-sm md:text-base"
+                          disabled={isTextSearching}
                         />
-                        {tableSearchTerm && (
+                        {isTextSearching && (
+                          <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-gray-400" />
+                        )}
+                        {textSearchQuery && !isTextSearching && (
                           <button
-                            onClick={clearTableSearch}
+                            onClick={() => setTextSearchQuery("")}
                             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 w-11 h-11 flex items-center justify-center"
                             aria-label="Clear search"
                           >
@@ -848,9 +1000,17 @@ export default function FieldOfficerDashboard() {
                   {/* Result Count */}
                   <div className="text-xs md:text-sm text-gray-600">
                     {(() => {
+                      const currentResult = getCurrentSearchResult()
+                      if (!currentResult) return "No results"
+
                       const filteredResidents = getFilteredResidents()
                       const totalOnPage = filteredResidents.length
-                      const totalAll = advancedSearchResult.totalResidents
+                      const totalAll = currentResult.totalResidents
+                      const isTextSearch = textSearchQuery && textSearchQuery.trim().length >= 2
+
+                      if (isTextSearch) {
+                        return `Found ${totalAll} resident(s) matching "${textSearchQuery}"`
+                      }
 
                       if (tableSearchTerm) {
                         return `Showing ${totalOnPage} of ${totalAll} residents (filtered)`
@@ -862,8 +1022,19 @@ export default function FieldOfficerDashboard() {
                   {/* Results Table */}
                   {(() => {
                     const filteredResidents = getFilteredResidents()
+                    const isTextSearch = textSearchQuery && textSearchQuery.trim().length >= 2
 
-                    if (filteredResidents.length === 0 && tableSearchTerm) {
+                    if (isTextSearching) {
+                      return (
+                        <div className="text-center py-8 text-gray-500">
+                          <Loader2 className="h-12 w-12 mx-auto mb-3 text-gray-400 animate-spin" />
+                          <p className="font-medium">Searching...</p>
+                          <p className="text-sm">Please wait</p>
+                        </div>
+                      )
+                    }
+
+                    if (filteredResidents.length === 0 && (tableSearchTerm || isTextSearch)) {
                       return (
                         <div className="text-center py-8 text-gray-500">
                           <Search className="h-12 w-12 mx-auto mb-3 text-gray-400" />
@@ -882,43 +1053,56 @@ export default function FieldOfficerDashboard() {
                   })()}
 
                   {/* Pagination Controls */}
-                  {advancedSearchResult.pagination.totalPages > 1 && (
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t">
-                      <div className="text-xs md:text-sm text-gray-600 order-2 sm:order-1">
-                        Page {advancedSearchResult.pagination.currentPage} of{" "}
-                        {advancedSearchResult.pagination.totalPages}
-                      </div>
-                      <div className="flex items-center gap-1 md:gap-2 order-1 sm:order-2 w-full sm:w-auto justify-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handlePageChange(currentPage - 1)}
-                          disabled={
-                            !advancedSearchResult.pagination.hasPreviousPage ||
-                            isAdvancedSearching
-                          }
-                          className="h-11 md:h-auto px-2 md:px-4"
-                        >
-                          <ChevronLeft className="h-4 w-4 md:mr-1" />
-                          <span className="hidden md:inline">Previous</span>
-                        </Button>
+                  {(() => {
+                    const currentResult = getCurrentSearchResult()
+                    if (!currentResult || currentResult.pagination.totalPages <= 1) return null
 
-                        {/* Page Numbers */}
-                        <div className="hidden sm:flex items-center gap-1">
-                          {Array.from(
-                            { length: advancedSearchResult.pagination.totalPages },
-                            (_, i) => i + 1
-                          )
-                            .filter((page) => {
-                              // Show first page, last page, current page, and pages around current
-                              const current = advancedSearchResult.pagination.currentPage
-                              return (
-                                page === 1 ||
-                                page === advancedSearchResult.pagination.totalPages ||
-                                (page >= current - 1 && page <= current + 1)
-                              )
-                            })
-                            .map((page, index, array) => {
+                    const isTextSearch = textSearchQuery && textSearchQuery.trim().length >= 2
+                    const isSearching = isTextSearch ? isTextSearching : isAdvancedSearching
+
+                    return (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t">
+                        <div className="text-xs md:text-sm text-gray-600 order-2 sm:order-1">
+                          Page {currentResult.pagination.currentPage} of{" "}
+                          {currentResult.pagination.totalPages}
+                        </div>
+                        <div className="flex items-center gap-1 md:gap-2 order-1 sm:order-2 w-full sm:w-auto justify-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (isTextSearch) {
+                                performTextSearch(textSearchQuery, currentPage - 1)
+                              } else {
+                                handlePageChange(currentPage - 1)
+                              }
+                            }}
+                            disabled={
+                              !currentResult.pagination.hasPreviousPage ||
+                              isSearching
+                            }
+                            className="h-11 md:h-auto px-2 md:px-4"
+                          >
+                            <ChevronLeft className="h-4 w-4 md:mr-1" />
+                            <span className="hidden md:inline">Previous</span>
+                          </Button>
+
+                          {/* Page Numbers */}
+                          <div className="hidden sm:flex items-center gap-1">
+                            {Array.from(
+                              { length: currentResult.pagination.totalPages },
+                              (_, i) => i + 1
+                            )
+                              .filter((page) => {
+                                // Show first page, last page, current page, and pages around current
+                                const current = currentResult.pagination.currentPage
+                                return (
+                                  page === 1 ||
+                                  page === currentResult.pagination.totalPages ||
+                                  (page >= current - 1 && page <= current + 1)
+                                )
+                              })
+                              .map((page, index, array) => {
                               // Add ellipsis if there's a gap
                               const prevPage = array[index - 1]
                               const showEllipsis = prevPage && page - prevPage > 1
@@ -930,13 +1114,19 @@ export default function FieldOfficerDashboard() {
                                   )}
                                   <Button
                                     variant={
-                                      page === advancedSearchResult.pagination.currentPage
+                                      page === currentResult.pagination.currentPage
                                         ? "default"
                                         : "outline"
                                     }
                                     size="sm"
-                                    onClick={() => handlePageChange(page)}
-                                    disabled={isAdvancedSearching}
+                                    onClick={() => {
+                                      if (isTextSearch) {
+                                        performTextSearch(textSearchQuery, page)
+                                      } else {
+                                        handlePageChange(page)
+                                      }
+                                    }}
+                                    disabled={isSearching}
                                     className="min-w-[2rem] md:min-w-[2.5rem] h-11 md:h-auto"
                                   >
                                     {page}
@@ -949,10 +1139,16 @@ export default function FieldOfficerDashboard() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handlePageChange(currentPage + 1)}
+                          onClick={() => {
+                            if (isTextSearch) {
+                              performTextSearch(textSearchQuery, currentPage + 1)
+                            } else {
+                              handlePageChange(currentPage + 1)
+                            }
+                          }}
                           disabled={
-                            !advancedSearchResult.pagination.hasNextPage ||
-                            isAdvancedSearching
+                            !currentResult.pagination.hasNextPage ||
+                            isSearching
                           }
                           className="h-11 md:h-auto px-2 md:px-4"
                         >
@@ -961,7 +1157,7 @@ export default function FieldOfficerDashboard() {
                         </Button>
                       </div>
                     </div>
-                  )}
+                  )})()}
                 </CardContent>
               </Card>
             )}
