@@ -498,9 +498,14 @@ export default function FieldOfficerDashboard() {
 
   // Get filtered residents for display
   const getFilteredResidents = (): Resident[] => {
-    // If text search is active and has results, use those
-    if (textSearchQuery && textSearchQuery.trim().length >= 2 && textSearchResult) {
-      return textSearchResult.residents
+    // If text search is active (user is typing in search box)
+    if (textSearchQuery && textSearchQuery.trim().length >= 2) {
+      // If we have text search results, use those
+      if (textSearchResult) {
+        return textSearchResult.residents
+      }
+      // If text search returned no results (404), return empty array
+      return []
     }
 
     // Otherwise use advanced search results with client-side filtering
@@ -510,9 +515,15 @@ export default function FieldOfficerDashboard() {
 
   // Get the current search result for pagination and counts
   const getCurrentSearchResult = (): AdvancedSearchResult | null => {
+    // If text search is active and has results, use those
     if (textSearchQuery && textSearchQuery.trim().length >= 2 && textSearchResult) {
       return textSearchResult
     }
+    // If text search is active but no results, return null (will show "no results")
+    if (textSearchQuery && textSearchQuery.trim().length >= 2 && !textSearchResult && !isTextSearching) {
+      return null
+    }
+    // Otherwise use advanced search results
     return advancedSearchResult
   }
 
@@ -955,17 +966,27 @@ export default function FieldOfficerDashboard() {
                   {/* Result Count */}
                   <div className="text-xs md:text-sm text-gray-600">
                     {(() => {
+                      const isTextSearch = textSearchQuery && textSearchQuery.trim().length >= 2
+
+                      // If text search is active
+                      if (isTextSearch) {
+                        if (isTextSearching) {
+                          return `Searching for "${textSearchQuery}"...`
+                        }
+                        if (textSearchResult) {
+                          return `Found ${textSearchResult.totalResidents} resident(s) matching "${textSearchQuery}"`
+                        }
+                        // No results found
+                        return `No residents found matching "${textSearchQuery}"`
+                      }
+
+                      // Advanced search results
                       const currentResult = getCurrentSearchResult()
                       if (!currentResult) return "No results"
 
                       const filteredResidents = getFilteredResidents()
                       const totalOnPage = filteredResidents.length
                       const totalAll = currentResult.totalResidents
-                      const isTextSearch = textSearchQuery && textSearchQuery.trim().length >= 2
-
-                      if (isTextSearch) {
-                        return `Found ${totalAll} resident(s) matching "${textSearchQuery}"`
-                      }
 
                       if (tableSearchTerm) {
                         return `Showing ${totalOnPage} of ${totalAll} residents (filtered)`
@@ -982,19 +1003,23 @@ export default function FieldOfficerDashboard() {
                     if (isTextSearching) {
                       return (
                         <div className="text-center py-8 text-gray-500">
-                          <Loader2 className="h-12 w-12 mx-auto mb-3 text-gray-400 animate-spin" />
+                          <Loader2 className="h-12 w-12 mx-auto mb-3 text-orange-600 animate-spin" />
                           <p className="font-medium">Searching...</p>
                           <p className="text-sm">Please wait</p>
                         </div>
                       )
                     }
 
-                    if (filteredResidents.length === 0 && (tableSearchTerm || isTextSearch)) {
+                    if (filteredResidents.length === 0) {
                       return (
                         <div className="text-center py-8 text-gray-500">
                           <Search className="h-12 w-12 mx-auto mb-3 text-gray-400" />
                           <p className="font-medium">No residents found</p>
-                          <p className="text-sm">Try adjusting your search term</p>
+                          <p className="text-sm">
+                            {isTextSearch
+                              ? `No results matching "${textSearchQuery}". Try a different search term.`
+                              : "Try adjusting your search filters"}
+                          </p>
                         </div>
                       )
                     }
