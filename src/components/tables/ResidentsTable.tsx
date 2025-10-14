@@ -21,6 +21,13 @@ import { Label } from "@/components/ui/label"
 import { Edit2, Save, X, Phone, CreditCard, User, MapPin, Calendar, Users, Home, Loader2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { toast } from "sonner"
 
+// Helper function to mask UID (show only last 4 digits)
+function maskUID(uid: string | null): string {
+  if (!uid) return "Not set"
+  if (uid.length <= 4) return uid
+  return "*".repeat(uid.length - 4) + uid.slice(-4)
+}
+
 // Helper function to validate mobile number patterns
 function isValidMobilePattern(mobile: string): boolean {
   // Check if all digits are the same (e.g., 9999999999, 8888888888)
@@ -155,7 +162,7 @@ function SearchedPersonDetails({ person }: SearchedPersonDetailsProps) {
               <CreditCard className="h-4 w-4 text-gray-600 mt-0.5" />
               <div>
                 <div className="text-xs text-gray-600 font-medium">UID</div>
-                <div className="font-mono text-sm">{person.uid || <span className="text-gray-400">Not set</span>}</div>
+                <div className="font-mono text-sm">{maskUID(person.uid)}</div>
               </div>
             </div>
           </div>
@@ -196,7 +203,7 @@ function SearchedPersonDetails({ person }: SearchedPersonDetailsProps) {
               <div>
                 <div className="text-xs text-gray-600 font-medium">Mobile Number</div>
                 <div className="text-sm font-medium">
-                  {person.citizenMobile || <span className="text-gray-400">Not set</span>}
+                  {person.citizenMobile || <span className="text-gray-400">0</span>}
                 </div>
               </div>
             </div>
@@ -367,7 +374,7 @@ function HouseholdMemberCard({
             </div>
 
             <div className="text-sm space-y-1 text-gray-700">
-              <div><strong>UID:</strong> {member.uid || "N/A"}</div>
+              <div><strong>UID:</strong> {maskUID(member.uid)}</div>
               <div><strong>Age:</strong> {member.age || "N/A"}</div>
               <div><strong>Gender:</strong> {member.gender || "N/A"}</div>
               {member.dob && (
@@ -403,7 +410,7 @@ function HouseholdMemberCard({
                 </div>
               ) : (
                 <div className="text-sm font-medium">
-                  {member.citizenMobile || <span className="text-gray-400">Not set</span>}
+                  {member.citizenMobile || <span className="text-gray-400">0</span>}
                 </div>
               )}
             </div>
@@ -742,7 +749,7 @@ export function ResidentsTable({
                   )}
                 </CardTitle>
                 <div className="mt-2 space-y-1 text-xs text-gray-600">
-                  <div><strong>UID:</strong> {resident.uid || "N/A"}</div>
+                  <div><strong>UID:</strong> {maskUID(resident.uid)}</div>
                   <div><strong>Age:</strong> {resident.age || "N/A"} | <strong>Gender:</strong> {resident.gender || "N/A"}</div>
                   {resident.secName && (
                     <div className="flex items-center gap-1">
@@ -835,7 +842,7 @@ export function ResidentsTable({
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Mobile:</span>
-                  <span className="font-medium">{resident.citizenMobile || "Not set"}</span>
+                  <span className="font-medium">{resident.citizenMobile || "0"}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Health ID:</span>
@@ -863,10 +870,10 @@ export function ResidentsTable({
   // Sortable column header component
   const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
     <TableHead
-      className="font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+      className="font-semibold cursor-pointer hover:bg-gray-100 transition-colors text-center"
       onClick={() => handleSort(field)}
     >
-      <div className="flex items-center gap-1">
+      <div className="flex items-center justify-center gap-1">
         {children}
         {sortField === field && (
           sortDirection === 'asc' ?
@@ -885,13 +892,13 @@ export function ResidentsTable({
         <TableHeader>
           <TableRow className="bg-gray-50">
             <SortableHeader field="name">Name</SortableHeader>
-            <TableHead className="font-semibold">UID</TableHead>
-            <TableHead className="font-semibold">Age</TableHead>
-            <TableHead className="font-semibold">Gender</TableHead>
+            <TableHead className="font-semibold text-center">UID</TableHead>
+            <TableHead className="font-semibold text-center">Age</TableHead>
+            <TableHead className="font-semibold text-center">Gender</TableHead>
             <SortableHeader field="citizenMobile">Mobile Number</SortableHeader>
             <SortableHeader field="healthId">Health ID</SortableHeader>
             <SortableHeader field="secName">Location</SortableHeader>
-            <TableHead className="font-semibold">PHC</TableHead>
+            <TableHead className="font-semibold text-center">PHC</TableHead>
             <TableHead className="font-semibold text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -905,8 +912,8 @@ export function ResidentsTable({
                   : ""
               }
             >
-              <TableCell className="font-medium">
-                <div className="flex items-center gap-2">
+              <TableCell className="font-medium text-center">
+                <div className="flex items-center justify-center gap-2">
                   {resident.name}
                   {resident.residentId === searchedResidentId && (
                     <Badge variant="default" className="bg-orange-600 text-xs">
@@ -915,12 +922,12 @@ export function ResidentsTable({
                   )}
                 </div>
               </TableCell>
-              <TableCell className="font-mono text-xs">{resident.uid || "N/A"}</TableCell>
-              <TableCell>{resident.age || "N/A"}</TableCell>
-              <TableCell>{resident.gender || "N/A"}</TableCell>
-              <TableCell>
+              <TableCell className="font-mono text-xs text-center whitespace-nowrap">{maskUID(resident.uid)}</TableCell>
+              <TableCell className="text-center">{resident.age || "N/A"}</TableCell>
+              <TableCell className="text-center">{resident.gender || "N/A"}</TableCell>
+              <TableCell className="text-center">
                 {editingId === resident.residentId ? (
-                  <div className="space-y-1">
+                  <div className="space-y-1 flex flex-col items-center">
                     <Input
                       {...register("citizenMobile")}
                       placeholder="10-digit mobile"
@@ -933,13 +940,13 @@ export function ResidentsTable({
                   </div>
                 ) : (
                   <span className={resident.citizenMobile ? "font-medium" : "text-gray-400"}>
-                    {resident.citizenMobile || "Not set"}
+                    {resident.citizenMobile || "0"}
                   </span>
                 )}
               </TableCell>
-              <TableCell>
+              <TableCell className="text-center">
                 {editingId === resident.residentId ? (
-                  <div className="space-y-1">
+                  <div className="space-y-1 flex flex-col items-center">
                     <Controller
                       name="healthId"
                       control={control}
@@ -977,10 +984,10 @@ export function ResidentsTable({
                   </span>
                 )}
               </TableCell>
-              <TableCell className="text-xs">
+              <TableCell className="text-xs text-center">
                 {resident.secName ? `${resident.secName}, ${resident.mandalName}` : "N/A"}
               </TableCell>
-              <TableCell className="text-xs">{resident.phcName || "N/A"}</TableCell>
+              <TableCell className="text-xs text-center">{resident.phcName || "N/A"}</TableCell>
               <TableCell>
                 {editingId === resident.residentId ? (
                   <div className="flex gap-1 justify-center">

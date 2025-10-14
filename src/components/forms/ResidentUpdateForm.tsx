@@ -12,6 +12,13 @@ import { Badge } from "@/components/ui/badge"
 import { Phone, CreditCard, User, MapPin, Calendar, Users } from "lucide-react"
 import { toast } from "sonner"
 
+// Helper function to mask UID (show only last 4 digits)
+function maskUID(uid: string | null): string {
+  if (!uid) return "Not available"
+  if (uid.length <= 4) return uid
+  return "*".repeat(uid.length - 4) + uid.slice(-4)
+}
+
 // Helper function to validate mobile number patterns
 function isValidMobilePattern(mobile: string): boolean {
   // Check if all digits are the same (e.g., 9999999999, 8888888888)
@@ -200,7 +207,7 @@ export function ResidentUpdateForm({
             </CardTitle>
             <div className="mt-2 space-y-1 text-sm text-gray-600">
               <div className="flex items-center gap-2">
-                <strong>UID:</strong> {resident.uid || "Not available"}
+                <strong>UID:</strong> {maskUID(resident.uid)}
               </div>
               <div className="flex items-center gap-2">
                 <strong>Resident ID:</strong> {resident.residentId}
