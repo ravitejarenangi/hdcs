@@ -60,10 +60,10 @@ export async function GET() {
       prisma.resident.count({
         where: {
           AND: [
-            { mobileNumber: { not: null } },
-            { mobileNumber: { not: "N/A" } },
-            { mobileNumber: { not: "0" } },
-            { mobileNumber: { not: "" } },
+            { citizenMobile: { not: null } },
+            { citizenMobile: { not: "N/A" } },
+            { citizenMobile: { not: "0" } },
+            { citizenMobile: { not: "" } },
           ],
         },
       }),
@@ -91,10 +91,10 @@ export async function GET() {
       prisma.resident.count({
         where: {
           OR: [
-            { mobileNumber: null },
-            { mobileNumber: "N/A" },
-            { mobileNumber: "0" },
-            { mobileNumber: "" },
+            { citizenMobile: null },
+            { citizenMobile: "N/A" },
+            { citizenMobile: "0" },
+            { citizenMobile: "" },
           ],
         },
       }),
@@ -335,10 +335,10 @@ export async function GET() {
           mandal_name as mandalName,
           COUNT(*) as totalResidents,
           SUM(CASE
-            WHEN mobile_number IS NOT NULL
-              AND mobile_number != 'N/A'
-              AND mobile_number != '0'
-              AND mobile_number != ''
+            WHEN citizen_mobile IS NOT NULL
+              AND citizen_mobile != 'N/A'
+              AND citizen_mobile != '0'
+              AND citizen_mobile != ''
             THEN 1
             ELSE 0
           END) as withMobile,
@@ -370,10 +370,10 @@ export async function GET() {
           sec_name as secName,
           COUNT(*) as totalResidents,
           SUM(CASE
-            WHEN mobile_number IS NOT NULL
-              AND mobile_number != 'N/A'
-              AND mobile_number != '0'
-              AND mobile_number != ''
+            WHEN citizen_mobile IS NOT NULL
+              AND citizen_mobile != 'N/A'
+              AND citizen_mobile != '0'
+              AND citizen_mobile != ''
             THEN 1
             ELSE 0
           END) as withMobile,

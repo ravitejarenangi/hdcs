@@ -3,11 +3,51 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
 
+// Helper function to validate mobile number patterns
+function isValidMobilePattern(mobile: string): boolean {
+  // Check if all digits are the same (e.g., 9999999999, 8888888888)
+  const allSameDigit = /^(\d)\1{9}$/.test(mobile)
+  if (allSameDigit) return false
+
+  // Check for repetitive patterns (e.g., 9999998888, 7777776666)
+  // Pattern: 5+ same digits followed by 4+ same digits
+  const repetitivePattern = /^(\d)\1{4,}(\d)\2{3,}$/.test(mobile)
+  if (repetitivePattern) return false
+
+  // Check for simple sequential patterns (e.g., 1234567890, 0987654321)
+  const digits = mobile.split('').map(Number)
+  let isAscending = true
+  let isDescending = true
+
+  for (let i = 1; i < digits.length; i++) {
+    if (digits[i] !== digits[i - 1] + 1) isAscending = false
+    if (digits[i] !== digits[i - 1] - 1) isDescending = false
+  }
+
+  if (isAscending || isDescending) return false
+
+  return true
+}
+
+// Helper function to validate Health ID format
+function isValidHealthIdFormat(healthId: string): boolean {
+  // Remove all non-digit characters
+  const digits = healthId.replace(/\D/g, '')
+
+  // Must be exactly 14 digits
+  return digits.length === 14 && /^\d{14}$/.test(digits)
+}
+
 // Validation schema for update requests
 const updateSchema = z.object({
-  mobileNumber: z
+  citizenMobile: z
     .union([
-      z.string().regex(/^[6-9]\d{9}$/, "Mobile number must be 10 digits starting with 6-9"),
+      z.string()
+        .regex(/^[6-9]\d{9}$/, "Mobile number must be 10 digits starting with 6-9")
+        .refine(
+          (val) => isValidMobilePattern(val),
+          "Mobile number cannot be repetitive or sequential (e.g., 9999999999, 9999998888)"
+        ),
       z.null(),
       z.literal(""),
     ])
@@ -15,7 +55,12 @@ const updateSchema = z.object({
     .transform((val) => (val === "" ? null : val)),
   healthId: z
     .union([
-      z.string().min(1, "Health ID cannot be empty").max(50, "Health ID too long"),
+      z.string()
+        .refine(
+          (val) => isValidHealthIdFormat(val),
+          "Health ID must be 14 digits (format: XX-XXXX-XXXX-XXXX)"
+        ),
+      // Health IDs are stored WITH dashes in database to match existing data
       z.null(),
       z.literal(""),
     ])
@@ -53,17 +98,45 @@ export async function PUT(
       )
     }
 
+    // Validate citizenMobile uniqueness within secretariat (max 5 residents per mobile number)
+    if (
+      validatedData.citizenMobile !== undefined &&
+      validatedData.citizenMobile !== null &&
+      validatedData.citizenMobile !== "" &&
+      validatedData.citizenMobile !== currentResident.citizenMobile // Only validate if mobile number is changing
+    ) {
+      // Count how many residents in the same secretariat already have this mobile number
+      const duplicateCount = await prisma.resident.count({
+        where: {
+          citizenMobile: validatedData.citizenMobile,
+          secName: currentResident.secName, // Same secretariat
+          residentId: { not: residentId }, // Exclude current resident
+        },
+      })
+
+      // If 5 or more residents already have this mobile number, reject the update
+      if (duplicateCount >= 5) {
+        return NextResponse.json(
+          {
+            error: "MOBILE_DUPLICATE_LIMIT_EXCEEDED",
+            message: `This mobile number is already used by ${duplicateCount} residents in this secretariat. The same mobile number cannot be assigned to more than 5 residents.`,
+          },
+          { status: 400 }
+        )
+      }
+    }
+
     // Prepare update data (only include fields that are provided)
     const updateData: {
       updatedAt: Date
-      mobileNumber?: string | null
+      citizenMobile?: string | null
       healthId?: string | null
     } = {
       updatedAt: new Date(),
     }
 
-    if (validatedData.mobileNumber !== undefined) {
-      updateData.mobileNumber = validatedData.mobileNumber
+    if (validatedData.citizenMobile !== undefined) {
+      updateData.citizenMobile = validatedData.citizenMobile
     }
 
     if (validatedData.healthId !== undefined) {
@@ -78,20 +151,20 @@ export async function PUT(
 
     // Log changes to UpdateLog table
     const changes = []
-    const ipAddress = request.headers.get("x-forwarded-for") || 
-                     request.headers.get("x-real-ip") || 
+    const ipAddress = request.headers.get("x-forwarded-for") ||
+                     request.headers.get("x-real-ip") ||
                      "unknown"
 
     if (
-      validatedData.mobileNumber !== undefined &&
-      validatedData.mobileNumber !== currentResident.mobileNumber
+      validatedData.citizenMobile !== undefined &&
+      validatedData.citizenMobile !== currentResident.citizenMobile
     ) {
       changes.push({
         residentId,
         userId: session.user.id,
-        fieldUpdated: "mobile_number",
-        oldValue: currentResident.mobileNumber || "null",
-        newValue: validatedData.mobileNumber || "null",
+        fieldUpdated: "citizen_mobile",
+        oldValue: currentResident.citizenMobile || "null",
+        newValue: validatedData.citizenMobile || "null",
         ipAddress,
       })
     }

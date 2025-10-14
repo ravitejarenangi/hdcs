@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import {
@@ -18,20 +18,74 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Edit2, Save, X, Phone, CreditCard, User, MapPin, Calendar, Users, Home, Loader2, AlertCircle } from "lucide-react"
+import { Edit2, Save, X, Phone, CreditCard, User, MapPin, Calendar, Users, Home, Loader2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { toast } from "sonner"
+
+// Helper function to validate mobile number patterns
+function isValidMobilePattern(mobile: string): boolean {
+  // Check if all digits are the same (e.g., 9999999999, 8888888888)
+  const allSameDigit = /^(\d)\1{9}$/.test(mobile)
+  if (allSameDigit) return false
+
+  // Check for repetitive patterns (e.g., 9999998888, 7777776666)
+  const repetitivePattern = /^(\d)\1{4,}(\d)\2{3,}$/.test(mobile)
+  if (repetitivePattern) return false
+
+  // Check for simple sequential patterns (e.g., 1234567890, 0987654321)
+  const digits = mobile.split('').map(Number)
+  let isAscending = true
+  let isDescending = true
+
+  for (let i = 1; i < digits.length; i++) {
+    if (digits[i] !== digits[i - 1] + 1) isAscending = false
+    if (digits[i] !== digits[i - 1] - 1) isDescending = false
+  }
+
+  if (isAscending || isDescending) return false
+
+  return true
+}
+
+// Helper functions for Health ID formatting
+function formatHealthId(healthId: string): string {
+  // Remove all non-digit characters
+  const digits = healthId.replace(/\D/g, '')
+
+  // Format as XX-XXXX-XXXX-XXXX (14 digits)
+  if (digits.length === 14) {
+    return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 10)}-${digits.slice(10, 14)}`
+  }
+
+  // Return as-is if not 14 digits
+  return healthId
+}
+
+function isValidHealthIdFormat(healthId: string): boolean {
+  // Remove formatting
+  const digits = healthId.replace(/\D/g, '')
+
+  // Must be exactly 14 digits
+  return digits.length === 14 && /^\d{14}$/.test(digits)
+}
 
 // Validation schema
 const updateSchema = z.object({
-  mobileNumber: z
+  citizenMobile: z
     .string()
     .regex(/^[6-9]\d{9}$/, "Mobile number must be 10 digits starting with 6-9")
+    .refine(
+      (val) => !val || isValidMobilePattern(val),
+      "Mobile number cannot be repetitive or sequential (e.g., 9999999999, 9999998888)"
+    )
     .optional()
     .or(z.literal("")),
   healthId: z
     .string()
-    .min(1, "Health ID cannot be empty")
-    .max(50, "Health ID too long")
+    .refine(
+      (val) => !val || isValidHealthIdFormat(val),
+      "Health ID must be 14 digits (format: XX-XXXX-XXXX-XXXX)"
+    )
+    // Health IDs are stored WITH dashes in database to match existing data
     .optional()
     .or(z.literal("")),
 })
@@ -46,7 +100,7 @@ interface Resident {
   name: string
   dob: Date | null
   gender: string | null
-  mobileNumber: string | null
+  citizenMobile: string | null
   healthId: string | null
   distName: string | null
   mandalName: string | null
@@ -142,7 +196,7 @@ function SearchedPersonDetails({ person }: SearchedPersonDetailsProps) {
               <div>
                 <div className="text-xs text-gray-600 font-medium">Mobile Number</div>
                 <div className="text-sm font-medium">
-                  {person.mobileNumber || <span className="text-gray-400">Not set</span>}
+                  {person.citizenMobile || <span className="text-gray-400">Not set</span>}
                 </div>
               </div>
             </div>
@@ -216,7 +270,7 @@ interface HouseholdMemberCardProps {
   isUpdating: boolean
   onEdit: () => void
   onCancelEdit: () => void
-  onUpdate: (residentId: string, data: { mobileNumber?: string | null; healthId?: string | null }) => Promise<void>
+  onUpdate: (residentId: string, data: { citizenMobile?: string | null; healthId?: string | null }) => Promise<void>
 }
 
 function HouseholdMemberCard({
@@ -228,9 +282,9 @@ function HouseholdMemberCard({
   onCancelEdit,
   onUpdate,
 }: HouseholdMemberCardProps) {
-  const [mobileNumber, setMobileNumber] = useState(member.mobileNumber || "")
-  const [healthId, setHealthId] = useState(member.healthId || "")
-  const [errors, setErrors] = useState<{ mobileNumber?: string; healthId?: string }>({})
+  const [citizenMobile, setCitizenMobile] = useState(member.citizenMobile || "")
+  const [healthId, setHealthId] = useState(formatHealthId(member.healthId || ""))
+  const [errors, setErrors] = useState<{ citizenMobile?: string; healthId?: string }>({})
 
   const validateMobileNumber = (value: string): boolean => {
     if (!value) return true // Empty is valid
@@ -238,11 +292,38 @@ function HouseholdMemberCard({
     return regex.test(value)
   }
 
-  const handleSave = async () => {
-    const newErrors: { mobileNumber?: string; healthId?: string } = {}
+  const handleHealthIdChange = (value: string) => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, '')
 
-    if (mobileNumber && !validateMobileNumber(mobileNumber)) {
-      newErrors.mobileNumber = "Mobile number must be 10 digits starting with 6-9"
+    // Limit to 14 digits
+    const limitedDigits = digits.slice(0, 14)
+
+    // Format as XX-XXXX-XXXX-XXXX
+    let formatted = limitedDigits
+    if (limitedDigits.length > 2) {
+      formatted = `${limitedDigits.slice(0, 2)}-${limitedDigits.slice(2)}`
+    }
+    if (limitedDigits.length > 6) {
+      formatted = `${limitedDigits.slice(0, 2)}-${limitedDigits.slice(2, 6)}-${limitedDigits.slice(6)}`
+    }
+    if (limitedDigits.length > 10) {
+      formatted = `${limitedDigits.slice(0, 2)}-${limitedDigits.slice(2, 6)}-${limitedDigits.slice(6, 10)}-${limitedDigits.slice(10, 14)}`
+    }
+
+    setHealthId(formatted)
+    setErrors({ ...errors, healthId: undefined })
+  }
+
+  const handleSave = async () => {
+    const newErrors: { citizenMobile?: string; healthId?: string } = {}
+
+    if (citizenMobile && !validateMobileNumber(citizenMobile)) {
+      newErrors.citizenMobile = "Mobile number must be 10 digits starting with 6-9"
+    }
+
+    if (healthId && !isValidHealthIdFormat(healthId)) {
+      newErrors.healthId = "Health ID must be 14 digits (format: XX-XXXX-XXXX-XXXX)"
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -251,14 +332,14 @@ function HouseholdMemberCard({
     }
 
     await onUpdate(member.residentId, {
-      mobileNumber: mobileNumber || null,
-      healthId: healthId || null,
+      citizenMobile: citizenMobile || null,
+      healthId: healthId || null, // Save WITH dashes to match existing data
     })
   }
 
   const handleCancel = () => {
-    setMobileNumber(member.mobileNumber || "")
-    setHealthId(member.healthId || "")
+    setCitizenMobile(member.citizenMobile || "")
+    setHealthId(formatHealthId(member.healthId || ""))
     setErrors({})
     onCancelEdit()
   }
@@ -307,22 +388,22 @@ function HouseholdMemberCard({
                 <div>
                   <Input
                     id={`mobile-${member.residentId}`}
-                    value={mobileNumber}
+                    value={citizenMobile}
                     onChange={(e) => {
-                      setMobileNumber(e.target.value)
-                      setErrors({ ...errors, mobileNumber: undefined })
+                      setCitizenMobile(e.target.value)
+                      setErrors({ ...errors, citizenMobile: undefined })
                     }}
                     placeholder="Enter 10-digit mobile number"
                     disabled={isUpdating}
-                    className={errors.mobileNumber ? "border-red-500" : ""}
+                    className={errors.citizenMobile ? "border-red-500" : ""}
                   />
-                  {errors.mobileNumber && (
-                    <p className="text-xs text-red-600 mt-1">{errors.mobileNumber}</p>
+                  {errors.citizenMobile && (
+                    <p className="text-xs text-red-600 mt-1">{errors.citizenMobile}</p>
                   )}
                 </div>
               ) : (
                 <div className="text-sm font-medium">
-                  {member.mobileNumber || <span className="text-gray-400">Not set</span>}
+                  {member.citizenMobile || <span className="text-gray-400">Not set</span>}
                 </div>
               )}
             </div>
@@ -334,16 +415,23 @@ function HouseholdMemberCard({
                 Health ID
               </Label>
               {isEditing ? (
-                <Input
-                  id={`health-${member.residentId}`}
-                  value={healthId}
-                  onChange={(e) => setHealthId(e.target.value)}
-                  placeholder="Enter Health ID"
-                  disabled={isUpdating}
-                />
+                <div>
+                  <Input
+                    id={`health-${member.residentId}`}
+                    value={healthId}
+                    onChange={(e) => handleHealthIdChange(e.target.value)}
+                    placeholder="XX-XXXX-XXXX-XXXX"
+                    disabled={isUpdating}
+                    className={errors.healthId ? "border-red-500" : ""}
+                    maxLength={17} // 14 digits + 3 dashes
+                  />
+                  {errors.healthId && (
+                    <p className="text-xs text-red-600 mt-1">{errors.healthId}</p>
+                  )}
+                </div>
               ) : (
                 <div className="text-sm font-medium">
-                  {member.healthId || <span className="text-gray-400">Not set</span>}
+                  {member.healthId ? formatHealthId(member.healthId) : <span className="text-gray-400">Not set</span>}
                 </div>
               )}
             </div>
@@ -389,6 +477,9 @@ function HouseholdMemberCard({
   )
 }
 
+type SortField = 'name' | 'residentId' | 'citizenMobile' | 'healthId' | 'secName'
+type SortDirection = 'asc' | 'desc'
+
 export function ResidentsTable({
   residents,
   searchedResidentId,
@@ -402,12 +493,15 @@ export function ResidentsTable({
   const [isLoadingHousehold, setIsLoadingHousehold] = useState(false)
   const [householdError, setHouseholdError] = useState("")
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<SortField>('name')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
   const {
     register,
     handleSubmit,
     formState: { errors, isDirty },
     reset,
+    control,
   } = useForm<UpdateFormData>({
     resolver: zodResolver(updateSchema),
   })
@@ -415,8 +509,8 @@ export function ResidentsTable({
   const startEditing = (resident: Resident) => {
     setEditingId(resident.residentId)
     reset({
-      mobileNumber: resident.mobileNumber || "",
-      healthId: resident.healthId || "",
+      citizenMobile: resident.citizenMobile || "",
+      healthId: formatHealthId(resident.healthId || ""),
     })
   }
 
@@ -424,6 +518,51 @@ export function ResidentsTable({
     setEditingId(null)
     reset()
   }
+
+  // Sorting function
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Toggle direction if same field
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      // New field, default to ascending
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  // Sort residents
+  const sortedResidents = [...residents].sort((a, b) => {
+    let aValue: string | number = ''
+    let bValue: string | number = ''
+
+    switch (sortField) {
+      case 'name':
+        aValue = a.name?.toLowerCase() || ''
+        bValue = b.name?.toLowerCase() || ''
+        break
+      case 'residentId':
+        aValue = a.residentId || ''
+        bValue = b.residentId || ''
+        break
+      case 'citizenMobile':
+        aValue = a.citizenMobile?.toLowerCase() || ''
+        bValue = b.citizenMobile?.toLowerCase() || ''
+        break
+      case 'healthId':
+        aValue = a.healthId?.toLowerCase() || ''
+        bValue = b.healthId?.toLowerCase() || ''
+        break
+      case 'secName':
+        aValue = a.secName?.toLowerCase() || ''
+        bValue = b.secName?.toLowerCase() || ''
+        break
+    }
+
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+    return 0
+  })
 
   const onSubmit = async (data: UpdateFormData) => {
     if (!editingId) return
@@ -437,7 +576,7 @@ export function ResidentsTable({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          mobileNumber: data.mobileNumber || null,
+          citizenMobile: data.citizenMobile || null,
           healthId: data.healthId || null,
         }),
       })
@@ -451,9 +590,17 @@ export function ResidentsTable({
         setEditingId(null)
         onUpdateSuccess()
       } else {
-        toast.error("Update failed", {
-          description: result.error || "Please try again",
-        })
+        // Check for mobile duplicate limit error
+        if (result.error === "MOBILE_DUPLICATE_LIMIT_EXCEEDED") {
+          toast.error("Mobile Number Limit Exceeded", {
+            description: result.message || "This mobile number is already used by 5 residents in this secretariat.",
+            duration: 6000, // Show for 6 seconds
+          })
+        } else {
+          toast.error("Update failed", {
+            description: result.message || result.error || "Please try again",
+          })
+        }
       }
     } catch {
       toast.error("Network error", {
@@ -513,7 +660,7 @@ export function ResidentsTable({
   // Update a household member
   const updateHouseholdMember = async (
     residentId: string,
-    data: { mobileNumber?: string | null; healthId?: string | null }
+    data: { citizenMobile?: string | null; healthId?: string | null }
   ) => {
     setIsUpdating(true)
 
@@ -543,9 +690,17 @@ export function ResidentsTable({
 
         setEditingMemberId(null)
       } else {
-        toast.error("Update failed", {
-          description: result.error || "Please try again",
-        })
+        // Check for mobile duplicate limit error
+        if (result.error === "MOBILE_DUPLICATE_LIMIT_EXCEEDED") {
+          toast.error("Mobile Number Limit Exceeded", {
+            description: result.message || "This mobile number is already used by 5 residents in this secretariat.",
+            duration: 6000, // Show for 6 seconds
+          })
+        } else {
+          toast.error("Update failed", {
+            description: result.message || result.error || "Please try again",
+          })
+        }
       }
     } catch {
       toast.error("Network error", {
@@ -559,7 +714,7 @@ export function ResidentsTable({
   // Mobile view - Card layout
   const MobileView = () => (
     <div className="md:hidden space-y-4">
-      {residents.map((resident) => (
+      {sortedResidents.map((resident) => (
         <Card
           key={resident.residentId}
           className={`${
@@ -609,25 +764,46 @@ export function ResidentsTable({
                   </Label>
                   <Input
                     id={`mobile-${resident.residentId}`}
-                    {...register("mobileNumber")}
+                    {...register("citizenMobile")}
                     placeholder="10-digit mobile"
                     className="text-sm"
                     disabled={isUpdating}
                   />
-                  {errors.mobileNumber && (
-                    <p className="text-xs text-red-500">{errors.mobileNumber.message}</p>
+                  {errors.citizenMobile && (
+                    <p className="text-xs text-red-500">{errors.citizenMobile.message}</p>
                   )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor={`health-${resident.residentId}`} className="text-xs">
                     Health ID
                   </Label>
-                  <Input
-                    id={`health-${resident.residentId}`}
-                    {...register("healthId")}
-                    placeholder="Health ID"
-                    className="text-sm"
-                    disabled={isUpdating}
+                  <Controller
+                    name="healthId"
+                    control={control}
+                    render={({ field }) => (
+                      <Input
+                        id={`health-${resident.residentId}`}
+                        value={field.value || ""}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 14)
+                          let formatted = digits
+                          if (digits.length > 2) {
+                            formatted = `${digits.slice(0, 2)}-${digits.slice(2)}`
+                          }
+                          if (digits.length > 6) {
+                            formatted = `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`
+                          }
+                          if (digits.length > 10) {
+                            formatted = `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 10)}-${digits.slice(10, 14)}`
+                          }
+                          field.onChange(formatted)
+                        }}
+                        placeholder="XX-XXXX-XXXX-XXXX"
+                        className="text-sm"
+                        disabled={isUpdating}
+                        maxLength={17}
+                      />
+                    )}
                   />
                   {errors.healthId && (
                     <p className="text-xs text-red-500">{errors.healthId.message}</p>
@@ -659,11 +835,11 @@ export function ResidentsTable({
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Mobile:</span>
-                  <span className="font-medium">{resident.mobileNumber || "Not set"}</span>
+                  <span className="font-medium">{resident.citizenMobile || "Not set"}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Health ID:</span>
-                  <span className="font-medium">{resident.healthId || "Not set"}</span>
+                  <span className="font-medium">{resident.healthId ? formatHealthId(resident.healthId) : "Not set"}</span>
                 </div>
                 <Button
                   size="sm"
@@ -684,25 +860,43 @@ export function ResidentsTable({
     </div>
   )
 
+  // Sortable column header component
+  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <TableHead
+      className="font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {sortField === field && (
+          sortDirection === 'asc' ?
+            <ArrowUp className="h-4 w-4 text-orange-600" /> :
+            <ArrowDown className="h-4 w-4 text-orange-600" />
+        )}
+        {sortField !== field && <ArrowUpDown className="h-4 w-4 text-gray-400" />}
+      </div>
+    </TableHead>
+  )
+
   // Desktop view - Table layout
   const DesktopView = () => (
     <div className="hidden md:block overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="bg-gray-50">
-            <TableHead className="font-semibold">Name</TableHead>
+            <SortableHeader field="name">Name</SortableHeader>
             <TableHead className="font-semibold">UID</TableHead>
             <TableHead className="font-semibold">Age</TableHead>
             <TableHead className="font-semibold">Gender</TableHead>
-            <TableHead className="font-semibold">Mobile Number</TableHead>
-            <TableHead className="font-semibold">Health ID</TableHead>
-            <TableHead className="font-semibold">Location</TableHead>
+            <SortableHeader field="citizenMobile">Mobile Number</SortableHeader>
+            <SortableHeader field="healthId">Health ID</SortableHeader>
+            <SortableHeader field="secName">Location</SortableHeader>
             <TableHead className="font-semibold">PHC</TableHead>
             <TableHead className="font-semibold text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {residents.map((resident) => (
+          {sortedResidents.map((resident) => (
             <TableRow
               key={resident.residentId}
               className={
@@ -728,29 +922,50 @@ export function ResidentsTable({
                 {editingId === resident.residentId ? (
                   <div className="space-y-1">
                     <Input
-                      {...register("mobileNumber")}
+                      {...register("citizenMobile")}
                       placeholder="10-digit mobile"
                       className="w-36 text-sm"
                       disabled={isUpdating}
                     />
-                    {errors.mobileNumber && (
-                      <p className="text-xs text-red-500">{errors.mobileNumber.message}</p>
+                    {errors.citizenMobile && (
+                      <p className="text-xs text-red-500">{errors.citizenMobile.message}</p>
                     )}
                   </div>
                 ) : (
-                  <span className={resident.mobileNumber ? "font-medium" : "text-gray-400"}>
-                    {resident.mobileNumber || "Not set"}
+                  <span className={resident.citizenMobile ? "font-medium" : "text-gray-400"}>
+                    {resident.citizenMobile || "Not set"}
                   </span>
                 )}
               </TableCell>
               <TableCell>
                 {editingId === resident.residentId ? (
                   <div className="space-y-1">
-                    <Input
-                      {...register("healthId")}
-                      placeholder="Health ID"
-                      className="w-36 text-sm"
-                      disabled={isUpdating}
+                    <Controller
+                      name="healthId"
+                      control={control}
+                      render={({ field }) => (
+                        <Input
+                          value={field.value || ""}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/\D/g, '').slice(0, 14)
+                            let formatted = digits
+                            if (digits.length > 2) {
+                              formatted = `${digits.slice(0, 2)}-${digits.slice(2)}`
+                            }
+                            if (digits.length > 6) {
+                              formatted = `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`
+                            }
+                            if (digits.length > 10) {
+                              formatted = `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 10)}-${digits.slice(10, 14)}`
+                            }
+                            field.onChange(formatted)
+                          }}
+                          placeholder="XX-XXXX-XXXX-XXXX"
+                          className="w-44 text-sm"
+                          disabled={isUpdating}
+                          maxLength={17}
+                        />
+                      )}
                     />
                     {errors.healthId && (
                       <p className="text-xs text-red-500">{errors.healthId.message}</p>
@@ -758,7 +973,7 @@ export function ResidentsTable({
                   </div>
                 ) : (
                   <span className={resident.healthId ? "font-medium" : "text-gray-400"}>
-                    {resident.healthId || "Not set"}
+                    {resident.healthId ? formatHealthId(resident.healthId) : "Not set"}
                   </span>
                 )}
               </TableCell>

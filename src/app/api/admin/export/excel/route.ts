@@ -57,9 +57,9 @@ export async function GET(request: NextRequest) {
 
     // Mobile status filter
     if (mobileStatus === "with") {
-      whereClause.mobileNumber = { not: null }
+      whereClause.citizenMobile = { not: null }
     } else if (mobileStatus === "without") {
-      whereClause.mobileNumber = null
+      whereClause.citizenMobile = null
     }
 
     // Health ID status filter
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
           },
         }),
         prisma.resident.count({ where: whereClause }),
-        prisma.resident.count({ where: { ...whereClause, mobileNumber: { not: null } } }),
+        prisma.resident.count({ where: { ...whereClause, citizenMobile: { not: null } } }),
         prisma.resident.count({ where: { ...whereClause, healthId: { not: null } } }),
       ])
 
@@ -138,10 +138,10 @@ export async function GET(request: NextRequest) {
         withHealthId: bigint
       }>
     >`
-      SELECT 
+      SELECT
         mandalName,
         COUNT(*) as totalResidents,
-        SUM(CASE WHEN mobileNumber IS NOT NULL THEN 1 ELSE 0 END) as withMobile,
+        SUM(CASE WHEN citizenMobile IS NOT NULL THEN 1 ELSE 0 END) as withMobile,
         SUM(CASE WHEN healthId IS NOT NULL THEN 1 ELSE 0 END) as withHealthId
       FROM residents
       WHERE mandalName IS NOT NULL

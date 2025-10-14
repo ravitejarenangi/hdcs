@@ -15,7 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ResidentsTable } from "@/components/tables/ResidentsTable"
-import { Search, Filter, Loader2, AlertCircle, Users, ChevronLeft, ChevronRight, X } from "lucide-react"
+import { Search, Filter, Loader2, AlertCircle, Users, ChevronLeft, ChevronRight, X, CheckCircle2, Phone, CreditCard } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 
 interface Resident {
@@ -26,7 +27,7 @@ interface Resident {
   name: string
   dob: Date | null
   gender: string | null
-  mobileNumber: string | null
+  citizenMobile: string | null
   healthId: string | null
   distName: string | null
   mandalName: string | null
@@ -70,6 +71,14 @@ interface LocationOption {
   residentCount?: number
 }
 
+interface SecretariatStats {
+  total: number
+  mobilePending: number
+  mobileUpdated: number
+  healthIdPending: number
+  healthIdUpdated: number
+}
+
 export default function FieldOfficerDashboard() {
   // Removed unused session variable
 
@@ -111,12 +120,16 @@ export default function FieldOfficerDashboard() {
   const [assignedSecretariats, setAssignedSecretariats] = useState<AssignedSecretariat[]>([])
   const [, setIsLoadingAssignments] = useState(false)
 
+  // Secretariat Statistics State
+  const [secretariatStats, setSecretariatStats] = useState<SecretariatStats | null>(null)
+
   // Active Tab
   const [activeTab, setActiveTab] = useState("uid")
 
-  // Load assigned secretariats for Field Officer on component mount
+  // Load assigned secretariats and secretariat stats for Field Officer on component mount
   useEffect(() => {
     loadAssignedSecretariats()
+    loadSecretariatStats()
   }, [])
 
   // Auto-select mandal and secretariat for Field Officers
@@ -211,6 +224,24 @@ export default function FieldOfficerDashboard() {
       })
     } finally {
       setIsLoadingAssignments(false)
+    }
+  }
+
+  // Load secretariat-wide statistics
+  const loadSecretariatStats = async () => {
+    try {
+      const response = await fetch("/api/field-officer/secretariat-stats")
+      const data = await response.json()
+
+      if (response.ok) {
+        setSecretariatStats(data.stats)
+      } else {
+        console.error("Failed to load secretariat stats:", data.error)
+        // Don't show error toast - stats are optional
+      }
+    } catch (error) {
+      console.error("Network error loading secretariat stats:", error)
+      // Don't show error toast - stats are optional
     }
   }
 
@@ -388,10 +419,14 @@ export default function FieldOfficerDashboard() {
     if (searchUid) {
       handleUidSearch()
     }
+    // Reload secretariat stats after update
+    loadSecretariatStats()
   }
 
   const handleAdvancedUpdateSuccess = () => {
     handleAdvancedSearch()
+    // Reload secretariat stats after update
+    loadSecretariatStats()
   }
 
   // Real-time text search with debouncing
@@ -498,7 +533,7 @@ export default function FieldOfficerDashboard() {
         resident.uid,
         resident.hhId,
         resident.residentId,
-        resident.mobileNumber,
+        resident.citizenMobile,
         resident.healthId,
         resident.gender,
         resident.age?.toString(),
@@ -921,6 +956,92 @@ export default function FieldOfficerDashboard() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4 p-4 md:p-6">
+                  {/* Secretariat Statistics - Hidden on mobile */}
+                  {secretariatStats && (
+                    <div className="hidden md:block mb-6">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Users className="h-5 w-5 text-blue-600" />
+                        <h3 className="text-sm font-semibold text-gray-700">
+                          Secretariat Overview
+                        </h3>
+                        <Badge variant="outline" className="text-xs">
+                          All Residents
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Total Residents */}
+                        <Card>
+                          <CardContent className="pt-6">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-gray-600">Total Residents</p>
+                                <p className="text-3xl font-bold text-gray-900">{secretariatStats.total}</p>
+                              </div>
+                              <Users className="h-10 w-10 text-blue-600 opacity-75" />
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Mobile Numbers Updated */}
+                        <Card>
+                          <CardContent className="pt-6">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-gray-600">Mobile Updated</p>
+                                <p className="text-3xl font-bold text-green-600">{secretariatStats.mobileUpdated}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {secretariatStats.total > 0 ? Math.round((secretariatStats.mobileUpdated / secretariatStats.total) * 100) : 0}% complete
+                                </p>
+                              </div>
+                              <CheckCircle2 className="h-10 w-10 text-green-600 opacity-75" />
+                            </div>
+                            <div className="mt-2 text-xs text-gray-500">
+                              {secretariatStats.mobileUpdated}/{secretariatStats.total}
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Mobile Numbers Pending */}
+                        <Card>
+                          <CardContent className="pt-6">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-gray-600">Mobile Pending</p>
+                                <p className="text-3xl font-bold text-orange-600">{secretariatStats.mobilePending}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {secretariatStats.total > 0 ? Math.round((secretariatStats.mobilePending / secretariatStats.total) * 100) : 0}% pending
+                                </p>
+                              </div>
+                              <Phone className="h-10 w-10 text-orange-600 opacity-75" />
+                            </div>
+                            <div className="mt-2 text-xs text-gray-500">
+                              {secretariatStats.mobilePending}/{secretariatStats.total}
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Health IDs Updated */}
+                        <Card>
+                          <CardContent className="pt-6">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-gray-600">Health ID Updated</p>
+                                <p className="text-3xl font-bold text-purple-600">{secretariatStats.healthIdUpdated}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {secretariatStats.total > 0 ? Math.round((secretariatStats.healthIdUpdated / secretariatStats.total) * 100) : 0}% complete
+                                </p>
+                              </div>
+                              <CreditCard className="h-10 w-10 text-purple-600 opacity-75" />
+                            </div>
+                            <div className="mt-2 text-xs text-gray-500">
+                              {secretariatStats.healthIdUpdated}/{secretariatStats.total}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Search and Page Size Controls */}
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
                     {/* Real-time Search Input */}

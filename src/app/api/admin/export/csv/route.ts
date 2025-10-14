@@ -93,9 +93,9 @@ export async function GET(request: NextRequest) {
 
     // Mobile status filter
     if (mobileStatus === "with") {
-      whereClause.mobileNumber = { not: null }
+      whereClause.citizenMobile = { not: null }
     } else if (mobileStatus === "without") {
-      whereClause.mobileNumber = null
+      whereClause.citizenMobile = null
     }
 
     // Health ID status filter
