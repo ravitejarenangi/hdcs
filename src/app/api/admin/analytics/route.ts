@@ -138,7 +138,6 @@ export async function GET() {
       mobileUpdatesAllTime,
       mobileUpdatesToday,
       healthIdUpdatesAllTime,
-      healthIdsInSystem,
     ] = await Promise.all([
       prisma.updateLog.findMany({
         where: {
@@ -171,7 +170,7 @@ export async function GET() {
         },
       }),
 
-      // Mobile number updates count (last 30 days - for backward compatibility)
+      // Mobile number updates count
       prisma.updateLog.count({
         where: {
           updateTimestamp: { gte: thirtyDaysAgo },
@@ -179,7 +178,7 @@ export async function GET() {
         },
       }),
 
-      // Health ID updates count (last 30 days - for backward compatibility)
+      // Health ID updates count (last 30 days)
       prisma.updateLog.count({
         where: {
           updateTimestamp: { gte: thirtyDaysAgo },
@@ -206,17 +205,6 @@ export async function GET() {
       prisma.updateLog.count({
         where: {
           fieldUpdated: "health_id",
-        },
-      }),
-
-      // Health IDs currently in system (residents with valid health IDs)
-      prisma.resident.count({
-        where: {
-          AND: [
-            { healthId: { not: null } },
-            { healthId: { not: "N/A" } },
-            { healthId: { not: "" } },
-          ],
         },
       }),
     ])
@@ -510,15 +498,13 @@ export async function GET() {
         mobileCompletionRate,
         healthIdCompletionRate,
         recentUpdatesCount,
-        // Separate update counts by field type (last 30 days - for backward compatibility)
+        // Separate update counts by field type
         mobileUpdatesCount,
         healthIdUpdatesCount,
-        // Enhanced mobile statistics
+        // Enhanced mobile and health ID statistics
         mobileUpdatesAllTime,
         mobileUpdatesToday,
-        // Enhanced health ID statistics
         healthIdUpdatesAllTime,
-        healthIdsInSystem,
         // Placeholder metrics
         residentsWithNamePlaceholder,
         residentsWithHhIdPlaceholder,
