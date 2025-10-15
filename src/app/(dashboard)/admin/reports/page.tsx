@@ -800,7 +800,7 @@ export default function ReportsPage() {
                           onClick={() => handleMandalSort("mobile")}
                         >
                           <div className="flex items-center justify-end">
-                            With Mobile
+                            Mobile No Updated
                             <SortIcon
                               column="mobile"
                               currentColumn={mandalSortColumn}
@@ -813,7 +813,7 @@ export default function ReportsPage() {
                           onClick={() => handleMandalSort("mobilePercent")}
                         >
                           <div className="flex items-center justify-end">
-                            Mobile %
+                            Mobile No Updated %
                             <SortIcon
                               column="mobilePercent"
                               currentColumn={mandalSortColumn}
@@ -826,7 +826,7 @@ export default function ReportsPage() {
                           onClick={() => handleMandalSort("healthId")}
                         >
                           <div className="flex items-center justify-end">
-                            With Health ID
+                            Health IDs Updated
                             <SortIcon
                               column="healthId"
                               currentColumn={mandalSortColumn}
@@ -839,7 +839,7 @@ export default function ReportsPage() {
                           onClick={() => handleMandalSort("healthIdPercent")}
                         >
                           <div className="flex items-center justify-end">
-                            Health ID %
+                            Health ID Completion %
                             <SortIcon
                               column="healthIdPercent"
                               currentColumn={mandalSortColumn}
