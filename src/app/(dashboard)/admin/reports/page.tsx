@@ -7,8 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { ExportFilterDialog, ExportFilters } from "@/components/reports/ExportFilterDialog"
+import { format } from "date-fns"
 import {
   FileText,
   Download,
@@ -27,6 +30,8 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Calendar as CalendarIcon,
+  X,
 } from "lucide-react"
 import {
   BarChart,
@@ -120,24 +125,43 @@ export default function ReportsPage() {
   const [mandalSortColumn, setMandalSortColumn] = useState<MandalSortColumn | null>(null)
   const [mandalSortDirection, setMandalSortDirection] = useState<SortDirection>(null)
 
-  // Officer table state (search, pagination, sorting)
+  // Officer table state (search, pagination, sorting, date filtering)
   type OfficerSortColumn = "name" | "username" | "role" | "updates" | "mobileUpdates" | "healthIdUpdates"
   const [officerSearchQuery, setOfficerSearchQuery] = useState("")
   const [officerCurrentPage, setOfficerCurrentPage] = useState(1)
   const officerItemsPerPage = 10
   const [officerSortColumn, setOfficerSortColumn] = useState<OfficerSortColumn | null>("updates")
   const [officerSortDirection, setOfficerSortDirection] = useState<SortDirection>("desc")
+  const [officerStartDate, setOfficerStartDate] = useState<Date | null>(null)
+  const [officerEndDate, setOfficerEndDate] = useState<Date | null>(null)
 
   useEffect(() => {
     fetchAnalytics()
   }, [])
+
+  // Refetch analytics when officer date range changes
+  useEffect(() => {
+    if (analytics) {
+      fetchAnalytics()
+    }
+  }, [officerStartDate, officerEndDate])
 
   const fetchAnalytics = async () => {
     setIsLoading(true)
     setError("")
 
     try {
-      const response = await fetch("/api/admin/analytics")
+      // Build query parameters for date filtering
+      const params = new URLSearchParams()
+      if (officerStartDate) {
+        params.append("startDate", officerStartDate.toISOString())
+      }
+      if (officerEndDate) {
+        params.append("endDate", officerEndDate.toISOString())
+      }
+
+      const url = `/api/admin/analytics${params.toString() ? `?${params.toString()}` : ""}`
+      const response = await fetch(url)
 
       if (!response.ok) {
         throw new Error("Failed to fetch analytics data")
@@ -1042,6 +1066,86 @@ export default function ReportsPage() {
                 <CardDescription>Individual officer statistics</CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Date Range Filter */}
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+                    <div className="flex-1">
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">
+                        Filter by Date Range
+                      </label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {/* Start Date */}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start text-left font-normal"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {officerStartDate ? format(officerStartDate, "PPP") : "Start Date"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={officerStartDate || undefined}
+                              onSelect={(date) => setOfficerStartDate(date || null)}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+
+                        {/* End Date */}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start text-left font-normal"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {officerEndDate ? format(officerEndDate, "PPP") : "End Date"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={officerEndDate || undefined}
+                              onSelect={(date) => setOfficerEndDate(date || null)}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+
+                    {/* Clear Filters Button */}
+                    {(officerStartDate || officerEndDate) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setOfficerStartDate(null)
+                          setOfficerEndDate(null)
+                        }}
+                        className="mt-6"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Clear Dates
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Date Range Display */}
+                  {(officerStartDate || officerEndDate) && (
+                    <div className="mt-3 text-sm text-gray-600">
+                      <span className="font-medium">Showing updates from: </span>
+                      {officerStartDate ? format(officerStartDate, "MMM d, yyyy") : "Beginning"}
+                      {" to "}
+                      {officerEndDate ? format(officerEndDate, "MMM d, yyyy") : "Now"}
+                    </div>
+                  )}
+                </div>
+
                 {/* Search Input */}
                 <div className="mb-4">
                   <div className="relative">

@@ -16,7 +16,9 @@
     "import:residents": "tsx scripts/import-residents.ts",
     "bulk-import": "tsx scripts/bulk-import-mysql.ts",
     "test:completion": "tsx scripts/test-completion-rates.ts",
-    "cleanup:mobile": "tsx scripts/cleanup-mobile-numbers.ts"
+    "cleanup:mobile": "tsx scripts/cleanup-mobile-numbers.ts",
+    "preview:delete-users": "tsx scripts/preview-mandal-users-deletion.ts",
+    "delete:mandal-users": "tsx scripts/delete-mandal-users.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

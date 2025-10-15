@@ -10,7 +10,7 @@ function logTiming(label: string, startTime: number) {
   return duration
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const requestStart = Date.now()
 
   // Check authentication
@@ -28,11 +28,28 @@ export async function GET() {
     )
   }
 
-  // Check cache first
+  // Parse query parameters for date filtering
+  const { searchParams } = new URL(request.url)
+  const startDateParam = searchParams.get("startDate")
+  const endDateParam = searchParams.get("endDate")
+
+  let startDate: Date | null = null
+  let endDate: Date | null = null
+
+  if (startDateParam) {
+    startDate = new Date(startDateParam)
+  }
+  if (endDateParam) {
+    endDate = new Date(endDateParam)
+    // Set to end of day
+    endDate.setHours(23, 59, 59, 999)
+  }
+
+  // Check cache first (only if no date filters)
   const cacheKey = CacheKeys.adminAnalytics()
   const cachedData = cache.get<Record<string, unknown>>(cacheKey)
 
-  if (cachedData) {
+  if (cachedData && !startDate && !endDate) {
     console.log('[Analytics] Returning cached data')
     return NextResponse.json({
       ...cachedData,
@@ -318,6 +335,12 @@ export async function GET() {
             role: "FIELD_OFFICER",
             isActive: true,
           },
+          ...(startDate || endDate ? {
+            updateTimestamp: {
+              ...(startDate ? { gte: startDate } : {}),
+              ...(endDate ? { lte: endDate } : {}),
+            },
+          } : {}),
         },
       }),
 
@@ -335,6 +358,12 @@ export async function GET() {
           fieldUpdated: {
             in: ["citizen_mobile", "mobile_number", "citizenMobile", "mobileNumber"],
           },
+          ...(startDate || endDate ? {
+            updateTimestamp: {
+              ...(startDate ? { gte: startDate } : {}),
+              ...(endDate ? { lte: endDate } : {}),
+            },
+          } : {}),
         },
       }),
 
@@ -352,6 +381,12 @@ export async function GET() {
           fieldUpdated: {
             in: ["health_id", "healthId"],
           },
+          ...(startDate || endDate ? {
+            updateTimestamp: {
+              ...(startDate ? { gte: startDate } : {}),
+              ...(endDate ? { lte: endDate } : {}),
+            },
+          } : {}),
         },
       }),
     ])
