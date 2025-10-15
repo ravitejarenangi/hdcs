@@ -15,6 +15,7 @@ import {
   History,
   UserCog,
   Settings,
+  Download,
 } from "lucide-react"
 
 interface SidebarProps {
@@ -61,6 +62,12 @@ const menuItems: MenuItem[] = [
     title: "Import History",
     icon: <History className="h-5 w-5" />,
     href: "/admin/import/history",
+    roles: ["ADMIN"],
+  },
+  {
+    title: "Export Data",
+    icon: <Download className="h-5 w-5" />,
+    href: "/admin/export",
     roles: ["ADMIN"],
   },
 

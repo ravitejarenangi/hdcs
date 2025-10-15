@@ -23,6 +23,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  FileDown,
+  Upload,
 } from "lucide-react"
 import {
   BarChart,
@@ -437,15 +439,26 @@ export default function AdminDashboard() {
               Comprehensive analytics and insights
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchAnalytics}
-            className="gap-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.location.href = "/admin/export"}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Export Data
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchAnalytics}
+              className="gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Overview Statistics Cards */}
@@ -1278,35 +1291,40 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Button
                     variant="outline"
-                    className="h-20 flex flex-col gap-2"
+                    className="h-24 flex flex-col gap-2 hover:bg-blue-50 hover:border-blue-300 transition-colors"
                     onClick={() => {
                       toast.info("Import Data", {
                         description: "Data import feature coming soon",
                       })
                     }}
                   >
-                    <Download className="h-6 w-6" />
-                    <span>Import Data</span>
+                    <Upload className="h-6 w-6 text-blue-600" />
+                    <div className="text-center">
+                      <div className="font-semibold">Import Data</div>
+                      <div className="text-xs text-gray-500">Upload resident data</div>
+                    </div>
                   </Button>
                   <Button
                     variant="outline"
-                    className="h-20 flex flex-col gap-2"
-                    onClick={() => {
-                      toast.info("Export Data", {
-                        description: "Data export feature coming soon",
-                      })
-                    }}
+                    className="h-24 flex flex-col gap-2 hover:bg-orange-50 hover:border-orange-300 transition-colors"
+                    onClick={() => window.location.href = "/admin/export"}
                   >
-                    <Download className="h-6 w-6" />
-                    <span>Export Data</span>
+                    <FileDown className="h-6 w-6 text-orange-600" />
+                    <div className="text-center">
+                      <div className="font-semibold">Export Data</div>
+                      <div className="text-xs text-gray-500">Export resident data to CSV</div>
+                    </div>
                   </Button>
                   <Button
                     variant="outline"
-                    className="h-20 flex flex-col gap-2"
+                    className="h-24 flex flex-col gap-2 hover:bg-green-50 hover:border-green-300 transition-colors"
                     onClick={fetchAnalytics}
                   >
-                    <Activity className="h-6 w-6" />
-                    <span>Refresh Analytics</span>
+                    <Activity className="h-6 w-6 text-green-600" />
+                    <div className="text-center">
+                      <div className="font-semibold">Refresh Analytics</div>
+                      <div className="text-xs text-gray-500">Update dashboard data</div>
+                    </div>
                   </Button>
                 </div>
               </CardContent>
