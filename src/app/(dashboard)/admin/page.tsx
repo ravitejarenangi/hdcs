@@ -25,6 +25,7 @@ import {
   ArrowDown,
   FileDown,
   Upload,
+  FileSpreadsheet,
 } from "lucide-react"
 import {
   BarChart,
@@ -42,6 +43,7 @@ import {
   Line,
 } from "recharts"
 import { toast } from "sonner"
+import * as XLSX from "xlsx"
 
 interface AnalyticsData {
   overview: {
@@ -164,6 +166,10 @@ export default function AdminDashboard() {
   const [updatesSortColumn, setUpdatesSortColumn] = useState<UpdatesSortColumn | null>(null)
   const [updatesSortDirection, setUpdatesSortDirection] = useState<SortDirection>(null)
 
+  // Export state
+  const [isExportingCsv, setIsExportingCsv] = useState(false)
+  const [isExportingExcel, setIsExportingExcel] = useState(false)
+
   useEffect(() => {
     fetchAnalytics()
   }, [])
@@ -246,6 +252,260 @@ export default function AdminDashboard() {
     } else {
       setUpdatesSortColumn(column)
       setUpdatesSortDirection("asc")
+    }
+  }
+
+  // Export functions for Mandal-Wise table
+  const exportMandalTableToCSV = () => {
+    if (!analytics?.mandalHierarchy) {
+      toast.error("No data available to export")
+      return
+    }
+
+    try {
+      setIsExportingCsv(true)
+      toast.info("Generating CSV export...")
+
+      // Prepare CSV data
+      const csvRows: string[] = []
+
+      // Header row
+      const headers = [
+        "Name",
+        "Total Residents",
+        "Mobile %",
+        "Health ID %",
+        "Mobile Updates (All Time)",
+        "Mobile Updates (Today)",
+        "Health IDs (Original)",
+        "Health IDs (Added)",
+        "Health IDs (Today)",
+      ]
+      csvRows.push(headers.join(","))
+
+      // Data rows - Mandals and Secretariats
+      analytics.mandalHierarchy.forEach((mandal) => {
+        // Mandal row
+        csvRows.push([
+          `"${mandal.mandalName}"`,
+          mandal.totalResidents,
+          `${mandal.mobileCompletionRate}%`,
+          `${mandal.healthIdCompletionRate}%`,
+          mandal.mobileUpdatesAllTime,
+          mandal.mobileUpdatesToday,
+          mandal.healthIdsOriginal,
+          mandal.healthIdsAddedViaUpdates,
+          mandal.healthIdUpdatesToday,
+        ].join(","))
+
+        // Secretariat rows (indented with bullet)
+        mandal.secretariats.forEach((sec) => {
+          csvRows.push([
+            `"  • ${sec.secName}"`,
+            sec.totalResidents,
+            `${sec.mobileCompletionRate}%`,
+            `${sec.healthIdCompletionRate}%`,
+            sec.mobileUpdatesAllTime,
+            sec.mobileUpdatesToday,
+            sec.healthIdsOriginal,
+            sec.healthIdsAddedViaUpdates,
+            sec.healthIdUpdatesToday,
+          ].join(","))
+        })
+      })
+
+      // Totals row
+      const totalResidents = analytics.mandalHierarchy.reduce((sum, m) => sum + m.totalResidents, 0)
+      const avgMobile = Math.round(
+        analytics.mandalHierarchy.reduce((sum, m) => sum + m.mobileCompletionRate, 0) /
+          analytics.mandalHierarchy.length
+      )
+      const avgHealthId = Math.round(
+        analytics.mandalHierarchy.reduce((sum, m) => sum + m.healthIdCompletionRate, 0) /
+          analytics.mandalHierarchy.length
+      )
+      const totalMobileUpdatesAllTime = analytics.mandalHierarchy.reduce(
+        (sum, m) => sum + m.mobileUpdatesAllTime,
+        0
+      )
+      const totalMobileUpdatesToday = analytics.mandalHierarchy.reduce(
+        (sum, m) => sum + m.mobileUpdatesToday,
+        0
+      )
+      const totalHealthIdsOriginal = analytics.mandalHierarchy.reduce(
+        (sum, m) => sum + m.healthIdsOriginal,
+        0
+      )
+      const totalHealthIdsAdded = analytics.mandalHierarchy.reduce(
+        (sum, m) => sum + m.healthIdsAddedViaUpdates,
+        0
+      )
+      const totalHealthIdsToday = analytics.mandalHierarchy.reduce(
+        (sum, m) => sum + m.healthIdUpdatesToday,
+        0
+      )
+
+      csvRows.push([
+        '"TOTALS"',
+        totalResidents,
+        `"${avgMobile}% avg"`,
+        `"${avgHealthId}% avg"`,
+        totalMobileUpdatesAllTime,
+        totalMobileUpdatesToday,
+        totalHealthIdsOriginal,
+        totalHealthIdsAdded,
+        totalHealthIdsToday,
+      ].join(","))
+
+      // Create CSV content with BOM for Excel compatibility
+      const BOM = "\uFEFF"
+      const csvContent = BOM + csvRows.join("\n")
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+      link.download = `mandal_completion_rates_${timestamp}.csv`
+
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      toast.success("CSV exported successfully", {
+        description: `File: mandal_completion_rates_${timestamp}.csv`,
+      })
+    } catch (error) {
+      console.error("CSV export error:", error)
+      toast.error("Failed to export CSV", {
+        description: "Please try again",
+      })
+    } finally {
+      setIsExportingCsv(false)
+    }
+  }
+
+  const exportMandalTableToExcel = () => {
+    if (!analytics?.mandalHierarchy) {
+      toast.error("No data available to export")
+      return
+    }
+
+    try {
+      setIsExportingExcel(true)
+      toast.info("Generating Excel export...")
+
+      // Prepare data for Excel
+      const excelData: Array<Record<string, string | number>> = []
+
+      // Add mandals and secretariats
+      analytics.mandalHierarchy.forEach((mandal) => {
+        // Mandal row
+        excelData.push({
+          Name: mandal.mandalName,
+          "Total Residents": mandal.totalResidents,
+          "Mobile %": `${mandal.mobileCompletionRate}%`,
+          "Health ID %": `${mandal.healthIdCompletionRate}%`,
+          "Mobile Updates (All Time)": mandal.mobileUpdatesAllTime,
+          "Mobile Updates (Today)": mandal.mobileUpdatesToday,
+          "Health IDs (Original)": mandal.healthIdsOriginal,
+          "Health IDs (Added)": mandal.healthIdsAddedViaUpdates,
+          "Health IDs (Today)": mandal.healthIdUpdatesToday,
+        })
+
+        // Secretariat rows
+        mandal.secretariats.forEach((sec) => {
+          excelData.push({
+            Name: `  • ${sec.secName}`,
+            "Total Residents": sec.totalResidents,
+            "Mobile %": `${sec.mobileCompletionRate}%`,
+            "Health ID %": `${sec.healthIdCompletionRate}%`,
+            "Mobile Updates (All Time)": sec.mobileUpdatesAllTime,
+            "Mobile Updates (Today)": sec.mobileUpdatesToday,
+            "Health IDs (Original)": sec.healthIdsOriginal,
+            "Health IDs (Added)": sec.healthIdsAddedViaUpdates,
+            "Health IDs (Today)": sec.healthIdUpdatesToday,
+          })
+        })
+      })
+
+      // Totals row
+      const totalResidents = analytics.mandalHierarchy.reduce((sum, m) => sum + m.totalResidents, 0)
+      const avgMobile = Math.round(
+        analytics.mandalHierarchy.reduce((sum, m) => sum + m.mobileCompletionRate, 0) /
+          analytics.mandalHierarchy.length
+      )
+      const avgHealthId = Math.round(
+        analytics.mandalHierarchy.reduce((sum, m) => sum + m.healthIdCompletionRate, 0) /
+          analytics.mandalHierarchy.length
+      )
+
+      excelData.push({
+        Name: "TOTALS",
+        "Total Residents": totalResidents,
+        "Mobile %": `${avgMobile}% avg`,
+        "Health ID %": `${avgHealthId}% avg`,
+        "Mobile Updates (All Time)": analytics.mandalHierarchy.reduce(
+          (sum, m) => sum + m.mobileUpdatesAllTime,
+          0
+        ),
+        "Mobile Updates (Today)": analytics.mandalHierarchy.reduce(
+          (sum, m) => sum + m.mobileUpdatesToday,
+          0
+        ),
+        "Health IDs (Original)": analytics.mandalHierarchy.reduce(
+          (sum, m) => sum + m.healthIdsOriginal,
+          0
+        ),
+        "Health IDs (Added)": analytics.mandalHierarchy.reduce(
+          (sum, m) => sum + m.healthIdsAddedViaUpdates,
+          0
+        ),
+        "Health IDs (Today)": analytics.mandalHierarchy.reduce(
+          (sum, m) => sum + m.healthIdUpdatesToday,
+          0
+        ),
+      })
+
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(excelData)
+
+      // Set column widths
+      worksheet["!cols"] = [
+        { wch: 25 }, // Name
+        { wch: 15 }, // Total Residents
+        { wch: 12 }, // Mobile %
+        { wch: 12 }, // Health ID %
+        { wch: 22 }, // Mobile Updates (All Time)
+        { wch: 22 }, // Mobile Updates (Today)
+        { wch: 20 }, // Health IDs (Original)
+        { wch: 18 }, // Health IDs (Added)
+        { wch: 18 }, // Health IDs (Today)
+      ]
+
+      // Create workbook
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Mandal Completion Rates")
+
+      // Generate Excel file
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+      const filename = `mandal_completion_rates_${timestamp}.xlsx`
+
+      XLSX.writeFile(workbook, filename)
+
+      toast.success("Excel exported successfully", {
+        description: `File: ${filename}`,
+      })
+    } catch (error) {
+      console.error("Excel export error:", error)
+      toast.error("Failed to export Excel", {
+        description: "Please try again",
+      })
+    } finally {
+      setIsExportingExcel(false)
     }
   }
 
@@ -855,13 +1115,47 @@ export default function AdminDashboard() {
             {/* Mandal Completion Statistics */}
             <Card className="border-2 border-indigo-200">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-indigo-600" />
-                  Mandal-wise Completion Rates
-                </CardTitle>
-                <CardDescription>
-                  Mobile and Health ID completion by mandal
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <MapPin className="h-5 w-5 text-indigo-600" />
+                      Mandal-wise Completion Rates
+                    </CardTitle>
+                    <CardDescription>
+                      Mobile and Health ID completion by mandal
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={exportMandalTableToCSV}
+                      disabled={isExportingCsv || !analytics?.mandalHierarchy}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      {isExportingCsv ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileDown className="h-4 w-4" />
+                      )}
+                      Export CSV
+                    </Button>
+                    <Button
+                      onClick={exportMandalTableToExcel}
+                      disabled={isExportingExcel || !analytics?.mandalHierarchy}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      {isExportingExcel ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileSpreadsheet className="h-4 w-4" />
+                      )}
+                      Export Excel
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
