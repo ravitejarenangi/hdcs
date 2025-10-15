@@ -138,6 +138,7 @@ export async function GET() {
       mobileUpdatesAllTime,
       mobileUpdatesToday,
       healthIdUpdatesAllTime,
+      healthIdsAddedViaUpdates,
     ] = await Promise.all([
       prisma.updateLog.findMany({
         where: {
@@ -227,6 +228,32 @@ export async function GET() {
           OR: [
             { fieldUpdated: "health_id" },
             { fieldUpdated: "healthId" },
+          ],
+        },
+      }),
+
+      // Health IDs added via updates (where oldValue was null/empty and newValue has a health ID)
+      prisma.updateLog.count({
+        where: {
+          OR: [
+            { fieldUpdated: "health_id" },
+            { fieldUpdated: "healthId" },
+          ],
+          AND: [
+            {
+              OR: [
+                { oldValue: null },
+                { oldValue: "" },
+                { oldValue: "null" },
+                { oldValue: "N/A" },
+              ],
+            },
+            {
+              newValue: {
+                not: null,
+                notIn: ["", "null", "N/A"],
+              },
+            },
           ],
         },
       }),
@@ -528,6 +555,9 @@ export async function GET() {
         mobileUpdatesAllTime,
         mobileUpdatesToday,
         healthIdUpdatesAllTime,
+        healthIdsAddedViaUpdates,
+        // Calculate original health IDs (before updates)
+        healthIdsOriginal: residentsWithHealthId - healthIdsAddedViaUpdates,
         // Placeholder metrics
         residentsWithNamePlaceholder,
         residentsWithHhIdPlaceholder,

@@ -58,6 +58,8 @@ interface AnalyticsData {
     mobileUpdatesAllTime?: number
     mobileUpdatesToday?: number
     healthIdUpdatesAllTime?: number
+    healthIdsAddedViaUpdates?: number
+    healthIdsOriginal?: number
     // Placeholder metrics
     residentsWithNamePlaceholder?: number
     residentsWithHhIdPlaceholder?: number
@@ -560,15 +562,15 @@ export default function AdminDashboard() {
                   {/* Statistics */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-purple-100 p-2 rounded">
-                      <p className="text-xs text-gray-600">In System</p>
+                      <p className="text-xs text-gray-600">Original Data</p>
                       <p className="text-lg font-bold text-purple-700">
-                        {analytics.overview.residentsWithHealthId.toLocaleString()}
+                        {(analytics.overview.healthIdsOriginal || 0).toLocaleString()}
                       </p>
                     </div>
                     <div className="bg-purple-100 p-2 rounded">
-                      <p className="text-xs text-gray-600">Total Updated</p>
+                      <p className="text-xs text-gray-600">Added via Updates</p>
                       <p className="text-lg font-bold text-purple-700">
-                        {(analytics.overview.healthIdUpdatesAllTime || 0).toLocaleString()}
+                        {(analytics.overview.healthIdsAddedViaUpdates || 0).toLocaleString()}
                       </p>
                     </div>
                   </div>
