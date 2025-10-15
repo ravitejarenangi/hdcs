@@ -126,7 +126,7 @@ export async function GET() {
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    const [recentUpdates, recentUpdatesCount] = await Promise.all([
+    const [recentUpdates, recentUpdatesCount, mobileUpdatesCount, healthIdUpdatesCount] = await Promise.all([
       prisma.updateLog.findMany({
         where: {
           updateTimestamp: { gte: thirtyDaysAgo },
@@ -151,9 +151,26 @@ export async function GET() {
         take: 50, // Limit to 50 most recent updates
       }),
 
+      // Total updates count (for backward compatibility)
       prisma.updateLog.count({
         where: {
           updateTimestamp: { gte: thirtyDaysAgo },
+        },
+      }),
+
+      // Mobile number updates count
+      prisma.updateLog.count({
+        where: {
+          updateTimestamp: { gte: thirtyDaysAgo },
+          fieldUpdated: "citizen_mobile",
+        },
+      }),
+
+      // Health ID updates count
+      prisma.updateLog.count({
+        where: {
+          updateTimestamp: { gte: thirtyDaysAgo },
+          fieldUpdated: "health_id",
         },
       }),
     ])
@@ -447,6 +464,9 @@ export async function GET() {
         mobileCompletionRate,
         healthIdCompletionRate,
         recentUpdatesCount,
+        // Separate update counts by field type
+        mobileUpdatesCount,
+        healthIdUpdatesCount,
         // Placeholder metrics
         residentsWithNamePlaceholder,
         residentsWithHhIdPlaceholder,

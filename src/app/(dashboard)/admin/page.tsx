@@ -51,6 +51,9 @@ interface AnalyticsData {
     mobileCompletionRate: number
     healthIdCompletionRate: number
     recentUpdatesCount: number
+    // Separate update counts by field type
+    mobileUpdatesCount?: number
+    healthIdUpdatesCount?: number
     // Placeholder metrics
     residentsWithNamePlaceholder?: number
     residentsWithHhIdPlaceholder?: number
@@ -521,21 +524,59 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Recent Updates */}
+              {/* Recent Updates - Split by Field Type */}
               <Card className="border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-white">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <TrendingUp className="h-5 w-5 text-orange-600" />
                     Recent Updates
                   </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-4xl font-bold text-orange-600">
-                    {analytics.overview.recentUpdatesCount.toLocaleString()}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-2">
+                  <CardDescription className="text-xs">
                     Last 30 days
-                  </p>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Mobile Numbers Updated */}
+                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-orange-100">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        <Phone className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Mobile Numbers</p>
+                        <p className="text-xs text-gray-500">Updated</p>
+                      </div>
+                    </div>
+                    <p className="text-2xl font-bold text-green-600">
+                      {(analytics.overview.mobileUpdatesCount || 0).toLocaleString()}
+                    </p>
+                  </div>
+
+                  {/* Health IDs Updated */}
+                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-orange-100">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <CreditCard className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Health IDs</p>
+                        <p className="text-xs text-gray-500">Updated</p>
+                      </div>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {(analytics.overview.healthIdUpdatesCount || 0).toLocaleString()}
+                    </p>
+                  </div>
+
+                  {/* Total Updates (Optional - for reference) */}
+                  <div className="pt-2 border-t border-orange-100">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-gray-600">Total Updates</p>
+                      <p className="text-sm font-bold text-orange-600">
+                        {analytics.overview.recentUpdatesCount.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
