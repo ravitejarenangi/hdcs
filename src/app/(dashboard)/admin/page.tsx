@@ -91,6 +91,12 @@ interface AnalyticsData {
     withHealthId: number
     mobileCompletionRate: number
     healthIdCompletionRate: number
+    mobileUpdatesAllTime: number
+    mobileUpdatesToday: number
+    healthIdUpdatesAllTime: number
+    healthIdUpdatesToday: number
+    healthIdsOriginal: number
+    healthIdsAddedViaUpdates: number
     secretariats: Array<{
       secName: string
       totalResidents: number
@@ -98,6 +104,12 @@ interface AnalyticsData {
       withHealthId: number
       mobileCompletionRate: number
       healthIdCompletionRate: number
+      mobileUpdatesAllTime: number
+      mobileUpdatesToday: number
+      healthIdUpdatesAllTime: number
+      healthIdUpdatesToday: number
+      healthIdsOriginal: number
+      healthIdsAddedViaUpdates: number
     }>
   }>
   fieldOfficerPerformance: Array<{
@@ -1082,16 +1094,108 @@ export default function AdminDashboard() {
                                     {secretariat.healthIdCompletionRate}%
                                   </Badge>
                                 </td>
-                                {/* Empty cells for update statistics (only shown at mandal level) */}
-                                <td className="text-right py-2 px-4 bg-green-50 text-gray-400 text-xs">-</td>
-                                <td className="text-right py-2 px-4 bg-green-50 text-gray-400 text-xs">-</td>
-                                <td className="text-right py-2 px-4 bg-purple-50 text-gray-400 text-xs">-</td>
-                                <td className="text-right py-2 px-4 bg-purple-50 text-gray-400 text-xs">-</td>
-                                <td className="text-right py-2 px-4 bg-purple-50 text-gray-400 text-xs">-</td>
+                                {/* Update statistics for secretariat */}
+                                <td className="text-right py-2 px-4 bg-green-50 text-green-600 text-sm">
+                                  {secretariat.mobileUpdatesAllTime.toLocaleString()}
+                                </td>
+                                <td className="text-right py-2 px-4 bg-green-50 text-green-600 text-sm">
+                                  {secretariat.mobileUpdatesToday > 0 ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      {secretariat.mobileUpdatesToday.toLocaleString()}
+                                      <Badge className="bg-green-600 text-white text-[10px] px-1.5 py-0">
+                                        Today
+                                      </Badge>
+                                    </span>
+                                  ) : (
+                                    "0"
+                                  )}
+                                </td>
+                                <td className="text-right py-2 px-4 bg-purple-50 text-purple-600 text-sm">
+                                  {secretariat.healthIdsOriginal.toLocaleString()}
+                                </td>
+                                <td className="text-right py-2 px-4 bg-purple-50 text-purple-600 text-sm">
+                                  {secretariat.healthIdsAddedViaUpdates.toLocaleString()}
+                                </td>
+                                <td className="text-right py-2 px-4 bg-purple-50 text-purple-600 text-sm">
+                                  {secretariat.healthIdUpdatesToday > 0 ? (
+                                    <span className="inline-flex items-center gap-1">
+                                      {secretariat.healthIdUpdatesToday.toLocaleString()}
+                                      <Badge className="bg-purple-600 text-white text-[10px] px-1.5 py-0">
+                                        Today
+                                      </Badge>
+                                    </span>
+                                  ) : (
+                                    "0"
+                                  )}
+                                </td>
                               </tr>
                             ))}
                         </React.Fragment>
                       ))}
+
+                      {/* Totals Row */}
+                      {analytics.mandalHierarchy.length > 0 && (
+                        <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
+                          <td className="py-3 px-4"></td>
+                          <td className="py-3 px-4 text-indigo-900">TOTALS</td>
+                          <td className="text-right py-3 px-4 text-gray-900">
+                            {analytics.mandalHierarchy
+                              .reduce((sum, m) => sum + m.totalResidents, 0)
+                              .toLocaleString()}
+                          </td>
+                          <td className="text-right py-3 px-4">
+                            <Badge className="bg-blue-600 text-white">
+                              {analytics.mandalHierarchy.length > 0
+                                ? Math.round(
+                                    analytics.mandalHierarchy.reduce(
+                                      (sum, m) => sum + m.mobileCompletionRate,
+                                      0
+                                    ) / analytics.mandalHierarchy.length
+                                  )
+                                : 0}
+                              % avg
+                            </Badge>
+                          </td>
+                          <td className="text-right py-3 px-4">
+                            <Badge className="bg-blue-600 text-white">
+                              {analytics.mandalHierarchy.length > 0
+                                ? Math.round(
+                                    analytics.mandalHierarchy.reduce(
+                                      (sum, m) => sum + m.healthIdCompletionRate,
+                                      0
+                                    ) / analytics.mandalHierarchy.length
+                                  )
+                                : 0}
+                              % avg
+                            </Badge>
+                          </td>
+                          <td className="text-right py-3 px-4 bg-green-100 text-green-800">
+                            {analytics.mandalHierarchy
+                              .reduce((sum, m) => sum + m.mobileUpdatesAllTime, 0)
+                              .toLocaleString()}
+                          </td>
+                          <td className="text-right py-3 px-4 bg-green-100 text-green-800">
+                            {analytics.mandalHierarchy
+                              .reduce((sum, m) => sum + m.mobileUpdatesToday, 0)
+                              .toLocaleString()}
+                          </td>
+                          <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
+                            {analytics.mandalHierarchy
+                              .reduce((sum, m) => sum + m.healthIdsOriginal, 0)
+                              .toLocaleString()}
+                          </td>
+                          <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
+                            {analytics.mandalHierarchy
+                              .reduce((sum, m) => sum + m.healthIdsAddedViaUpdates, 0)
+                              .toLocaleString()}
+                          </td>
+                          <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
+                            {analytics.mandalHierarchy
+                              .reduce((sum, m) => sum + m.healthIdUpdatesToday, 0)
+                              .toLocaleString()}
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>

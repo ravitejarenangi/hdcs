@@ -545,10 +545,77 @@ export async function GET() {
 
     logTiming('Mandal update statistics', requestStart)
 
+    // 11. Secretariat-wise update statistics
+    const secretariatUpdateStats = await prisma.$queryRaw<
+      Array<{
+        mandalName: string
+        secName: string
+        mobileUpdatesAllTime: bigint
+        mobileUpdatesToday: bigint
+        healthIdUpdatesAllTime: bigint
+        healthIdUpdatesToday: bigint
+        healthIdsAddedViaUpdates: bigint
+      }>
+    >`
+      SELECT
+        r.mandal_name as mandalName,
+        r.sec_name as secName,
+        -- Mobile updates (all time)
+        COUNT(CASE
+          WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+          THEN 1
+        END) as mobileUpdatesAllTime,
+        -- Mobile updates (today)
+        COUNT(CASE
+          WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+            AND ul.update_timestamp >= ${startOfToday}
+          THEN 1
+        END) as mobileUpdatesToday,
+        -- Health ID updates (all time)
+        COUNT(CASE
+          WHEN ul.field_updated IN ('health_id', 'healthId')
+          THEN 1
+        END) as healthIdUpdatesAllTime,
+        -- Health ID updates (today)
+        COUNT(CASE
+          WHEN ul.field_updated IN ('health_id', 'healthId')
+            AND ul.update_timestamp >= ${startOfToday}
+          THEN 1
+        END) as healthIdUpdatesToday,
+        -- Health IDs added via updates (where oldValue was null/empty)
+        COUNT(CASE
+          WHEN ul.field_updated IN ('health_id', 'healthId')
+            AND (ul.old_value IS NULL OR ul.old_value IN ('', 'null', 'N/A'))
+            AND ul.new_value IS NOT NULL
+            AND ul.new_value NOT IN ('', 'null', 'N/A')
+          THEN 1
+        END) as healthIdsAddedViaUpdates
+      FROM update_logs ul
+      INNER JOIN residents r ON ul.resident_id = r.resident_id
+      WHERE r.mandal_name IS NOT NULL AND r.sec_name IS NOT NULL
+      GROUP BY r.mandal_name, r.sec_name
+    `
+
+    logTiming('Secretariat update statistics', requestStart)
+
     // Create a map for quick lookup of update stats by mandal
     const mandalUpdateStatsMap = new Map(
       mandalUpdateStats.map((stat) => [
         stat.mandalName,
+        {
+          mobileUpdatesAllTime: Number(stat.mobileUpdatesAllTime),
+          mobileUpdatesToday: Number(stat.mobileUpdatesToday),
+          healthIdUpdatesAllTime: Number(stat.healthIdUpdatesAllTime),
+          healthIdUpdatesToday: Number(stat.healthIdUpdatesToday),
+          healthIdsAddedViaUpdates: Number(stat.healthIdsAddedViaUpdates),
+        },
+      ])
+    )
+
+    // Create a map for secretariat update stats
+    const secretariatUpdateStatsMap = new Map(
+      secretariatUpdateStats.map((stat) => [
+        `${stat.mandalName}|${stat.secName}`,
         {
           mobileUpdatesAllTime: Number(stat.mobileUpdatesAllTime),
           mobileUpdatesToday: Number(stat.mobileUpdatesToday),
@@ -603,20 +670,42 @@ export async function GET() {
       // Get all secretariats for this mandal
       const secretariats = hierarchicalStats
         .filter((stat) => stat.mandalName === mandal.mandalName && stat.secName)
-        .map((stat) => ({
-          secName: stat.secName!,
-          totalResidents: Number(stat.totalResidents),
-          withMobile: Number(stat.withMobile),
-          withHealthId: Number(stat.withHealthId),
-          mobileCompletionRate:
-            Number(stat.totalResidents) > 0
-              ? Math.round((Number(stat.withMobile) / Number(stat.totalResidents)) * 100)
-              : 0,
-          healthIdCompletionRate:
-            Number(stat.totalResidents) > 0
-              ? Math.round((Number(stat.withHealthId) / Number(stat.totalResidents)) * 100)
-              : 0,
-        }))
+        .map((stat) => {
+          const secUpdateStats = secretariatUpdateStatsMap.get(
+            `${stat.mandalName}|${stat.secName}`
+          ) || {
+            mobileUpdatesAllTime: 0,
+            mobileUpdatesToday: 0,
+            healthIdUpdatesAllTime: 0,
+            healthIdUpdatesToday: 0,
+            healthIdsAddedViaUpdates: 0,
+          }
+
+          const withHealthId = Number(stat.withHealthId)
+          const healthIdsOriginal = withHealthId - secUpdateStats.healthIdsAddedViaUpdates
+
+          return {
+            secName: stat.secName!,
+            totalResidents: Number(stat.totalResidents),
+            withMobile: Number(stat.withMobile),
+            withHealthId: Number(stat.withHealthId),
+            mobileCompletionRate:
+              Number(stat.totalResidents) > 0
+                ? Math.round((Number(stat.withMobile) / Number(stat.totalResidents)) * 100)
+                : 0,
+            healthIdCompletionRate:
+              Number(stat.totalResidents) > 0
+                ? Math.round((Number(stat.withHealthId) / Number(stat.totalResidents)) * 100)
+                : 0,
+            // Update statistics
+            mobileUpdatesAllTime: secUpdateStats.mobileUpdatesAllTime,
+            mobileUpdatesToday: secUpdateStats.mobileUpdatesToday,
+            healthIdUpdatesAllTime: secUpdateStats.healthIdUpdatesAllTime,
+            healthIdUpdatesToday: secUpdateStats.healthIdUpdatesToday,
+            healthIdsOriginal,
+            healthIdsAddedViaUpdates: secUpdateStats.healthIdsAddedViaUpdates,
+          }
+        })
 
       return {
         ...mandal,
