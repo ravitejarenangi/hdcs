@@ -126,7 +126,20 @@ export async function GET() {
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    const [recentUpdates, recentUpdatesCount, mobileUpdatesCount, healthIdUpdatesCount] = await Promise.all([
+    // Get start of today (00:00:00) for today's updates
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+
+    const [
+      recentUpdates,
+      recentUpdatesCount,
+      mobileUpdatesCount,
+      healthIdUpdatesCount,
+      mobileUpdatesAllTime,
+      mobileUpdatesToday,
+      healthIdUpdatesAllTime,
+      healthIdsInSystem,
+    ] = await Promise.all([
       prisma.updateLog.findMany({
         where: {
           updateTimestamp: { gte: thirtyDaysAgo },
@@ -158,7 +171,7 @@ export async function GET() {
         },
       }),
 
-      // Mobile number updates count
+      // Mobile number updates count (last 30 days - for backward compatibility)
       prisma.updateLog.count({
         where: {
           updateTimestamp: { gte: thirtyDaysAgo },
@@ -166,11 +179,44 @@ export async function GET() {
         },
       }),
 
-      // Health ID updates count
+      // Health ID updates count (last 30 days - for backward compatibility)
       prisma.updateLog.count({
         where: {
           updateTimestamp: { gte: thirtyDaysAgo },
           fieldUpdated: "health_id",
+        },
+      }),
+
+      // Mobile number updates - ALL TIME
+      prisma.updateLog.count({
+        where: {
+          fieldUpdated: "citizen_mobile",
+        },
+      }),
+
+      // Mobile number updates - TODAY
+      prisma.updateLog.count({
+        where: {
+          fieldUpdated: "citizen_mobile",
+          updateTimestamp: { gte: startOfToday },
+        },
+      }),
+
+      // Health ID updates - ALL TIME
+      prisma.updateLog.count({
+        where: {
+          fieldUpdated: "health_id",
+        },
+      }),
+
+      // Health IDs currently in system (residents with valid health IDs)
+      prisma.resident.count({
+        where: {
+          AND: [
+            { healthId: { not: null } },
+            { healthId: { not: "N/A" } },
+            { healthId: { not: "" } },
+          ],
         },
       }),
     ])
@@ -464,9 +510,15 @@ export async function GET() {
         mobileCompletionRate,
         healthIdCompletionRate,
         recentUpdatesCount,
-        // Separate update counts by field type
+        // Separate update counts by field type (last 30 days - for backward compatibility)
         mobileUpdatesCount,
         healthIdUpdatesCount,
+        // Enhanced mobile statistics
+        mobileUpdatesAllTime,
+        mobileUpdatesToday,
+        // Enhanced health ID statistics
+        healthIdUpdatesAllTime,
+        healthIdsInSystem,
         // Placeholder metrics
         residentsWithNamePlaceholder,
         residentsWithHhIdPlaceholder,

@@ -51,9 +51,15 @@ interface AnalyticsData {
     mobileCompletionRate: number
     healthIdCompletionRate: number
     recentUpdatesCount: number
-    // Separate update counts by field type
+    // Separate update counts by field type (last 30 days)
     mobileUpdatesCount?: number
     healthIdUpdatesCount?: number
+    // Enhanced mobile statistics
+    mobileUpdatesAllTime?: number
+    mobileUpdatesToday?: number
+    // Enhanced health ID statistics
+    healthIdUpdatesAllTime?: number
+    healthIdsInSystem?: number
     // Placeholder metrics
     residentsWithNamePlaceholder?: number
     residentsWithHhIdPlaceholder?: number
@@ -524,54 +530,95 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Recent Updates - Split by Field Type */}
+              {/* Recent Updates - Enhanced Statistics */}
               <Card className="border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-white">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <TrendingUp className="h-5 w-5 text-orange-600" />
-                    Recent Updates
+                    Update Statistics
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Last 30 days
+                    Mobile numbers and health IDs
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Mobile Numbers Updated */}
-                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-orange-100">
-                    <div className="flex items-center gap-3">
+                  {/* Mobile Numbers Section */}
+                  <div className="p-4 bg-white rounded-lg border-2 border-green-100">
+                    <div className="flex items-center gap-3 mb-3">
                       <div className="p-2 bg-green-100 rounded-lg">
                         <Phone className="h-5 w-5 text-green-600" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-700">Mobile Numbers</p>
-                        <p className="text-xs text-gray-500">Updated</p>
+                        <p className="text-sm font-semibold text-gray-800">Mobile Numbers</p>
+                        <p className="text-xs text-gray-500">Update activity</p>
                       </div>
                     </div>
-                    <p className="text-2xl font-bold text-green-600">
-                      {(analytics.overview.mobileUpdatesCount || 0).toLocaleString()}
-                    </p>
+
+                    {/* Mobile Statistics Grid */}
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      {/* All-Time Updates */}
+                      <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                        <p className="text-xs text-gray-600 mb-1">Total Records Updated</p>
+                        <p className="text-2xl font-bold text-green-700">
+                          {(analytics.overview.mobileUpdatesAllTime || 0).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">All time</p>
+                      </div>
+
+                      {/* Today's Updates */}
+                      <div className="bg-green-50 p-3 rounded-lg border border-green-200 relative">
+                        <Badge className="absolute -top-2 -right-2 bg-green-600 text-white text-xs px-2 py-0.5">
+                          Today
+                        </Badge>
+                        <p className="text-xs text-gray-600 mb-1">Updated Today</p>
+                        <p className="text-2xl font-bold text-green-700">
+                          {(analytics.overview.mobileUpdatesToday || 0).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">
+                          {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Health IDs Updated */}
-                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-orange-100">
-                    <div className="flex items-center gap-3">
+                  {/* Health IDs Section */}
+                  <div className="p-4 bg-white rounded-lg border-2 border-blue-100">
+                    <div className="flex items-center gap-3 mb-3">
                       <div className="p-2 bg-blue-100 rounded-lg">
                         <CreditCard className="h-5 w-5 text-blue-600" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-700">Health IDs</p>
-                        <p className="text-xs text-gray-500">Updated</p>
+                        <p className="text-sm font-semibold text-gray-800">Health IDs</p>
+                        <p className="text-xs text-gray-500">System status</p>
                       </div>
                     </div>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {(analytics.overview.healthIdUpdatesCount || 0).toLocaleString()}
-                    </p>
+
+                    {/* Health ID Statistics Grid */}
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      {/* Health IDs in System */}
+                      <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                        <p className="text-xs text-gray-600 mb-1">Health IDs in System</p>
+                        <p className="text-2xl font-bold text-blue-700">
+                          {(analytics.overview.healthIdsInSystem || 0).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-blue-600 mt-1">Current total</p>
+                      </div>
+
+                      {/* All-Time Updates */}
+                      <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                        <p className="text-xs text-gray-600 mb-1">Records Updated</p>
+                        <p className="text-2xl font-bold text-blue-700">
+                          {(analytics.overview.healthIdUpdatesAllTime || 0).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-blue-600 mt-1">All time</p>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Total Updates (Optional - for reference) */}
+                  {/* Total Updates Summary (Optional - for reference) */}
                   <div className="pt-2 border-t border-orange-100">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium text-gray-600">Total Updates</p>
+                      <p className="text-xs font-medium text-gray-600">Total Updates (Last 30 days)</p>
                       <p className="text-sm font-bold text-orange-600">
                         {analytics.overview.recentUpdatesCount.toLocaleString()}
                       </p>
