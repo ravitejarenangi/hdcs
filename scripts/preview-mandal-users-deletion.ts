@@ -25,7 +25,7 @@ interface UserToDelete {
   username: string
   fullName: string
   role: string
-  email: string | null
+  mobileNumber: string | null
   mandalName: string | null
   assignedSecretariats: string | null
   isActive: boolean
@@ -108,7 +108,7 @@ async function main() {
         username: true,
         fullName: true,
         role: true,
-        email: true,
+        mobileNumber: true,
         mandalName: true,
         assignedSecretariats: true,
         isActive: true,
@@ -173,12 +173,17 @@ async function main() {
       }
     })
 
-    // Display by mandal
-    MANDALS_TO_DELETE.forEach(mandal => {
-      const users = byMandal[mandal] || []
+    // Display by mandal (check all case variations)
+    MANDALS_TO_DELETE.forEach(targetMandal => {
+      // Find the actual mandal key (case-insensitive)
+      const actualMandalKey = Object.keys(byMandal).find(
+        key => key.toLowerCase() === targetMandal.toLowerCase()
+      )
+
+      const users = actualMandalKey ? byMandal[actualMandalKey] : []
       if (users.length === 0) return
 
-      console.log(`\n📍 ${mandal.toUpperCase()} (${users.length} user${users.length > 1 ? 's' : ''})`)
+      console.log(`\n📍 ${targetMandal.toUpperCase()} (${users.length} user${users.length > 1 ? 's' : ''})`)
       console.log('─'.repeat(80))
 
       const panchayatSecs = users.filter(u => u.role === 'PANCHAYAT_SECRETARY')
@@ -189,7 +194,7 @@ async function main() {
         panchayatSecs.forEach((user, idx) => {
           console.log(`     ${idx + 1}. ${user.fullName}`)
           console.log(`        Username: @${user.username}`)
-          console.log(`        Email: ${user.email || 'N/A'}`)
+          console.log(`        Mobile: ${user.mobileNumber || 'N/A'}`)
           console.log(`        Status: ${user.isActive ? '🟢 Active' : '🔴 Inactive'}`)
           console.log(`        Created: ${user.createdAt.toLocaleDateString()}`)
           console.log()
@@ -201,7 +206,7 @@ async function main() {
         fieldOffs.forEach((user, idx) => {
           console.log(`     ${idx + 1}. ${user.fullName}`)
           console.log(`        Username: @${user.username}`)
-          console.log(`        Email: ${user.email || 'N/A'}`)
+          console.log(`        Mobile: ${user.mobileNumber || 'N/A'}`)
           console.log(`        ${getLocationDescription(user)}`)
           console.log(`        Status: ${user.isActive ? '🟢 Active' : '🔴 Inactive'}`)
           console.log(`        Created: ${user.createdAt.toLocaleDateString()}`)

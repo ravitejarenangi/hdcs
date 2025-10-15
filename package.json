@@ -18,7 +18,9 @@
     "test:completion": "tsx scripts/test-completion-rates.ts",
     "cleanup:mobile": "tsx scripts/cleanup-mobile-numbers.ts",
     "preview:delete-users": "tsx scripts/preview-mandal-users-deletion.ts",
-    "delete:mandal-users": "tsx scripts/delete-mandal-users.ts"
+    "delete:mandal-users": "tsx scripts/delete-mandal-users.ts",
+    "preview:delete-residents": "tsx scripts/preview-mandal-residents-deletion.ts",
+    "delete:mandal-residents": "tsx scripts/delete-mandal-residents.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
