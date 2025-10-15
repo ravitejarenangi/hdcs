@@ -170,41 +170,64 @@ export async function GET() {
         },
       }),
 
-      // Mobile number updates count
+      // Mobile number updates count (last 30 days)
+      // Check for both "citizen_mobile" and "mobile_number" for backward compatibility
       prisma.updateLog.count({
         where: {
           updateTimestamp: { gte: thirtyDaysAgo },
-          fieldUpdated: "citizen_mobile",
+          OR: [
+            { fieldUpdated: "citizen_mobile" },
+            { fieldUpdated: "mobile_number" },
+            { fieldUpdated: "citizenMobile" },
+            { fieldUpdated: "mobileNumber" },
+          ],
         },
       }),
 
       // Health ID updates count (last 30 days)
+      // Check for both "health_id" and "healthId" for backward compatibility
       prisma.updateLog.count({
         where: {
           updateTimestamp: { gte: thirtyDaysAgo },
-          fieldUpdated: "health_id",
+          OR: [
+            { fieldUpdated: "health_id" },
+            { fieldUpdated: "healthId" },
+          ],
         },
       }),
 
       // Mobile number updates - ALL TIME
       prisma.updateLog.count({
         where: {
-          fieldUpdated: "citizen_mobile",
+          OR: [
+            { fieldUpdated: "citizen_mobile" },
+            { fieldUpdated: "mobile_number" },
+            { fieldUpdated: "citizenMobile" },
+            { fieldUpdated: "mobileNumber" },
+          ],
         },
       }),
 
       // Mobile number updates - TODAY
       prisma.updateLog.count({
         where: {
-          fieldUpdated: "citizen_mobile",
           updateTimestamp: { gte: startOfToday },
+          OR: [
+            { fieldUpdated: "citizen_mobile" },
+            { fieldUpdated: "mobile_number" },
+            { fieldUpdated: "citizenMobile" },
+            { fieldUpdated: "mobileNumber" },
+          ],
         },
       }),
 
       // Health ID updates - ALL TIME
       prisma.updateLog.count({
         where: {
-          fieldUpdated: "health_id",
+          OR: [
+            { fieldUpdated: "health_id" },
+            { fieldUpdated: "healthId" },
+          ],
         },
       }),
     ])
