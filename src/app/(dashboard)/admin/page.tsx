@@ -77,6 +77,12 @@ interface AnalyticsData {
     withHealthId: number
     mobileCompletionRate: number
     healthIdCompletionRate: number
+    mobileUpdatesAllTime: number
+    mobileUpdatesToday: number
+    healthIdUpdatesAllTime: number
+    healthIdUpdatesToday: number
+    healthIdsOriginal: number
+    healthIdsAddedViaUpdates: number
   }>
   mandalHierarchy: Array<{
     mandalName: string
@@ -903,6 +909,41 @@ export default function AdminDashboard() {
                             />
                           </div>
                         </th>
+                        <th className="text-right py-2 px-4 bg-green-50">
+                          <div className="text-xs font-semibold text-green-700">
+                            Mobile Updates
+                            <br />
+                            (All Time)
+                          </div>
+                        </th>
+                        <th className="text-right py-2 px-4 bg-green-50">
+                          <div className="text-xs font-semibold text-green-700">
+                            Mobile Updates
+                            <br />
+                            (Today)
+                          </div>
+                        </th>
+                        <th className="text-right py-2 px-4 bg-purple-50">
+                          <div className="text-xs font-semibold text-purple-700">
+                            Health IDs
+                            <br />
+                            (Original)
+                          </div>
+                        </th>
+                        <th className="text-right py-2 px-4 bg-purple-50">
+                          <div className="text-xs font-semibold text-purple-700">
+                            Health IDs
+                            <br />
+                            (Added)
+                          </div>
+                        </th>
+                        <th className="text-right py-2 px-4 bg-purple-50">
+                          <div className="text-xs font-semibold text-purple-700">
+                            Health IDs
+                            <br />
+                            (Today)
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -958,6 +999,39 @@ export default function AdminDashboard() {
                                 {mandal.healthIdCompletionRate}%
                               </Badge>
                             </td>
+                            <td className="text-right py-2 px-4 bg-green-50 font-semibold text-green-700">
+                              {mandal.mobileUpdatesAllTime.toLocaleString()}
+                            </td>
+                            <td className="text-right py-2 px-4 bg-green-50 font-semibold text-green-700">
+                              {mandal.mobileUpdatesToday > 0 ? (
+                                <span className="inline-flex items-center gap-1">
+                                  {mandal.mobileUpdatesToday.toLocaleString()}
+                                  <Badge className="bg-green-600 text-white text-[10px] px-1.5 py-0">
+                                    Today
+                                  </Badge>
+                                </span>
+                              ) : (
+                                "0"
+                              )}
+                            </td>
+                            <td className="text-right py-2 px-4 bg-purple-50 font-semibold text-purple-700">
+                              {mandal.healthIdsOriginal.toLocaleString()}
+                            </td>
+                            <td className="text-right py-2 px-4 bg-purple-50 font-semibold text-purple-700">
+                              {mandal.healthIdsAddedViaUpdates.toLocaleString()}
+                            </td>
+                            <td className="text-right py-2 px-4 bg-purple-50 font-semibold text-purple-700">
+                              {mandal.healthIdUpdatesToday > 0 ? (
+                                <span className="inline-flex items-center gap-1">
+                                  {mandal.healthIdUpdatesToday.toLocaleString()}
+                                  <Badge className="bg-purple-600 text-white text-[10px] px-1.5 py-0">
+                                    Today
+                                  </Badge>
+                                </span>
+                              ) : (
+                                "0"
+                              )}
+                            </td>
                           </tr>
 
                           {/* Level 2: Secretariat Rows (shown when mandal is expanded) */}
@@ -1008,6 +1082,12 @@ export default function AdminDashboard() {
                                     {secretariat.healthIdCompletionRate}%
                                   </Badge>
                                 </td>
+                                {/* Empty cells for update statistics (only shown at mandal level) */}
+                                <td className="text-right py-2 px-4 bg-green-50 text-gray-400 text-xs">-</td>
+                                <td className="text-right py-2 px-4 bg-green-50 text-gray-400 text-xs">-</td>
+                                <td className="text-right py-2 px-4 bg-purple-50 text-gray-400 text-xs">-</td>
+                                <td className="text-right py-2 px-4 bg-purple-50 text-gray-400 text-xs">-</td>
+                                <td className="text-right py-2 px-4 bg-purple-50 text-gray-400 text-xs">-</td>
                               </tr>
                             ))}
                         </React.Fragment>

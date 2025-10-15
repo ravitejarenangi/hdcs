@@ -494,24 +494,109 @@ export async function GET() {
 
     logTiming('Completion statistics', requestStart)
 
-    const mandalCompletion = mandalCompletionStats.map((stat) => ({
-      mandalName: stat.mandalName,
-      totalResidents: Number(stat.totalResidents),
-      withMobile: Number(stat.withMobile),
-      withHealthId: Number(stat.withHealthId),
-      mobileCompletionRate:
-        Number(stat.totalResidents) > 0
-          ? Math.round(
-              (Number(stat.withMobile) / Number(stat.totalResidents)) * 100
-            )
-          : 0,
-      healthIdCompletionRate:
-        Number(stat.totalResidents) > 0
-          ? Math.round(
-              (Number(stat.withHealthId) / Number(stat.totalResidents)) * 100
-            )
-          : 0,
-    }))
+    // 10. Mandal-wise update statistics
+    const mandalUpdateStats = await prisma.$queryRaw<
+      Array<{
+        mandalName: string
+        mobileUpdatesAllTime: bigint
+        mobileUpdatesToday: bigint
+        healthIdUpdatesAllTime: bigint
+        healthIdUpdatesToday: bigint
+        healthIdsAddedViaUpdates: bigint
+      }>
+    >`
+      SELECT
+        r.mandal_name as mandalName,
+        -- Mobile updates (all time)
+        COUNT(CASE
+          WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+          THEN 1
+        END) as mobileUpdatesAllTime,
+        -- Mobile updates (today)
+        COUNT(CASE
+          WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+            AND ul.update_timestamp >= ${startOfToday}
+          THEN 1
+        END) as mobileUpdatesToday,
+        -- Health ID updates (all time)
+        COUNT(CASE
+          WHEN ul.field_updated IN ('health_id', 'healthId')
+          THEN 1
+        END) as healthIdUpdatesAllTime,
+        -- Health ID updates (today)
+        COUNT(CASE
+          WHEN ul.field_updated IN ('health_id', 'healthId')
+            AND ul.update_timestamp >= ${startOfToday}
+          THEN 1
+        END) as healthIdUpdatesToday,
+        -- Health IDs added via updates (where oldValue was null/empty)
+        COUNT(CASE
+          WHEN ul.field_updated IN ('health_id', 'healthId')
+            AND (ul.old_value IS NULL OR ul.old_value IN ('', 'null', 'N/A'))
+            AND ul.new_value IS NOT NULL
+            AND ul.new_value NOT IN ('', 'null', 'N/A')
+          THEN 1
+        END) as healthIdsAddedViaUpdates
+      FROM update_logs ul
+      INNER JOIN residents r ON ul.resident_id = r.resident_id
+      WHERE r.mandal_name IS NOT NULL
+      GROUP BY r.mandal_name
+    `
+
+    logTiming('Mandal update statistics', requestStart)
+
+    // Create a map for quick lookup of update stats by mandal
+    const mandalUpdateStatsMap = new Map(
+      mandalUpdateStats.map((stat) => [
+        stat.mandalName,
+        {
+          mobileUpdatesAllTime: Number(stat.mobileUpdatesAllTime),
+          mobileUpdatesToday: Number(stat.mobileUpdatesToday),
+          healthIdUpdatesAllTime: Number(stat.healthIdUpdatesAllTime),
+          healthIdUpdatesToday: Number(stat.healthIdUpdatesToday),
+          healthIdsAddedViaUpdates: Number(stat.healthIdsAddedViaUpdates),
+        },
+      ])
+    )
+
+    const mandalCompletion = mandalCompletionStats.map((stat) => {
+      const updateStats = mandalUpdateStatsMap.get(stat.mandalName) || {
+        mobileUpdatesAllTime: 0,
+        mobileUpdatesToday: 0,
+        healthIdUpdatesAllTime: 0,
+        healthIdUpdatesToday: 0,
+        healthIdsAddedViaUpdates: 0,
+      }
+
+      const withHealthId = Number(stat.withHealthId)
+      const healthIdsOriginal = withHealthId - updateStats.healthIdsAddedViaUpdates
+
+      return {
+        mandalName: stat.mandalName,
+        totalResidents: Number(stat.totalResidents),
+        withMobile: Number(stat.withMobile),
+        withHealthId: Number(stat.withHealthId),
+        mobileCompletionRate:
+          Number(stat.totalResidents) > 0
+            ? Math.round(
+                (Number(stat.withMobile) / Number(stat.totalResidents)) * 100
+              )
+            : 0,
+        healthIdCompletionRate:
+          Number(stat.totalResidents) > 0
+            ? Math.round(
+                (Number(stat.withHealthId) / Number(stat.totalResidents)) * 100
+              )
+            : 0,
+        // Update statistics
+        mobileUpdatesAllTime: updateStats.mobileUpdatesAllTime,
+        mobileUpdatesToday: updateStats.mobileUpdatesToday,
+        healthIdUpdatesAllTime: updateStats.healthIdUpdatesAllTime,
+        healthIdUpdatesToday: updateStats.healthIdUpdatesToday,
+        healthIdsOriginal,
+        healthIdsAddedViaUpdates: updateStats.healthIdsAddedViaUpdates,
+      }
+    })
 
     // Build hierarchical structure (2 levels: Mandal → Secretariat)
     const mandalHierarchy = mandalCompletion.map((mandal) => {
