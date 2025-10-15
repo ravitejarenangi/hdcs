@@ -1,9 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { useForm, Controller } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
+import { useState, useMemo, useCallback } from "react"
 import {
   Table,
   TableBody,
@@ -15,11 +12,11 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Edit2, Save, X, Phone, CreditCard, User, MapPin, Calendar, Users, Home, Loader2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Edit2, Save, X, User, MapPin, Users, Home, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { toast } from "sonner"
+import { HouseholdMembersDialog } from "@/components/dialogs/HouseholdMembersDialog"
 
 // Helper function to mask UID (show only last 4 digits)
 function maskUID(uid: string | null): string {
@@ -75,29 +72,7 @@ function isValidHealthIdFormat(healthId: string): boolean {
   return digits.length === 14 && /^\d{14}$/.test(digits)
 }
 
-// Validation schema
-const updateSchema = z.object({
-  citizenMobile: z
-    .string()
-    .regex(/^[6-9]\d{9}$/, "Mobile number must be 10 digits starting with 6-9")
-    .refine(
-      (val) => !val || isValidMobilePattern(val),
-      "Mobile number cannot be repetitive or sequential (e.g., 9999999999, 9999998888)"
-    )
-    .optional()
-    .or(z.literal("")),
-  healthId: z
-    .string()
-    .refine(
-      (val) => !val || isValidHealthIdFormat(val),
-      "Health ID must be 14 digits (format: XX-XXXX-XXXX-XXXX)"
-    )
-    // Health IDs are stored WITH dashes in database to match existing data
-    .optional()
-    .or(z.literal("")),
-})
-
-type UpdateFormData = z.infer<typeof updateSchema>
+// No zod schema needed - using useState like HouseholdMemberEditForm
 
 interface Resident {
   id: string
@@ -124,182 +99,53 @@ interface ResidentsTableProps {
   onUpdateSuccess: () => void
 }
 
-// Searched Person Details Component
-interface SearchedPersonDetailsProps {
-  person: Resident
-}
+// Type definitions for sorting
+type SortField = 'name' | 'residentId' | 'citizenMobile' | 'healthId' | 'secName'
+type SortDirection = 'asc' | 'desc'
 
-function SearchedPersonDetails({ person }: SearchedPersonDetailsProps) {
-  return (
-    <Card className="border-2 border-blue-500 bg-blue-50/30 mb-6">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <User className="h-5 w-5 text-blue-600" />
-          Searched Person Details
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Column 1 - Basic Info */}
-          <div className="space-y-2">
-            <div className="flex items-start gap-2">
-              <User className="h-4 w-4 text-gray-600 mt-0.5" />
-              <div>
-                <div className="text-xs text-gray-600 font-medium">Name</div>
-                <div className="font-semibold text-base">{person.name}</div>
-              </div>
-            </div>
+export function ResidentsTable({
+  residents,
+  searchedResidentId,
+  householdId,
+  onUpdateSuccess,
+}: ResidentsTableProps) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [selectedResident, setSelectedResident] = useState<Resident | null>(null)
+  const [householdMembers, setHouseholdMembers] = useState<Resident[]>([])
+  const [isLoadingHousehold, setIsLoadingHousehold] = useState(false)
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<SortField>('name')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
-            <div className="flex items-start gap-2">
-              <CreditCard className="h-4 w-4 text-gray-600 mt-0.5" />
-              <div>
-                <div className="text-xs text-gray-600 font-medium">Resident ID</div>
-                <div className="font-mono text-sm">{person.residentId}</div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <CreditCard className="h-4 w-4 text-gray-600 mt-0.5" />
-              <div>
-                <div className="text-xs text-gray-600 font-medium">UID</div>
-                <div className="font-mono text-sm">{maskUID(person.uid)}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Column 2 - Personal Details */}
-          <div className="space-y-2">
-            <div className="flex items-start gap-2">
-              <User className="h-4 w-4 text-gray-600 mt-0.5" />
-              <div>
-                <div className="text-xs text-gray-600 font-medium">Age</div>
-                <div className="text-sm">{person.age || <span className="text-gray-400">N/A</span>}</div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <User className="h-4 w-4 text-gray-600 mt-0.5" />
-              <div>
-                <div className="text-xs text-gray-600 font-medium">Gender</div>
-                <div className="text-sm">{person.gender || <span className="text-gray-400">N/A</span>}</div>
-              </div>
-            </div>
-
-            {person.dob && (
-              <div className="flex items-start gap-2">
-                <User className="h-4 w-4 text-gray-600 mt-0.5" />
-                <div>
-                  <div className="text-xs text-gray-600 font-medium">Date of Birth</div>
-                  <div className="text-sm">{new Date(person.dob).toLocaleDateString("en-IN")}</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Column 3 - Contact & Health Info */}
-          <div className="space-y-2">
-            <div className="flex items-start gap-2">
-              <Phone className="h-4 w-4 text-green-600 mt-0.5" />
-              <div>
-                <div className="text-xs text-gray-600 font-medium">Mobile Number</div>
-                <div className="text-sm font-medium">
-                  {person.citizenMobile || <span className="text-gray-400">0</span>}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <CreditCard className="h-4 w-4 text-blue-600 mt-0.5" />
-              <div>
-                <div className="text-xs text-gray-600 font-medium">Health ID</div>
-                <div className="text-sm font-medium">
-                  {person.healthId || <span className="text-gray-400">Not set</span>}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-2">
-              <Home className="h-4 w-4 text-gray-600 mt-0.5" />
-              <div>
-                <div className="text-xs text-gray-600 font-medium">Household ID</div>
-                <div className="font-mono text-sm">{person.hhId}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Location Info - Full Width */}
-        {(person.mandalName || person.secName || person.phcName) && (
-          <div className="mt-4 pt-4 border-t border-blue-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {person.mandalName && (
-                <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-gray-600 mt-0.5" />
-                  <div>
-                    <div className="text-xs text-gray-600 font-medium">Mandal</div>
-                    <div className="text-sm">{person.mandalName}</div>
-                  </div>
-                </div>
-              )}
-
-              {person.secName && (
-                <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-gray-600 mt-0.5" />
-                  <div>
-                    <div className="text-xs text-gray-600 font-medium">Secretariat</div>
-                    <div className="text-sm">{person.secName}</div>
-                  </div>
-                </div>
-              )}
-
-              {person.phcName && (
-                <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 text-gray-600 mt-0.5" />
-                  <div>
-                    <div className="text-xs text-gray-600 font-medium">PHC</div>
-                    <div className="text-sm">{person.phcName}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-// Household Member Card Component
-interface HouseholdMemberCardProps {
-  member: Resident
-  isSelected: boolean
-  isEditing: boolean
-  isUpdating: boolean
-  onEdit: () => void
-  onCancelEdit: () => void
-  onUpdate: (residentId: string, data: { citizenMobile?: string | null; healthId?: string | null }) => Promise<void>
-}
-
-function HouseholdMemberCard({
-  member,
-  isSelected,
-  isEditing,
-  isUpdating,
-  onEdit,
-  onCancelEdit,
-  onUpdate,
-}: HouseholdMemberCardProps) {
-  const [citizenMobile, setCitizenMobile] = useState(member.citizenMobile || "")
-  const [healthId, setHealthId] = useState(formatHealthId(member.healthId || ""))
+  // Form state using useState (like HouseholdMemberEditForm)
+  const [citizenMobile, setCitizenMobile] = useState("")
+  const [healthId, setHealthId] = useState("")
   const [errors, setErrors] = useState<{ citizenMobile?: string; healthId?: string }>({})
 
-  const validateMobileNumber = (value: string): boolean => {
-    if (!value) return true // Empty is valid
-    const regex = /^[6-9]\d{9}$/
-    return regex.test(value)
+  const startEditing = (resident: Resident) => {
+    console.log('🟡 Starting edit for resident:', resident.residentId)
+    setEditingId(resident.residentId)
+    setCitizenMobile(resident.citizenMobile || "")
+    setHealthId(formatHealthId(resident.healthId || ""))
+    setErrors({})
   }
 
-  const handleHealthIdChange = (value: string) => {
+  const cancelEditing = () => {
+    setEditingId(null)
+    setCitizenMobile("")
+    setHealthId("")
+    setErrors({})
+  }
+
+  const handleMobileChange = useCallback((value: string) => {
+    // Remove all non-digit characters and limit to 10 digits
+    const filtered = value.replace(/\D/g, '').slice(0, 10)
+    setCitizenMobile(filtered)
+    setErrors(prev => ({ ...prev, citizenMobile: undefined }))
+  }, [])
+
+  const handleHealthIdChange = useCallback((value: string) => {
     // Remove all non-digit characters
     const digits = value.replace(/\D/g, '')
 
@@ -319,212 +165,8 @@ function HouseholdMemberCard({
     }
 
     setHealthId(formatted)
-    setErrors({ ...errors, healthId: undefined })
-  }
-
-  const handleSave = async () => {
-    const newErrors: { citizenMobile?: string; healthId?: string } = {}
-
-    if (citizenMobile && !validateMobileNumber(citizenMobile)) {
-      newErrors.citizenMobile = "Mobile number must be 10 digits starting with 6-9"
-    }
-
-    if (healthId && !isValidHealthIdFormat(healthId)) {
-      newErrors.healthId = "Health ID must be 14 digits (format: XX-XXXX-XXXX-XXXX)"
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors)
-      return
-    }
-
-    await onUpdate(member.residentId, {
-      citizenMobile: citizenMobile || null,
-      healthId: healthId || null, // Save WITH dashes to match existing data
-    })
-  }
-
-  const handleCancel = () => {
-    setCitizenMobile(member.citizenMobile || "")
-    setHealthId(formatHealthId(member.healthId || ""))
-    setErrors({})
-    onCancelEdit()
-  }
-
-  return (
-    <Card
-      className={`${
-        isSelected
-          ? "border-2 border-orange-500 bg-orange-50/50"
-          : "border border-gray-200"
-      }`}
-    >
-      <CardContent className="pt-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Left Column - Basic Info */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-gray-600" />
-              <div>
-                <div className="font-semibold text-base">{member.name}</div>
-                {isSelected && (
-                  <Badge className="mt-1 bg-orange-600">Selected Resident</Badge>
-                )}
-              </div>
-            </div>
-
-            <div className="text-sm space-y-1 text-gray-700">
-              <div><strong>UID:</strong> {maskUID(member.uid)}</div>
-              <div><strong>Age:</strong> {member.age || "N/A"}</div>
-              <div><strong>Gender:</strong> {member.gender || "N/A"}</div>
-              {member.dob && (
-                <div><strong>DOB:</strong> {new Date(member.dob).toLocaleDateString("en-IN")}</div>
-              )}
-            </div>
-          </div>
-
-          {/* Right Column - Editable Fields */}
-          <div className="space-y-3">
-            {/* Mobile Number */}
-            <div className="space-y-1">
-              <Label htmlFor={`mobile-${member.residentId}`} className="flex items-center gap-2 text-sm">
-                <Phone className="h-3 w-3 text-green-600" />
-                Mobile Number
-              </Label>
-              {isEditing ? (
-                <div>
-                  <Input
-                    id={`mobile-${member.residentId}`}
-                    value={citizenMobile}
-                    onChange={(e) => {
-                      setCitizenMobile(e.target.value)
-                      setErrors({ ...errors, citizenMobile: undefined })
-                    }}
-                    placeholder="Enter 10-digit mobile number"
-                    disabled={isUpdating}
-                    className={errors.citizenMobile ? "border-red-500" : ""}
-                  />
-                  {errors.citizenMobile && (
-                    <p className="text-xs text-red-600 mt-1">{errors.citizenMobile}</p>
-                  )}
-                </div>
-              ) : (
-                <div className="text-sm font-medium">
-                  {member.citizenMobile || <span className="text-gray-400">0</span>}
-                </div>
-              )}
-            </div>
-
-            {/* Health ID */}
-            <div className="space-y-1">
-              <Label htmlFor={`health-${member.residentId}`} className="flex items-center gap-2 text-sm">
-                <CreditCard className="h-3 w-3 text-blue-600" />
-                Health ID
-              </Label>
-              {isEditing ? (
-                <div>
-                  <Input
-                    id={`health-${member.residentId}`}
-                    value={healthId}
-                    onChange={(e) => handleHealthIdChange(e.target.value)}
-                    placeholder="XX-XXXX-XXXX-XXXX"
-                    disabled={isUpdating}
-                    className={errors.healthId ? "border-red-500" : ""}
-                    maxLength={17} // 14 digits + 3 dashes
-                  />
-                  {errors.healthId && (
-                    <p className="text-xs text-red-600 mt-1">{errors.healthId}</p>
-                  )}
-                </div>
-              ) : (
-                <div className="text-sm font-medium">
-                  {member.healthId ? formatHealthId(member.healthId) : <span className="text-gray-400">Not set</span>}
-                </div>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2 pt-2">
-              {isEditing ? (
-                <>
-                  <Button
-                    size="sm"
-                    onClick={handleSave}
-                    disabled={isUpdating}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    <Save className="h-3 w-3 mr-1" />
-                    {isUpdating ? "Saving..." : "Save"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleCancel}
-                    disabled={isUpdating}
-                  >
-                    <X className="h-3 w-3 mr-1" />
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  size="sm"
-                  onClick={onEdit}
-                  className="bg-orange-600 hover:bg-orange-700"
-                >
-                  <Edit2 className="h-3 w-3 mr-1" />
-                  Edit
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-type SortField = 'name' | 'residentId' | 'citizenMobile' | 'healthId' | 'secName'
-type SortDirection = 'asc' | 'desc'
-
-export function ResidentsTable({
-  residents,
-  searchedResidentId,
-  householdId,
-  onUpdateSuccess,
-}: ResidentsTableProps) {
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [isUpdating, setIsUpdating] = useState(false)
-  const [selectedResident, setSelectedResident] = useState<Resident | null>(null)
-  const [householdMembers, setHouseholdMembers] = useState<Resident[]>([])
-  const [isLoadingHousehold, setIsLoadingHousehold] = useState(false)
-  const [householdError, setHouseholdError] = useState("")
-  const [editingMemberId, setEditingMemberId] = useState<string | null>(null)
-  const [sortField, setSortField] = useState<SortField>('name')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isDirty },
-    reset,
-    control,
-  } = useForm<UpdateFormData>({
-    resolver: zodResolver(updateSchema),
-  })
-
-  const startEditing = (resident: Resident) => {
-    setEditingId(resident.residentId)
-    reset({
-      citizenMobile: resident.citizenMobile || "",
-      healthId: formatHealthId(resident.healthId || ""),
-    })
-  }
-
-  const cancelEditing = () => {
-    setEditingId(null)
-    reset()
-  }
+    setErrors(prev => ({ ...prev, healthId: undefined }))
+  }, [])
 
   // Sorting function
   const handleSort = (field: SortField) => {
@@ -538,63 +180,114 @@ export function ResidentsTable({
     }
   }
 
-  // Sort residents
-  const sortedResidents = [...residents].sort((a, b) => {
-    let aValue: string | number = ''
-    let bValue: string | number = ''
+  // Sort residents - memoized to prevent unnecessary re-renders
+  const sortedResidents = useMemo(() => {
+    return [...residents].sort((a, b) => {
+      let aValue: string | number = ''
+      let bValue: string | number = ''
 
-    switch (sortField) {
-      case 'name':
-        aValue = a.name?.toLowerCase() || ''
-        bValue = b.name?.toLowerCase() || ''
-        break
-      case 'residentId':
-        aValue = a.residentId || ''
-        bValue = b.residentId || ''
-        break
-      case 'citizenMobile':
-        aValue = a.citizenMobile?.toLowerCase() || ''
-        bValue = b.citizenMobile?.toLowerCase() || ''
-        break
-      case 'healthId':
-        aValue = a.healthId?.toLowerCase() || ''
-        bValue = b.healthId?.toLowerCase() || ''
-        break
-      case 'secName':
-        aValue = a.secName?.toLowerCase() || ''
-        bValue = b.secName?.toLowerCase() || ''
-        break
+      switch (sortField) {
+        case 'name':
+          aValue = a.name?.toLowerCase() || ''
+          bValue = b.name?.toLowerCase() || ''
+          break
+        case 'residentId':
+          aValue = a.residentId || ''
+          bValue = b.residentId || ''
+          break
+        case 'citizenMobile':
+          aValue = a.citizenMobile?.toLowerCase() || ''
+          bValue = b.citizenMobile?.toLowerCase() || ''
+          break
+        case 'healthId':
+          aValue = a.healthId?.toLowerCase() || ''
+          bValue = b.healthId?.toLowerCase() || ''
+          break
+        case 'secName':
+          aValue = a.secName?.toLowerCase() || ''
+          bValue = b.secName?.toLowerCase() || ''
+          break
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [residents, sortField, sortDirection])
+
+  const handleSubmit = async (e: React.FormEvent, resident: Resident) => {
+    e.preventDefault()
+    console.log('🟢 Form submitted!', { citizenMobile, healthId, editingId })
+
+    if (!editingId) {
+      console.log('❌ No editingId, aborting')
+      return
     }
 
-    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1
-    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1
-    return 0
-  })
+    const newErrors: { citizenMobile?: string; healthId?: string } = {}
 
-  const onSubmit = async (data: UpdateFormData) => {
-    if (!editingId) return
+    // Validate mobile number
+    if (citizenMobile) {
+      const regex = /^[6-9]\d{9}$/
+      if (!regex.test(citizenMobile)) {
+        newErrors.citizenMobile = "Mobile number must be 10 digits starting with 6-9"
+      } else if (!isValidMobilePattern(citizenMobile)) {
+        newErrors.citizenMobile = "Mobile number cannot be repetitive or sequential (e.g., 9999999999, 9999998888)"
+      }
+    }
+
+    // Validate health ID
+    if (healthId && !isValidHealthIdFormat(healthId)) {
+      newErrors.healthId = "Health ID must be 14 digits (format: XX-XXXX-XXXX-XXXX)"
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      console.log('❌ Validation errors:', newErrors)
+      setErrors(newErrors)
+      return
+    }
+
+    console.log('✅ Validation passed, preparing update...')
+
+    // Prepare data for update
+    const updateData: { citizenMobile?: string | null; healthId?: string | null } = {}
+
+    if (citizenMobile !== (resident.citizenMobile || "")) {
+      updateData.citizenMobile = citizenMobile || null
+    }
+
+    if (healthId) {
+      const formattedHealthId = healthId.replace(/-/g, '')
+      if (formattedHealthId !== (resident.healthId || "")) {
+        updateData.healthId = formattedHealthId
+      }
+    } else if (resident.healthId) {
+      updateData.healthId = null
+    }
 
     setIsUpdating(true)
 
     try {
+      console.log('📤 Sending PUT request to:', `/api/residents/${editingId}`)
       const response = await fetch(`/api/residents/${editingId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          citizenMobile: data.citizenMobile || null,
-          healthId: data.healthId || null,
-        }),
+        body: JSON.stringify(updateData),
       })
 
       const result = await response.json()
+      console.log('📥 Response received:', { ok: response.ok, result })
 
       if (response.ok) {
         toast.success("Updated successfully!", {
           description: `${result.changesLogged} field(s) updated`,
         })
         setEditingId(null)
+        setCitizenMobile("")
+        setHealthId("")
+        setErrors({})
         onUpdateSuccess()
       } else {
         // Check for mobile duplicate limit error
@@ -609,7 +302,8 @@ export function ResidentsTable({
           })
         }
       }
-    } catch {
+    } catch (error) {
+      console.error('❌ Network error:', error)
       toast.error("Network error", {
         description: "Please check your connection and try again",
       })
@@ -618,15 +312,9 @@ export function ResidentsTable({
     }
   }
 
-  const formatDate = (date: Date | null) => {
-    if (!date) return "N/A"
-    return new Date(date).toLocaleDateString("en-IN")
-  }
-
   // Fetch household members when resident details is clicked
   const fetchHouseholdMembers = async (hhId: string) => {
     setIsLoadingHousehold(true)
-    setHouseholdError("")
 
     try {
       const response = await fetch(`/api/residents/household/${hhId}`)
@@ -635,13 +323,11 @@ export function ResidentsTable({
       if (response.ok) {
         setHouseholdMembers(data.members)
       } else {
-        setHouseholdError(data.error || "Failed to load household members")
         toast.error("Failed to load household members", {
           description: data.error || "Please try again",
         })
       }
     } catch (error) {
-      setHouseholdError("Network error")
       toast.error("Network error", {
         description: "Please check your connection and try again",
       })
@@ -661,7 +347,6 @@ export function ResidentsTable({
     setSelectedResident(null)
     setHouseholdMembers([])
     setEditingMemberId(null)
-    setHouseholdError("")
   }
 
   // Update a household member
@@ -718,323 +403,7 @@ export function ResidentsTable({
     }
   }
 
-  // Mobile view - Card layout
-  const MobileView = () => (
-    <div className="md:hidden space-y-4">
-      {sortedResidents.map((resident) => (
-        <Card
-          key={resident.residentId}
-          className={`${
-            resident.residentId === searchedResidentId
-              ? "border-2 border-orange-500 bg-orange-50/50"
-              : "border border-gray-200"
-          } ${editingId !== resident.residentId ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
-          onClick={() => {
-            // Only open details if not in edit mode
-            if (editingId !== resident.residentId) {
-              handleOpenResidentDetails(resident)
-            }
-          }}
-        >
-          <CardHeader className="pb-3">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <User className="h-4 w-4 text-orange-600" />
-                  {resident.name}
-                  {resident.residentId === searchedResidentId && (
-                    <Badge variant="default" className="ml-2 bg-orange-600">
-                      Searched
-                    </Badge>
-                  )}
-                </CardTitle>
-                <div className="mt-2 space-y-1 text-xs text-gray-600">
-                  <div><strong>UID:</strong> {maskUID(resident.uid)}</div>
-                  <div><strong>Age:</strong> {resident.age || "N/A"} | <strong>Gender:</strong> {resident.gender || "N/A"}</div>
-                  {resident.secName && (
-                    <div className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {resident.secName}, {resident.mandalName}
-                    </div>
-                  )}
-                  {resident.phcName && <div><strong>PHC:</strong> {resident.phcName}</div>}
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent onClick={(e) => e.stopPropagation()}>
-            {editingId === resident.residentId ? (
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-                <div className="space-y-2">
-                  <Label htmlFor={`mobile-${resident.residentId}`} className="text-xs">
-                    Mobile Number
-                  </Label>
-                  <Input
-                    id={`mobile-${resident.residentId}`}
-                    {...register("citizenMobile")}
-                    placeholder="10-digit mobile"
-                    className="text-sm"
-                    disabled={isUpdating}
-                  />
-                  {errors.citizenMobile && (
-                    <p className="text-xs text-red-500">{errors.citizenMobile.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor={`health-${resident.residentId}`} className="text-xs">
-                    Health ID
-                  </Label>
-                  <Controller
-                    name="healthId"
-                    control={control}
-                    render={({ field }) => (
-                      <Input
-                        id={`health-${resident.residentId}`}
-                        value={field.value || ""}
-                        onChange={(e) => {
-                          const digits = e.target.value.replace(/\D/g, '').slice(0, 14)
-                          let formatted = digits
-                          if (digits.length > 2) {
-                            formatted = `${digits.slice(0, 2)}-${digits.slice(2)}`
-                          }
-                          if (digits.length > 6) {
-                            formatted = `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`
-                          }
-                          if (digits.length > 10) {
-                            formatted = `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 10)}-${digits.slice(10, 14)}`
-                          }
-                          field.onChange(formatted)
-                        }}
-                        placeholder="XX-XXXX-XXXX-XXXX"
-                        className="text-sm"
-                        disabled={isUpdating}
-                        maxLength={17}
-                      />
-                    )}
-                  />
-                  {errors.healthId && (
-                    <p className="text-xs text-red-500">{errors.healthId.message}</p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={isUpdating || !isDirty}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                  >
-                    <Save className="h-3 w-3 mr-1" />
-                    Save
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={cancelEditing}
-                    disabled={isUpdating}
-                  >
-                    <X className="h-3 w-3 mr-1" />
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Mobile:</span>
-                  <span className="font-medium">{resident.citizenMobile || "0"}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Health ID:</span>
-                  <span className="font-medium">{resident.healthId ? formatHealthId(resident.healthId) : "Not set"}</span>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation() // Prevent card click
-                    startEditing(resident)
-                  }}
-                  className="w-full bg-orange-600 hover:bg-orange-700"
-                >
-                  <Edit2 className="h-3 w-3 mr-1" />
-                  Edit Details
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  )
 
-  // Sortable column header component
-  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <TableHead
-      className="font-semibold cursor-pointer hover:bg-gray-100 transition-colors text-center"
-      onClick={() => handleSort(field)}
-    >
-      <div className="flex items-center justify-center gap-1">
-        {children}
-        {sortField === field && (
-          sortDirection === 'asc' ?
-            <ArrowUp className="h-4 w-4 text-orange-600" /> :
-            <ArrowDown className="h-4 w-4 text-orange-600" />
-        )}
-        {sortField !== field && <ArrowUpDown className="h-4 w-4 text-gray-400" />}
-      </div>
-    </TableHead>
-  )
-
-  // Desktop view - Table layout
-  const DesktopView = () => (
-    <div className="hidden md:block overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-gray-50">
-            <SortableHeader field="name">Name</SortableHeader>
-            <TableHead className="font-semibold text-center">UID</TableHead>
-            <TableHead className="font-semibold text-center">Age</TableHead>
-            <TableHead className="font-semibold text-center">Gender</TableHead>
-            <SortableHeader field="citizenMobile">Mobile Number</SortableHeader>
-            <SortableHeader field="healthId">Health ID</SortableHeader>
-            <SortableHeader field="secName">Location</SortableHeader>
-            <TableHead className="font-semibold text-center">PHC</TableHead>
-            <TableHead className="font-semibold text-center">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedResidents.map((resident) => (
-            <TableRow
-              key={resident.residentId}
-              className={
-                resident.residentId === searchedResidentId
-                  ? "bg-orange-50 border-l-4 border-l-orange-600"
-                  : ""
-              }
-            >
-              <TableCell className="font-medium text-center">
-                <div className="flex items-center justify-center gap-2">
-                  {resident.name}
-                  {resident.residentId === searchedResidentId && (
-                    <Badge variant="default" className="bg-orange-600 text-xs">
-                      Searched
-                    </Badge>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell className="font-mono text-xs text-center whitespace-nowrap">{maskUID(resident.uid)}</TableCell>
-              <TableCell className="text-center">{resident.age || "N/A"}</TableCell>
-              <TableCell className="text-center">{resident.gender || "N/A"}</TableCell>
-              <TableCell className="text-center">
-                {editingId === resident.residentId ? (
-                  <div className="space-y-1 flex flex-col items-center">
-                    <Input
-                      {...register("citizenMobile")}
-                      placeholder="10-digit mobile"
-                      className="w-36 text-sm"
-                      disabled={isUpdating}
-                    />
-                    {errors.citizenMobile && (
-                      <p className="text-xs text-red-500">{errors.citizenMobile.message}</p>
-                    )}
-                  </div>
-                ) : (
-                  <span className={resident.citizenMobile ? "font-medium" : "text-gray-400"}>
-                    {resident.citizenMobile || "0"}
-                  </span>
-                )}
-              </TableCell>
-              <TableCell className="text-center">
-                {editingId === resident.residentId ? (
-                  <div className="space-y-1 flex flex-col items-center">
-                    <Controller
-                      name="healthId"
-                      control={control}
-                      render={({ field }) => (
-                        <Input
-                          value={field.value || ""}
-                          onChange={(e) => {
-                            const digits = e.target.value.replace(/\D/g, '').slice(0, 14)
-                            let formatted = digits
-                            if (digits.length > 2) {
-                              formatted = `${digits.slice(0, 2)}-${digits.slice(2)}`
-                            }
-                            if (digits.length > 6) {
-                              formatted = `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`
-                            }
-                            if (digits.length > 10) {
-                              formatted = `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 10)}-${digits.slice(10, 14)}`
-                            }
-                            field.onChange(formatted)
-                          }}
-                          placeholder="XX-XXXX-XXXX-XXXX"
-                          className="w-44 text-sm"
-                          disabled={isUpdating}
-                          maxLength={17}
-                        />
-                      )}
-                    />
-                    {errors.healthId && (
-                      <p className="text-xs text-red-500">{errors.healthId.message}</p>
-                    )}
-                  </div>
-                ) : (
-                  <span className={resident.healthId ? "font-medium" : "text-gray-400"}>
-                    {resident.healthId ? formatHealthId(resident.healthId) : "Not set"}
-                  </span>
-                )}
-              </TableCell>
-              <TableCell className="text-xs text-center">
-                {resident.secName ? `${resident.secName}, ${resident.mandalName}` : "N/A"}
-              </TableCell>
-              <TableCell className="text-xs text-center">{resident.phcName || "N/A"}</TableCell>
-              <TableCell>
-                {editingId === resident.residentId ? (
-                  <div className="flex gap-1 justify-center">
-                    <Button
-                      size="sm"
-                      onClick={handleSubmit(onSubmit)}
-                      disabled={isUpdating || !isDirty}
-                      className="bg-green-600 hover:bg-green-700"
-                    >
-                      <Save className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={cancelEditing}
-                      disabled={isUpdating}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex gap-1 justify-center">
-                    <Button
-                      size="sm"
-                      onClick={() => startEditing(resident)}
-                      className="bg-orange-600 hover:bg-orange-700"
-                      title="Edit Details"
-                    >
-                      <Edit2 className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleOpenResidentDetails(resident)}
-                      title="View Household Members"
-                    >
-                      <Users className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  )
 
   return (
     <>
@@ -1050,71 +419,352 @@ export function ResidentsTable({
         </div>
       )}
 
-      <MobileView />
-      <DesktopView />
-
-      {/* Household Members Dialog */}
-      <Dialog open={!!selectedResident} onOpenChange={handleCloseResidentDetails}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Home className="h-5 w-5 text-orange-600" />
-              Household Information
-            </DialogTitle>
-            {selectedResident && (
-              <div className="text-sm text-gray-600 mt-2">
-                <div><strong>Household ID:</strong> {selectedResident.hhId}</div>
-                <div><strong>Total Members:</strong> {householdMembers.length}</div>
-              </div>
-            )}
-          </DialogHeader>
-
-          {isLoadingHousehold ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
-              <span className="ml-3 text-gray-600">Loading household members...</span>
-            </div>
-          ) : householdError ? (
-            <div className="flex items-center justify-center py-12 text-red-600">
-              <AlertCircle className="h-8 w-8 mr-3" />
-              <span>{householdError}</span>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Searched Person Details Section */}
-              {selectedResident && (
-                <SearchedPersonDetails person={selectedResident} />
-              )}
-
-              {/* Household Members Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <Users className="h-5 w-5 text-orange-600" />
-                  <h3 className="text-lg font-semibold">All Household Members</h3>
-                  <Badge variant="secondary" className="ml-2">
-                    {householdMembers.length} {householdMembers.length === 1 ? 'Member' : 'Members'}
-                  </Badge>
+      {/* Mobile view - Card layout */}
+      <div className="md:hidden space-y-4">
+        {sortedResidents.map((resident) => (
+          <Card
+            key={resident.residentId}
+            className={`${
+              resident.residentId === searchedResidentId
+                ? "border-2 border-orange-500 bg-orange-50/50"
+                : "border border-gray-200"
+            } ${editingId !== resident.residentId ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+            onClick={() => {
+              // Only open details if not in edit mode
+              if (editingId !== resident.residentId) {
+                handleOpenResidentDetails(resident)
+              }
+            }}
+          >
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <User className="h-4 w-4 text-orange-600" />
+                    {resident.name}
+                    {resident.residentId === searchedResidentId && (
+                      <Badge variant="default" className="ml-2 bg-orange-600">
+                        Searched
+                      </Badge>
+                    )}
+                  </CardTitle>
+                  <div className="mt-2 space-y-1 text-xs text-gray-600">
+                    <div><strong>UID:</strong> {maskUID(resident.uid)}</div>
+                    <div><strong>Age:</strong> {resident.age || "N/A"} | <strong>Gender:</strong> {resident.gender || "N/A"}</div>
+                    {resident.secName && (
+                      <div className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {resident.secName}, {resident.mandalName}
+                      </div>
+                    )}
+                    {resident.phcName && <div><strong>PHC:</strong> {resident.phcName}</div>}
+                  </div>
                 </div>
-
-                <div className="space-y-4">
-                  {householdMembers.map((member) => (
-                    <HouseholdMemberCard
-                      key={member.residentId}
-                      member={member}
-                      isSelected={member.residentId === selectedResident?.residentId}
-                      isEditing={editingMemberId === member.residentId}
-                      isUpdating={isUpdating}
-                      onEdit={() => setEditingMemberId(member.residentId)}
-                      onCancelEdit={() => setEditingMemberId(null)}
-                      onUpdate={updateHouseholdMember}
+              </div>
+            </CardHeader>
+            <CardContent onClick={(e) => e.stopPropagation()}>
+              {editingId === resident.residentId ? (
+                <form
+                  onSubmit={(e) => handleSubmit(e, resident)}
+                  className="space-y-3"
+                >
+                  <div className="space-y-2">
+                    <Label htmlFor={`mobile-${resident.residentId}`} className="text-xs">
+                      Mobile Number
+                    </Label>
+                    <Input
+                      id={`mobile-${resident.residentId}`}
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={citizenMobile}
+                      onChange={(e) => handleMobileChange(e.target.value)}
+                      placeholder="Enter 10-digit mobile number"
+                      disabled={isUpdating}
+                      className={`text-sm ${errors.citizenMobile ? 'border-red-500' : ''}`}
+                      maxLength={10}
+                      autoComplete="off"
                     />
-                  ))}
+                    {errors.citizenMobile && (
+                      <p className="text-xs text-red-500 font-medium">
+                        ⚠️ {errors.citizenMobile}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`health-${resident.residentId}`} className="text-xs">
+                      Health ID
+                    </Label>
+                    <Input
+                      id={`health-${resident.residentId}`}
+                      type="text"
+                      inputMode="numeric"
+                      value={healthId}
+                      onChange={(e) => handleHealthIdChange(e.target.value)}
+                      placeholder="XX-XXXX-XXXX-XXXX"
+                      disabled={isUpdating}
+                      className={`text-sm ${errors.healthId ? 'border-red-500' : ''}`}
+                      maxLength={17}
+                      autoComplete="off"
+                    />
+                    {errors.healthId && (
+                      <p className="text-xs text-red-500">{errors.healthId}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={isUpdating || (citizenMobile === (resident.citizenMobile || "") && healthId === formatHealthId(resident.healthId || ""))}
+                      className="flex-1 bg-green-600 hover:bg-green-700"
+                    >
+                      <Save className="h-3 w-3 mr-1" />
+                      Save
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={cancelEditing}
+                      disabled={isUpdating}
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Mobile:</span>
+                    <span className="font-medium">{resident.citizenMobile || "0"}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Health ID:</span>
+                    <span className="font-medium">{resident.healthId ? formatHealthId(resident.healthId) : "Not set"}</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation() // Prevent card click
+                      startEditing(resident)
+                    }}
+                    className="w-full bg-orange-600 hover:bg-orange-700"
+                  >
+                    <Edit2 className="h-3 w-3 mr-1" />
+                    Edit Details
+                  </Button>
                 </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Desktop view - Table layout */}
+      <div className="hidden md:block overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gray-50">
+              <TableHead
+                className="font-semibold cursor-pointer hover:bg-gray-100 transition-colors text-center"
+                onClick={() => handleSort('name')}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Name
+                  {sortField === 'name' && (
+                    sortDirection === 'asc' ?
+                      <ArrowUp className="h-4 w-4 text-orange-600" /> :
+                      <ArrowDown className="h-4 w-4 text-orange-600" />
+                  )}
+                  {sortField !== 'name' && <ArrowUpDown className="h-4 w-4 text-gray-400" />}
+                </div>
+              </TableHead>
+              <TableHead className="font-semibold text-center">UID</TableHead>
+              <TableHead className="font-semibold text-center">Age</TableHead>
+              <TableHead className="font-semibold text-center">Gender</TableHead>
+              <TableHead
+                className="font-semibold cursor-pointer hover:bg-gray-100 transition-colors text-center"
+                onClick={() => handleSort('citizenMobile')}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Mobile Number
+                  {sortField === 'citizenMobile' && (
+                    sortDirection === 'asc' ?
+                      <ArrowUp className="h-4 w-4 text-orange-600" /> :
+                      <ArrowDown className="h-4 w-4 text-orange-600" />
+                  )}
+                  {sortField !== 'citizenMobile' && <ArrowUpDown className="h-4 w-4 text-gray-400" />}
+                </div>
+              </TableHead>
+              <TableHead
+                className="font-semibold cursor-pointer hover:bg-gray-100 transition-colors text-center"
+                onClick={() => handleSort('healthId')}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Health ID
+                  {sortField === 'healthId' && (
+                    sortDirection === 'asc' ?
+                      <ArrowUp className="h-4 w-4 text-orange-600" /> :
+                      <ArrowDown className="h-4 w-4 text-orange-600" />
+                  )}
+                  {sortField !== 'healthId' && <ArrowUpDown className="h-4 w-4 text-gray-400" />}
+                </div>
+              </TableHead>
+              <TableHead
+                className="font-semibold cursor-pointer hover:bg-gray-100 transition-colors text-center"
+                onClick={() => handleSort('secName')}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Location
+                  {sortField === 'secName' && (
+                    sortDirection === 'asc' ?
+                      <ArrowUp className="h-4 w-4 text-orange-600" /> :
+                      <ArrowDown className="h-4 w-4 text-orange-600" />
+                  )}
+                  {sortField !== 'secName' && <ArrowUpDown className="h-4 w-4 text-gray-400" />}
+                </div>
+              </TableHead>
+              <TableHead className="font-semibold text-center">PHC</TableHead>
+              <TableHead className="font-semibold text-center">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedResidents.map((resident) => (
+              <TableRow
+                key={resident.residentId}
+                className={
+                  resident.residentId === searchedResidentId
+                    ? "bg-orange-50 border-l-4 border-l-orange-600"
+                    : ""
+                }
+              >
+                <TableCell className="font-medium text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    {resident.name}
+                    {resident.residentId === searchedResidentId && (
+                      <Badge variant="default" className="bg-orange-600 text-xs">
+                        Searched
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="font-mono text-xs text-center whitespace-nowrap">{maskUID(resident.uid)}</TableCell>
+                <TableCell className="text-center">{resident.age || "N/A"}</TableCell>
+                <TableCell className="text-center">{resident.gender || "N/A"}</TableCell>
+                <TableCell className="text-center">
+                  {editingId === resident.residentId ? (
+                    <div className="space-y-1 flex flex-col items-center">
+                      <Input
+                        type="tel"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={citizenMobile}
+                        onChange={(e) => handleMobileChange(e.target.value)}
+                        placeholder="10-digit mobile"
+                        className="w-36 text-sm"
+                        disabled={isUpdating}
+                        maxLength={10}
+                      />
+                      {errors.citizenMobile && (
+                        <p className="text-xs text-red-500">{errors.citizenMobile}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <span className={resident.citizenMobile ? "font-medium" : "text-gray-400"}>
+                      {resident.citizenMobile || "0"}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  {editingId === resident.residentId ? (
+                    <div className="space-y-1 flex flex-col items-center">
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={healthId}
+                        onChange={(e) => handleHealthIdChange(e.target.value)}
+                        placeholder="XX-XXXX-XXXX-XXXX"
+                        className="w-44 text-sm"
+                        disabled={isUpdating}
+                        maxLength={17}
+                      />
+                      {errors.healthId && (
+                        <p className="text-xs text-red-500">{errors.healthId}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <span className={resident.healthId ? "font-medium" : "text-gray-400"}>
+                      {resident.healthId ? formatHealthId(resident.healthId) : "Not set"}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="text-xs text-center">
+                  {resident.secName ? `${resident.secName}, ${resident.mandalName}` : "N/A"}
+                </TableCell>
+                <TableCell className="text-xs text-center">{resident.phcName || "N/A"}</TableCell>
+                <TableCell>
+                  {editingId === resident.residentId ? (
+                    <div className="flex gap-1 justify-center">
+                      <Button
+                        size="sm"
+                        onClick={(e) => handleSubmit(e, resident)}
+                        disabled={isUpdating || (citizenMobile === (resident.citizenMobile || "") && healthId === formatHealthId(resident.healthId || ""))}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <Save className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={cancelEditing}
+                        disabled={isUpdating}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1 justify-center">
+                      <Button
+                        size="sm"
+                        onClick={() => startEditing(resident)}
+                        className="bg-orange-600 hover:bg-orange-700"
+                        title="Edit Details"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenResidentDetails(resident)}
+                        title="View Household Members"
+                      >
+                        <Users className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Household Members Dialog - Mobile-Optimized */}
+      <HouseholdMembersDialog
+        open={!!selectedResident}
+        onOpenChange={(open) => {
+          if (!open) handleCloseResidentDetails()
+        }}
+        selectedResident={selectedResident}
+        householdMembers={householdMembers}
+        isLoading={isLoadingHousehold}
+        editingResidentId={editingMemberId}
+        updatingResidentId={isUpdating ? editingMemberId : null}
+        onEdit={(residentId) => setEditingMemberId(residentId)}
+        onCancelEdit={() => setEditingMemberId(null)}
+        onUpdate={updateHouseholdMember}
+      />
     </>
   )
 }
