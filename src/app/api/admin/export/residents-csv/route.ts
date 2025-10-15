@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     const phcName = searchParams.get("phcName")
 
     // Build where clause based on filters
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const whereClause: any = {}
     if (mandalName && mandalName !== "all") {
       whereClause.mandalName = mandalName
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
     // Fetch residents data using raw query to handle invalid dates
     // Prisma cannot handle dates with day/month = 0 (e.g., 0000-00-00, 2000-00-00)
     // Select ALL columns from residents table
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const residents = await prisma.$queryRawUnsafe<any[]>(`
       SELECT
         id,
@@ -126,6 +128,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper function to generate CSV content
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function generateCSV(residents: any[]): string {
   // Define CSV headers - ALL columns from residents table
   const headers = [
@@ -183,7 +186,7 @@ function generateCSV(residents: any[]): string {
           dob = dobDate.toISOString().split("T")[0]
         }
       }
-    } catch (error) {
+    } catch {
       // Invalid date, leave as empty
       console.warn(`Invalid DOB for resident ${resident.resident_id}:`, resident.dob)
     }
@@ -210,7 +213,7 @@ function generateCSV(residents: any[]): string {
           updatedAt = updatedDate.toISOString()
         }
       }
-    } catch (error) {
+    } catch {
       // Invalid timestamp, leave as empty
     }
 

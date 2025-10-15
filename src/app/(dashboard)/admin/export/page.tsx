@@ -46,6 +46,7 @@ export default function AdminExportPage() {
   // Fetch record count when filters change
   useEffect(() => {
     fetchRecordCount()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMandal, selectedSecretariat, selectedPhc])
 
   // Update secretariat options when mandal changes
@@ -307,7 +308,7 @@ export default function AdminExportPage() {
                 Export Residents Data
               </CardTitle>
               <CardDescription className="mt-2">
-                Select filters to export specific data or leave all filters as "All" to export complete dataset
+                Select filters to export specific data or leave all filters as &quot;All&quot; to export complete dataset
               </CardDescription>
             </div>
             <Button

@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const phcName = searchParams.get("phcName")
 
     // Build where clause based on filters
-    const whereClause: any = {}
+    const whereClause: Record<string, string> = {}
     if (mandalName && mandalName !== "all") {
       whereClause.mandalName = mandalName
     }

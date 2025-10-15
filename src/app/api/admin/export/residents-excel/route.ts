@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch residents data using raw query to handle invalid dates
     // Same query as CSV export for consistency
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const residents = await prisma.$queryRawUnsafe<any[]>(`
       SELECT 
         id,
@@ -122,42 +123,8 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper function to generate Excel file
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function generateExcel(residents: any[]): Buffer {
-  // Define column headers with proper display names
-  const headers = [
-    "ID",
-    "Resident ID",
-    "UID (Aadhaar)",
-    "Household ID",
-    "Name",
-    "Date of Birth",
-    "Age",
-    "Gender",
-    "Mobile Number",
-    "Health ID",
-    "District Name",
-    "Mandal Name",
-    "Mandal Code",
-    "Secretariat Name",
-    "Secretariat Code",
-    "Rural/Urban",
-    "Cluster Name",
-    "Qualification",
-    "Occupation",
-    "Caste",
-    "Sub Caste",
-    "Caste Category",
-    "Caste Category Detailed",
-    "Head of Family",
-    "Door Number",
-    "Address (eKYC)",
-    "Address (Household)",
-    "Citizen Mobile",
-    "PHC Name",
-    "Created At",
-    "Updated At",
-  ]
-
   // Transform data for Excel
   const excelData = residents.map((resident) => {
     // Handle date of birth
@@ -169,7 +136,7 @@ function generateExcel(residents: any[]): Buffer {
           dobValue = dobDate // Excel will format as date
         }
       }
-    } catch (error) {
+    } catch {
       // Invalid date, leave as empty
     }
 
@@ -189,7 +156,7 @@ function generateExcel(residents: any[]): Buffer {
           updatedAtValue = updatedDate
         }
       }
-    } catch (error) {
+    } catch {
       // Invalid timestamp, leave as empty
     }
 

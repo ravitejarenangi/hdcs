@@ -27,11 +27,13 @@ export async function GET(request: NextRequest) {
     const startTime = Date.now()
 
     // Build where clauses
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const secretariatsWhere: any = { secName: { not: null } }
     if (mandalName) {
       secretariatsWhere.mandalName = mandalName
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const phcsWhere: any = { phcName: { not: null } }
     if (secName) {
       phcsWhere.secName = secName
