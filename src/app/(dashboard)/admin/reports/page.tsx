@@ -113,7 +113,7 @@ export default function ReportsPage() {
   const [activeFilters, setActiveFilters] = useState<ExportFilters | null>(null)
 
   // Sorting state for Mandal Statistics table
-  type MandalSortColumn = "name" | "total" | "mobile" | "mobilePercent" | "healthId" | "healthIdPercent"
+  type MandalSortColumn = "name" | "total" | "mobile" | "withoutMobile" | "mobilePercent" | "healthId" | "pendingHealthId" | "healthIdPercent"
   type SortDirection = "asc" | "desc" | null
   const [mandalSortColumn, setMandalSortColumn] = useState<MandalSortColumn | null>(null)
   const [mandalSortDirection, setMandalSortDirection] = useState<SortDirection>(null)
@@ -189,6 +189,10 @@ export default function ReportsPage() {
             aVal = a.withMobile
             bVal = b.withMobile
             break
+          case "withoutMobile":
+            aVal = a.totalResidents - a.withMobile
+            bVal = b.totalResidents - b.withMobile
+            break
           case "mobilePercent":
             aVal = a.mobileCompletionRate
             bVal = b.mobileCompletionRate
@@ -196,6 +200,10 @@ export default function ReportsPage() {
           case "healthId":
             aVal = a.withHealthId
             bVal = b.withHealthId
+            break
+          case "pendingHealthId":
+            aVal = a.totalResidents - a.withHealthId
+            bVal = b.totalResidents - b.withHealthId
             break
           case "healthIdPercent":
             aVal = a.healthIdCompletionRate
@@ -810,6 +818,19 @@ export default function ReportsPage() {
                         </th>
                         <th
                           className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("withoutMobile")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Without Mobile No
+                            <SortIcon
+                              column="withoutMobile"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
                           onClick={() => handleMandalSort("mobilePercent")}
                         >
                           <div className="flex items-center justify-end">
@@ -836,6 +857,19 @@ export default function ReportsPage() {
                         </th>
                         <th
                           className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalSort("pendingHealthId")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Pending Health ID Updation
+                            <SortIcon
+                              column="pendingHealthId"
+                              currentColumn={mandalSortColumn}
+                              direction={mandalSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
                           onClick={() => handleMandalSort("healthIdPercent")}
                         >
                           <div className="flex items-center justify-end">
@@ -850,40 +884,50 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {getSortedMandalData().map((mandal, index) => (
-                        <tr key={index} className="border-b hover:bg-gray-50">
-                          <td className="p-3 font-medium">{mandal.mandalName}</td>
-                          <td className="p-3 text-right">{mandal.totalResidents.toLocaleString()}</td>
-                          <td className="p-3 text-right">{mandal.withMobile.toLocaleString()}</td>
-                          <td className="p-3 text-right">
-                            <span
-                              className={`inline-block px-2 py-1 rounded ${
-                                mandal.mobileCompletionRate >= 80
-                                  ? "bg-green-100 text-green-800"
-                                  : mandal.mobileCompletionRate >= 50
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {mandal.mobileCompletionRate}%
-                            </span>
-                          </td>
-                          <td className="p-3 text-right">{mandal.withHealthId.toLocaleString()}</td>
-                          <td className="p-3 text-right">
-                            <span
-                              className={`inline-block px-2 py-1 rounded ${
-                                mandal.healthIdCompletionRate >= 80
-                                  ? "bg-green-100 text-green-800"
-                                  : mandal.healthIdCompletionRate >= 50
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {mandal.healthIdCompletionRate}%
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {getSortedMandalData().map((mandal, index) => {
+                        const withoutMobile = mandal.totalResidents - mandal.withMobile
+                        const pendingHealthId = mandal.totalResidents - mandal.withHealthId
+                        return (
+                          <tr key={index} className="border-b hover:bg-gray-50">
+                            <td className="p-3 font-medium">{mandal.mandalName}</td>
+                            <td className="p-3 text-right">{mandal.totalResidents.toLocaleString()}</td>
+                            <td className="p-3 text-right">{mandal.withMobile.toLocaleString()}</td>
+                            <td className="p-3 text-right text-red-600 font-semibold">
+                              {withoutMobile.toLocaleString()}
+                            </td>
+                            <td className="p-3 text-right">
+                              <span
+                                className={`inline-block px-2 py-1 rounded ${
+                                  mandal.mobileCompletionRate >= 80
+                                    ? "bg-green-100 text-green-800"
+                                    : mandal.mobileCompletionRate >= 50
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {mandal.mobileCompletionRate}%
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">{mandal.withHealthId.toLocaleString()}</td>
+                            <td className="p-3 text-right text-orange-600 font-semibold">
+                              {pendingHealthId.toLocaleString()}
+                            </td>
+                            <td className="p-3 text-right">
+                              <span
+                                className={`inline-block px-2 py-1 rounded ${
+                                  mandal.healthIdCompletionRate >= 80
+                                    ? "bg-green-100 text-green-800"
+                                    : mandal.healthIdCompletionRate >= 50
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {mandal.healthIdCompletionRate}%
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
