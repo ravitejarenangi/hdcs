@@ -271,7 +271,7 @@ export default function AdminDashboard() {
 
       // Header row
       const headers = [
-        "Name",
+        "Mandal Name",
         "Total Residents",
         "Mobile %",
         "Health ID %",
@@ -283,9 +283,8 @@ export default function AdminDashboard() {
       ]
       csvRows.push(headers.join(","))
 
-      // Data rows - Mandals and Secretariats
+      // Data rows - Mandals only (no secretariats)
       analytics.mandalHierarchy.forEach((mandal) => {
-        // Mandal row
         csvRows.push([
           `"${mandal.mandalName}"`,
           mandal.totalResidents,
@@ -297,21 +296,6 @@ export default function AdminDashboard() {
           mandal.healthIdsAddedViaUpdates,
           mandal.healthIdUpdatesToday,
         ].join(","))
-
-        // Secretariat rows (indented with bullet)
-        mandal.secretariats.forEach((sec) => {
-          csvRows.push([
-            `"  • ${sec.secName}"`,
-            sec.totalResidents,
-            `${sec.mobileCompletionRate}%`,
-            `${sec.healthIdCompletionRate}%`,
-            sec.mobileUpdatesAllTime,
-            sec.mobileUpdatesToday,
-            sec.healthIdsOriginal,
-            sec.healthIdsAddedViaUpdates,
-            sec.healthIdUpdatesToday,
-          ].join(","))
-        })
       })
 
       // Totals row
@@ -346,7 +330,7 @@ export default function AdminDashboard() {
       )
 
       csvRows.push([
-        '"TOTALS"',
+        '"TOTAL (All Mandals)"',
         totalResidents,
         `"${avgMobile}% avg"`,
         `"${avgHealthId}% avg"`,
@@ -401,11 +385,10 @@ export default function AdminDashboard() {
       // Prepare data for Excel
       const excelData: Array<Record<string, string | number>> = []
 
-      // Add mandals and secretariats
+      // Add mandals only (no secretariats)
       analytics.mandalHierarchy.forEach((mandal) => {
-        // Mandal row
         excelData.push({
-          Name: mandal.mandalName,
+          "Mandal Name": mandal.mandalName,
           "Total Residents": mandal.totalResidents,
           "Mobile %": `${mandal.mobileCompletionRate}%`,
           "Health ID %": `${mandal.healthIdCompletionRate}%`,
@@ -414,21 +397,6 @@ export default function AdminDashboard() {
           "Health IDs (Original)": mandal.healthIdsOriginal,
           "Health IDs (Added)": mandal.healthIdsAddedViaUpdates,
           "Health IDs (Today)": mandal.healthIdUpdatesToday,
-        })
-
-        // Secretariat rows
-        mandal.secretariats.forEach((sec) => {
-          excelData.push({
-            Name: `  • ${sec.secName}`,
-            "Total Residents": sec.totalResidents,
-            "Mobile %": `${sec.mobileCompletionRate}%`,
-            "Health ID %": `${sec.healthIdCompletionRate}%`,
-            "Mobile Updates (All Time)": sec.mobileUpdatesAllTime,
-            "Mobile Updates (Today)": sec.mobileUpdatesToday,
-            "Health IDs (Original)": sec.healthIdsOriginal,
-            "Health IDs (Added)": sec.healthIdsAddedViaUpdates,
-            "Health IDs (Today)": sec.healthIdUpdatesToday,
-          })
         })
       })
 
@@ -444,7 +412,7 @@ export default function AdminDashboard() {
       )
 
       excelData.push({
-        Name: "TOTALS",
+        "Mandal Name": "TOTAL (All Mandals)",
         "Total Residents": totalResidents,
         "Mobile %": `${avgMobile}% avg`,
         "Health ID %": `${avgHealthId}% avg`,
