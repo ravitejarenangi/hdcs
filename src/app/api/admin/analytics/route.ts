@@ -288,7 +288,7 @@ export async function GET() {
     }))
 
     // 6. Field officer performance metrics - Execute in parallel
-    const [allFieldOfficers, updateCounts] = await Promise.all([
+    const [allFieldOfficers, updateCounts, mobileUpdateCounts, healthIdUpdateCounts] = await Promise.all([
       // Get ALL active field officers (not just those with updates)
       // Note: Using type assertion as assignedSecretariats/mandalName exist in DB but not in Prisma schema
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -307,7 +307,7 @@ export async function GET() {
         },
       }),
 
-      // Get update counts for all field officers
+      // Get total update counts for all field officers
       prisma.updateLog.groupBy({
         by: ["userId"],
         _count: {
@@ -320,13 +320,53 @@ export async function GET() {
           },
         },
       }),
+
+      // Get mobile number update counts
+      prisma.updateLog.groupBy({
+        by: ["userId"],
+        _count: {
+          id: true,
+        },
+        where: {
+          user: {
+            role: "FIELD_OFFICER",
+            isActive: true,
+          },
+          fieldUpdated: {
+            in: ["citizen_mobile", "mobile_number", "citizenMobile", "mobileNumber"],
+          },
+        },
+      }),
+
+      // Get health ID update counts
+      prisma.updateLog.groupBy({
+        by: ["userId"],
+        _count: {
+          id: true,
+        },
+        where: {
+          user: {
+            role: "FIELD_OFFICER",
+            isActive: true,
+          },
+          fieldUpdated: {
+            in: ["health_id", "healthId"],
+          },
+        },
+      }),
     ])
 
     logTiming('Field officer data', requestStart)
 
-    // Create a map of userId to update count
+    // Create maps of userId to update counts
     const updateCountMap = new Map(
       updateCounts.map((count) => [count.userId, count._count?.id || 0])
+    )
+    const mobileUpdateCountMap = new Map(
+      mobileUpdateCounts.map((count) => [count.userId, count._count?.id || 0])
+    )
+    const healthIdUpdateCountMap = new Map(
+      healthIdUpdateCounts.map((count) => [count.userId, count._count?.id || 0])
     )
 
     // Combine field officer data with update counts (including 0 updates)
@@ -369,6 +409,8 @@ export async function GET() {
           role: officer.role as string,
           mandals, // Array of mandal names this officer is assigned to
           updatesCount: updateCountMap.get(officer.id as string) || 0,
+          mobileUpdatesCount: mobileUpdateCountMap.get(officer.id as string) || 0,
+          healthIdUpdatesCount: healthIdUpdateCountMap.get(officer.id as string) || 0,
         }
       })
       .sort((a: { updatesCount: number }, b: { updatesCount: number }) => b.updatesCount - a.updatesCount) // Sort by update count descending

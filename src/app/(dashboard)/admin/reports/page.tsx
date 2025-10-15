@@ -81,6 +81,8 @@ interface AnalyticsData {
     role: string
     mandals: string[] // Array of mandal names this officer is assigned to
     updatesCount: number
+    mobileUpdatesCount: number
+    healthIdUpdatesCount: number
   }>
   recentUpdates: Array<{
     id: number
@@ -119,7 +121,7 @@ export default function ReportsPage() {
   const [mandalSortDirection, setMandalSortDirection] = useState<SortDirection>(null)
 
   // Officer table state (search, pagination, sorting)
-  type OfficerSortColumn = "name" | "username" | "role" | "updates"
+  type OfficerSortColumn = "name" | "username" | "role" | "updates" | "mobileUpdates" | "healthIdUpdates"
   const [officerSearchQuery, setOfficerSearchQuery] = useState("")
   const [officerCurrentPage, setOfficerCurrentPage] = useState(1)
   const officerItemsPerPage = 10
@@ -298,6 +300,14 @@ export default function ReportsPage() {
           case "updates":
             aVal = a.updatesCount
             bVal = b.updatesCount
+            break
+          case "mobileUpdates":
+            aVal = a.mobileUpdatesCount
+            bVal = b.mobileUpdatesCount
+            break
+          case "healthIdUpdates":
+            aVal = a.healthIdUpdatesCount
+            bVal = b.healthIdUpdatesCount
             break
           default:
             return 0
@@ -1091,6 +1101,32 @@ export default function ReportsPage() {
                         </th>
                         <th
                           className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleOfficerSort("mobileUpdates")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Mobile No Updated
+                            <OfficerSortIcon
+                              column="mobileUpdates"
+                              currentColumn={officerSortColumn}
+                              direction={officerSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleOfficerSort("healthIdUpdates")}
+                        >
+                          <div className="flex items-center justify-end">
+                            Health IDs Updated
+                            <OfficerSortIcon
+                              column="healthIdUpdates"
+                              currentColumn={officerSortColumn}
+                              direction={officerSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
                           onClick={() => handleOfficerSort("updates")}
                         >
                           <div className="flex items-center justify-end">
@@ -1107,7 +1143,7 @@ export default function ReportsPage() {
                     <tbody>
                       {paginatedOfficers.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="p-8 text-center text-gray-500">
+                          <td colSpan={6} className="p-8 text-center text-gray-500">
                             {officerSearchQuery
                               ? "No officers found matching your search"
                               : "No officer data available"}
@@ -1123,7 +1159,13 @@ export default function ReportsPage() {
                                 {officer.role}
                               </Badge>
                             </td>
-                            <td className="p-3 text-right font-semibold">
+                            <td className="p-3 text-right font-semibold text-green-600">
+                              {officer.mobileUpdatesCount.toLocaleString()}
+                            </td>
+                            <td className="p-3 text-right font-semibold text-blue-600">
+                              {officer.healthIdUpdatesCount.toLocaleString()}
+                            </td>
+                            <td className="p-3 text-right font-semibold text-orange-600">
                               {officer.updatesCount.toLocaleString()}
                             </td>
                           </tr>
