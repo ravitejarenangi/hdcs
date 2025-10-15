@@ -81,8 +81,8 @@ interface AnalyticsData {
     role: string
     mandals: string[] // Array of mandal names this officer is assigned to
     updatesCount: number
-    mobileUpdatesCount: number
-    healthIdUpdatesCount: number
+    mobileUpdatesCount?: number // Optional for backward compatibility
+    healthIdUpdatesCount?: number // Optional for backward compatibility
   }>
   recentUpdates: Array<{
     id: number
@@ -298,16 +298,16 @@ export default function ReportsPage() {
             bVal = b.role.toLowerCase()
             break
           case "updates":
-            aVal = a.updatesCount
-            bVal = b.updatesCount
+            aVal = a.updatesCount || 0
+            bVal = b.updatesCount || 0
             break
           case "mobileUpdates":
-            aVal = a.mobileUpdatesCount
-            bVal = b.mobileUpdatesCount
+            aVal = a.mobileUpdatesCount || 0
+            bVal = b.mobileUpdatesCount || 0
             break
           case "healthIdUpdates":
-            aVal = a.healthIdUpdatesCount
-            bVal = b.healthIdUpdatesCount
+            aVal = a.healthIdUpdatesCount || 0
+            bVal = b.healthIdUpdatesCount || 0
             break
           default:
             return 0
@@ -1160,13 +1160,13 @@ export default function ReportsPage() {
                               </Badge>
                             </td>
                             <td className="p-3 text-right font-semibold text-green-600">
-                              {officer.mobileUpdatesCount.toLocaleString()}
+                              {(officer.mobileUpdatesCount || 0).toLocaleString()}
                             </td>
                             <td className="p-3 text-right font-semibold text-blue-600">
-                              {officer.healthIdUpdatesCount.toLocaleString()}
+                              {(officer.healthIdUpdatesCount || 0).toLocaleString()}
                             </td>
                             <td className="p-3 text-right font-semibold text-orange-600">
-                              {officer.updatesCount.toLocaleString()}
+                              {(officer.updatesCount || 0).toLocaleString()}
                             </td>
                           </tr>
                         ))
