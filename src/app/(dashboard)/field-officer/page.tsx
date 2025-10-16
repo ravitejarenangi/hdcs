@@ -35,6 +35,9 @@ interface Resident {
   ruralUrban: string | null
   age: number | null
   phcName: string | null
+  doorNumber: string | null
+  addressEkyc: string | null
+  addressHh: string | null
 }
 
 interface UIDSearchResult {

@@ -14,9 +14,10 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Edit2, Save, X, User, MapPin, Users, Home, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Edit2, Save, X, User, MapPin, Users, Home, ArrowUpDown, ArrowUp, ArrowDown, Download, FileSpreadsheet } from "lucide-react"
 import { toast } from "sonner"
 import { HouseholdMembersDialog } from "@/components/dialogs/HouseholdMembersDialog"
+import * as XLSX from 'xlsx'
 
 // Helper function to mask UID (show only last 4 digits)
 function maskUID(uid: string | null): string {
@@ -90,6 +91,9 @@ interface Resident {
   ruralUrban: string | null
   age: number | null
   phcName: string | null
+  doorNumber: string | null
+  addressEkyc: string | null
+  addressHh: string | null
 }
 
 interface ResidentsTableProps {
@@ -403,6 +407,111 @@ export function ResidentsTable({
     }
   }
 
+  // Export to CSV function
+  const exportToCSV = () => {
+    if (residents.length === 0) {
+      toast.error("No data to export")
+      return
+    }
+
+    // Prepare CSV data with all required columns
+    const csvData = residents.map(resident => ({
+      'Mandal Name': resident.mandalName || 'N/A',
+      'Secretariat Name': resident.secName || 'N/A',
+      'Name of Resident': resident.name || 'N/A',
+      'Resident ID': resident.residentId || 'N/A',
+      'UID': maskUID(resident.uid),
+      'HH ID': resident.hhId || 'N/A',
+      'Health ID': resident.healthId || 'N/A',
+      'Citizen Mobile Number': resident.citizenMobile || 'N/A',
+      'Door No': resident.doorNumber || 'N/A',
+      'Address (eKYC)': resident.addressEkyc || 'N/A',
+      'Address (Household)': resident.addressHh || 'N/A',
+    }))
+
+    // Convert to CSV string
+    const headers = Object.keys(csvData[0])
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row =>
+        headers.map(header => {
+          const value = row[header as keyof typeof row]
+          // Escape commas and quotes in values
+          const escaped = String(value).replace(/"/g, '""')
+          return `"${escaped}"`
+        }).join(',')
+      )
+    ].join('\n')
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+
+    const fileName = `${residents[0]?.secName || 'Residents'}_Data_${new Date().toISOString().split('T')[0]}.csv`
+
+    link.setAttribute('href', url)
+    link.setAttribute('download', fileName)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    toast.success("CSV exported successfully", {
+      description: `Downloaded ${residents.length} residents data`
+    })
+  }
+
+  // Export to Excel function
+  const exportToExcel = () => {
+    if (residents.length === 0) {
+      toast.error("No data to export")
+      return
+    }
+
+    // Prepare Excel data with all required columns
+    const excelData = residents.map(resident => ({
+      'Mandal Name': resident.mandalName || 'N/A',
+      'Secretariat Name': resident.secName || 'N/A',
+      'Name of Resident': resident.name || 'N/A',
+      'Resident ID': resident.residentId || 'N/A',
+      'UID': maskUID(resident.uid),
+      'HH ID': resident.hhId || 'N/A',
+      'Health ID': resident.healthId || 'N/A',
+      'Citizen Mobile Number': resident.citizenMobile || 'N/A',
+      'Door No': resident.doorNumber || 'N/A',
+      'Address (eKYC)': resident.addressEkyc || 'N/A',
+      'Address (Household)': resident.addressHh || 'N/A',
+    }))
+
+    // Create workbook and worksheet
+    const ws = XLSX.utils.json_to_sheet(excelData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Residents')
+
+    // Auto-size columns
+    const maxWidth = 50
+    const colWidths = Object.keys(excelData[0]).map(key => ({
+      wch: Math.min(
+        Math.max(
+          key.length,
+          ...excelData.map(row => String(row[key as keyof typeof row]).length)
+        ),
+        maxWidth
+      )
+    }))
+    ws['!cols'] = colWidths
+
+    // Generate file name
+    const fileName = `${residents[0]?.secName || 'Residents'}_Data_${new Date().toISOString().split('T')[0]}.xlsx`
+
+    // Write file
+    XLSX.writeFile(wb, fileName)
+
+    toast.success("Excel exported successfully", {
+      description: `Downloaded ${residents.length} residents data`
+    })
+  }
 
 
   return (
@@ -416,6 +525,30 @@ export function ResidentsTable({
               <strong>Total Members:</strong> {residents.length}
             </span>
           </div>
+        </div>
+      )}
+
+      {/* Export Buttons */}
+      {residents.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2 justify-end">
+          <Button
+            onClick={exportToCSV}
+            variant="outline"
+            size="sm"
+            className="border-green-600 text-green-600 hover:bg-green-50"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
+          <Button
+            onClick={exportToExcel}
+            variant="outline"
+            size="sm"
+            className="border-blue-600 text-blue-600 hover:bg-blue-50"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Export Excel
+          </Button>
         </div>
       )}
 
