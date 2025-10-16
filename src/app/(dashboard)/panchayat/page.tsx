@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Users, Activity, TrendingUp, MapPin, UserCheck, BarChart3, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Users, Activity, TrendingUp, MapPin, UserCheck, BarChart3, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Download, FileSpreadsheet } from "lucide-react"
+import * as XLSX from "xlsx"
 import {
   BarChart,
   Bar,
@@ -201,6 +202,135 @@ export default function PanchayatDashboard() {
       return <ArrowUp className="h-4 w-4 ml-1 text-orange-600" />
     }
     return <ArrowDown className="h-4 w-4 ml-1 text-orange-600" />
+  }
+
+  const exportToCSV = () => {
+    if (!analytics || !analytics.secretariatCompletion.length) {
+      toast.error("No data to export")
+      return
+    }
+
+    // Calculate totals
+    const totalResidents = analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.totalResidents, 0)
+    const totalWithMobile = analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.withMobile, 0)
+    const totalWithHealthId = analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.withHealthId, 0)
+    const avgMobileRate = totalResidents > 0 ? Math.round((totalWithMobile / totalResidents) * 100) : 0
+    const avgHealthIdRate = totalResidents > 0 ? Math.round((totalWithHealthId / totalResidents) * 100) : 0
+    const avgQuality = Math.round((avgMobileRate + avgHealthIdRate) / 2)
+
+    // Create CSV header
+    const headers = [
+      "Secretariat",
+      "Total Residents",
+      "Mobile %",
+      "Health ID %",
+      "Mobile Updated",
+      "Mobile Today",
+      "Health ID Original",
+      "Health ID Updated",
+      "Health ID Today",
+      "Avg Quality %"
+    ]
+
+    // Create CSV rows
+    const rows = analytics.secretariatCompletion.map(sec => [
+      sec.secretariatName,
+      sec.totalResidents,
+      sec.mobileCompletionRate,
+      sec.healthIdCompletionRate,
+      sec.mobileUpdatesCount,
+      sec.mobileUpdatesToday,
+      sec.healthIdOriginal,
+      sec.healthIdUpdatesCount,
+      sec.healthIdUpdatesToday,
+      Math.round((sec.mobileCompletionRate + sec.healthIdCompletionRate) / 2)
+    ])
+
+    // Add totals row
+    rows.push([
+      "TOTAL",
+      totalResidents,
+      avgMobileRate,
+      avgHealthIdRate,
+      analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.mobileUpdatesCount, 0),
+      analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.mobileUpdatesToday, 0),
+      analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdOriginal, 0),
+      analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdUpdatesCount, 0),
+      analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdUpdatesToday, 0),
+      avgQuality
+    ])
+
+    // Convert to CSV string
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.join(","))
+    ].join("\n")
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    const url = URL.createObjectURL(blob)
+    link.setAttribute("href", url)
+    link.setAttribute("download", `${analytics.mandalName}_Secretariat_Completion_${format(new Date(), "yyyy-MM-dd")}.csv`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    toast.success("CSV exported successfully")
+  }
+
+  const exportToExcel = () => {
+    if (!analytics || !analytics.secretariatCompletion.length) {
+      toast.error("No data to export")
+      return
+    }
+
+    // Calculate totals
+    const totalResidents = analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.totalResidents, 0)
+    const totalWithMobile = analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.withMobile, 0)
+    const totalWithHealthId = analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.withHealthId, 0)
+    const avgMobileRate = totalResidents > 0 ? Math.round((totalWithMobile / totalResidents) * 100) : 0
+    const avgHealthIdRate = totalResidents > 0 ? Math.round((totalWithHealthId / totalResidents) * 100) : 0
+    const avgQuality = Math.round((avgMobileRate + avgHealthIdRate) / 2)
+
+    // Prepare data for Excel
+    const data = analytics.secretariatCompletion.map(sec => ({
+      "Secretariat": sec.secretariatName,
+      "Total Residents": sec.totalResidents,
+      "Mobile %": sec.mobileCompletionRate,
+      "Health ID %": sec.healthIdCompletionRate,
+      "Mobile Updated": sec.mobileUpdatesCount,
+      "Mobile Today": sec.mobileUpdatesToday,
+      "Health ID Original": sec.healthIdOriginal,
+      "Health ID Updated": sec.healthIdUpdatesCount,
+      "Health ID Today": sec.healthIdUpdatesToday,
+      "Avg Quality %": Math.round((sec.mobileCompletionRate + sec.healthIdCompletionRate) / 2)
+    }))
+
+    // Add totals row
+    data.push({
+      "Secretariat": "TOTAL",
+      "Total Residents": totalResidents,
+      "Mobile %": avgMobileRate,
+      "Health ID %": avgHealthIdRate,
+      "Mobile Updated": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.mobileUpdatesCount, 0),
+      "Mobile Today": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.mobileUpdatesToday, 0),
+      "Health ID Original": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdOriginal, 0),
+      "Health ID Updated": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdUpdatesCount, 0),
+      "Health ID Today": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdUpdatesToday, 0),
+      "Avg Quality %": avgQuality
+    })
+
+    // Create workbook and worksheet
+    const worksheet = XLSX.utils.json_to_sheet(data)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Secretariat Completion")
+
+    // Generate Excel file and download
+    XLSX.writeFile(workbook, `${analytics.mandalName}_Secretariat_Completion_${format(new Date(), "yyyy-MM-dd")}.xlsx`)
+
+    toast.success("Excel file exported successfully")
   }
 
   return (
@@ -400,8 +530,32 @@ export default function PanchayatDashboard() {
         {/* Secretariat Completion Table */}
         <Card className="border-2 border-orange-200">
           <CardHeader>
-            <CardTitle>Secretariat-wise Data Completion</CardTitle>
-            <CardDescription>Mobile number and Health ID completion rates</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Secretariat-wise Data Completion</CardTitle>
+                <CardDescription>Mobile number and Health ID completion rates</CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={exportToCSV}
+                  variant="outline"
+                  size="sm"
+                  className="border-green-600 text-green-600 hover:bg-green-50"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export CSV
+                </Button>
+                <Button
+                  onClick={exportToExcel}
+                  variant="outline"
+                  size="sm"
+                  className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Export Excel
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
