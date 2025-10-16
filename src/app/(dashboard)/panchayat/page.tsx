@@ -577,44 +577,87 @@ export default function PanchayatDashboard() {
                     )
                   })}
                   {/* Totals Row */}
-                  {analytics && analytics.secretariatCompletion.length > 0 && (
-                    <tr className="border-t-2 border-gray-300 bg-blue-50 font-bold">
-                      <td className="p-3 font-bold text-gray-900">TOTAL</td>
-                      <td className="p-3 text-right text-gray-900">
-                        {analytics.secretariatCompletion
-                          .reduce((sum, sec) => sum + sec.totalResidents, 0)
-                          .toLocaleString()}
-                      </td>
-                      <td className="p-3 text-right text-gray-600">-</td>
-                      <td className="p-3 text-right text-gray-600">-</td>
-                      <td className="p-3 text-right text-blue-700">
-                        {analytics.secretariatCompletion
-                          .reduce((sum, sec) => sum + sec.mobileUpdatesCount, 0)
-                          .toLocaleString()}
-                      </td>
-                      <td className="p-3 text-right text-green-700">
-                        {analytics.secretariatCompletion
-                          .reduce((sum, sec) => sum + sec.mobileUpdatesToday, 0)
-                          .toLocaleString()}
-                      </td>
-                      <td className="p-3 text-right text-purple-700">
-                        {analytics.secretariatCompletion
-                          .reduce((sum, sec) => sum + sec.healthIdOriginal, 0)
-                          .toLocaleString()}
-                      </td>
-                      <td className="p-3 text-right text-blue-700">
-                        {analytics.secretariatCompletion
-                          .reduce((sum, sec) => sum + sec.healthIdUpdatesCount, 0)
-                          .toLocaleString()}
-                      </td>
-                      <td className="p-3 text-right text-green-700">
-                        {analytics.secretariatCompletion
-                          .reduce((sum, sec) => sum + sec.healthIdUpdatesToday, 0)
-                          .toLocaleString()}
-                      </td>
-                      <td className="p-3 text-right text-gray-600">-</td>
-                    </tr>
-                  )}
+                  {analytics && analytics.secretariatCompletion.length > 0 && (() => {
+                    const totalResidents = analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.totalResidents, 0)
+                    const totalWithMobile = analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.withMobile, 0)
+                    const totalWithHealthId = analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.withHealthId, 0)
+                    const avgMobileRate = totalResidents > 0 ? Math.round((totalWithMobile / totalResidents) * 100) : 0
+                    const avgHealthIdRate = totalResidents > 0 ? Math.round((totalWithHealthId / totalResidents) * 100) : 0
+                    const avgQuality = Math.round((avgMobileRate + avgHealthIdRate) / 2)
+
+                    return (
+                      <tr className="border-t-2 border-gray-300 bg-blue-50 font-bold">
+                        <td className="p-3 font-bold text-gray-900">TOTAL</td>
+                        <td className="p-3 text-right text-gray-900">
+                          {totalResidents.toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right">
+                          <span
+                            className={`font-semibold ${
+                              avgMobileRate >= 80
+                                ? "text-green-600"
+                                : avgMobileRate >= 50
+                                ? "text-yellow-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {avgMobileRate}%
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <span
+                            className={`font-semibold ${
+                              avgHealthIdRate >= 80
+                                ? "text-green-600"
+                                : avgHealthIdRate >= 50
+                                ? "text-yellow-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {avgHealthIdRate}%
+                          </span>
+                        </td>
+                        <td className="p-3 text-right text-blue-700">
+                          {analytics.secretariatCompletion
+                            .reduce((sum, sec) => sum + sec.mobileUpdatesCount, 0)
+                            .toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right text-green-700">
+                          {analytics.secretariatCompletion
+                            .reduce((sum, sec) => sum + sec.mobileUpdatesToday, 0)
+                            .toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right text-purple-700">
+                          {analytics.secretariatCompletion
+                            .reduce((sum, sec) => sum + sec.healthIdOriginal, 0)
+                            .toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right text-blue-700">
+                          {analytics.secretariatCompletion
+                            .reduce((sum, sec) => sum + sec.healthIdUpdatesCount, 0)
+                            .toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right text-green-700">
+                          {analytics.secretariatCompletion
+                            .reduce((sum, sec) => sum + sec.healthIdUpdatesToday, 0)
+                            .toLocaleString()}
+                        </td>
+                        <td className="p-3 text-right">
+                          <span
+                            className={`font-semibold ${
+                              avgQuality >= 80
+                                ? "text-green-600"
+                                : avgQuality >= 50
+                                ? "text-yellow-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {avgQuality}%
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })()}
                 </tbody>
               </table>
             </div>
