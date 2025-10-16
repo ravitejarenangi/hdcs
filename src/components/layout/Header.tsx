@@ -59,7 +59,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       case "ADMIN":
         return "Admin"
       case "PANCHAYAT_SECRETARY":
-        return "Panchayat Secretary"
+        return "Mandal Officer"
       case "FIELD_OFFICER":
         return "Field Officer"
       default:

@@ -122,7 +122,7 @@ export default function OfficerDialog({
 
   const fetchMandalName = async () => {
     try {
-      const response = await fetch("/api/panchayat/analytics")
+      const response = await fetch("/api/mandal-officer/analytics")
       if (response.ok) {
         const data = await response.json()
         setMandalName(data.mandalName || "")
@@ -135,7 +135,7 @@ export default function OfficerDialog({
   const fetchSecretariats = async () => {
     try {
       setLoadingSecretariats(true)
-      const response = await fetch("/api/panchayat/secretariats")
+      const response = await fetch("/api/mandal-officer/secretariats")
 
       if (!response.ok) {
         throw new Error("Failed to fetch secretariats")
@@ -218,7 +218,7 @@ export default function OfficerDialog({
 
       if (isEdit) {
         // Update existing officer
-        const response = await fetch(`/api/panchayat/officers/${officer.id}`, {
+        const response = await fetch(`/api/mandal-officer/officers/${officer.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -237,7 +237,7 @@ export default function OfficerDialog({
         toast.success("Officer updated successfully")
       } else {
         // Create new officer
-        const response = await fetch("/api/panchayat/officers", {
+        const response = await fetch("/api/mandal-officer/officers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

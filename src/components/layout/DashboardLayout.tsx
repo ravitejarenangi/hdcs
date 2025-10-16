@@ -51,7 +51,7 @@ export function DashboardLayout({
       if (session?.user?.role === "ADMIN") {
         router.push("/admin")
       } else if (session?.user?.role === "PANCHAYAT_SECRETARY") {
-        router.push("/panchayat")
+        router.push("/mandal-officer")
       } else if (session?.user?.role === "FIELD_OFFICER") {
         router.push("/field-officer")
       } else {

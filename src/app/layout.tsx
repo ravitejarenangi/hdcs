@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     "healthcare analytics",
     "Chittoor district",
     "field officer dashboard",
-    "panchayat secretary",
+    "mandal officer",
     "health data collection",
     "resident database",
     "household management",

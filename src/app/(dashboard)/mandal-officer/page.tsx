@@ -100,7 +100,7 @@ export default function PanchayatDashboard() {
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch("/api/panchayat/analytics")
+      const response = await fetch("/api/mandal-officer/analytics")
 
       if (!response.ok) {
         throw new Error("Failed to fetch analytics")

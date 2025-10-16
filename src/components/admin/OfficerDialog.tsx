@@ -179,7 +179,7 @@ export function OfficerDialog({
     // Role-specific validation
     if (formData.role === "PANCHAYAT_SECRETARY") {
       if (!formData.mandalName) {
-        newErrors.mandalName = "Mandal is required for Panchayat Secretary"
+        newErrors.mandalName = "Mandal is required for Mandal Officer"
       }
     } else if (formData.role === "FIELD_OFFICER") {
       if (formData.assignedSecretariats.length === 0) {
@@ -424,7 +424,7 @@ export function OfficerDialog({
                 className="w-full px-3 py-2 border rounded-md"
               >
                 <option value="ADMIN">Admin</option>
-                <option value="PANCHAYAT_SECRETARY">Panchayat Secretary</option>
+                <option value="PANCHAYAT_SECRETARY">Mandal Officer</option>
                 <option value="FIELD_OFFICER">Field Officer</option>
               </select>
             </div>

@@ -47,7 +47,7 @@ export default function PanchayatOfficersPage() {
   const fetchOfficers = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/panchayat/officers")
+      const response = await fetch("/api/mandal-officer/officers")
 
       if (!response.ok) {
         throw new Error("Failed to fetch officers")
@@ -113,7 +113,7 @@ export default function PanchayatOfficersPage() {
   const handleToggleActive = async (officer: Officer) => {
     try {
       const newStatus = !officer.isActive
-      const response = await fetch(`/api/panchayat/officers/${officer.id}`, {
+      const response = await fetch(`/api/mandal-officer/officers/${officer.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: newStatus }),

@@ -71,7 +71,7 @@ export default function ResetPasswordDialog({
       setLoading(true)
 
       const response = await fetch(
-        `/api/panchayat/officers/${officer.id}/reset-password`,
+        `/api/mandal-officer/officers/${officer.id}/reset-password`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

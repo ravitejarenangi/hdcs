@@ -71,17 +71,17 @@ const menuItems: MenuItem[] = [
     roles: ["ADMIN"],
   },
 
-  // PANCHAYAT_SECRETARY Menu Items
+  // MANDAL_OFFICER (PANCHAYAT_SECRETARY) Menu Items
   {
     title: "Dashboard",
     icon: <LayoutDashboard className="h-5 w-5" />,
-    href: "/panchayat",
+    href: "/mandal-officer",
     roles: ["PANCHAYAT_SECRETARY"],
   },
   {
     title: "Field Officers",
     icon: <Users className="h-5 w-5" />,
-    href: "/panchayat/officers",
+    href: "/mandal-officer/officers",
     roles: ["PANCHAYAT_SECRETARY"],
   },
 

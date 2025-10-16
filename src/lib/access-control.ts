@@ -1,9 +1,9 @@
 /**
  * Role-Based Access Control for Data Filtering
- * 
+ *
  * This module provides utilities to enforce data access restrictions based on user roles:
  * - ADMIN: Can access all data
- * - PANCHAYAT_SECRETARY: Can only access data from their assigned mandal
+ * - PANCHAYAT_SECRETARY (Mandal Officer): Can only access data from their assigned mandal
  * - FIELD_OFFICER: Can only access data from their assigned secretariats
  */
 
@@ -61,10 +61,10 @@ export function buildResidentAccessFilter(user: UserSession): {
     return {}
   }
 
-  // PANCHAYAT_SECRETARY: Filter by assigned mandal
+  // PANCHAYAT_SECRETARY (Mandal Officer): Filter by assigned mandal
   if (user.role === "PANCHAYAT_SECRETARY") {
     if (!user.mandalName) {
-      throw new Error("Panchayat Secretary must have an assigned mandal")
+      throw new Error("Mandal Officer must have an assigned mandal")
     }
     return { mandalName: user.mandalName }
   }
@@ -105,7 +105,7 @@ export function canAccessResident(
     return true
   }
 
-  // PANCHAYAT_SECRETARY: Can access residents in their mandal
+  // PANCHAYAT_SECRETARY (Mandal Officer): Can access residents in their mandal
   if (user.role === "PANCHAYAT_SECRETARY") {
     return resident.mandalName === user.mandalName
   }
@@ -135,7 +135,7 @@ export function getAccessibleMandals(user: UserSession): string[] {
     return []
   }
 
-  // PANCHAYAT_SECRETARY: Can access only their assigned mandal
+  // PANCHAYAT_SECRETARY (Mandal Officer): Can access only their assigned mandal
   if (user.role === "PANCHAYAT_SECRETARY") {
     return user.mandalName ? [user.mandalName] : []
   }
@@ -154,7 +154,7 @@ export function getAccessibleMandals(user: UserSession): string[] {
  * Get accessible secretariats for a user in a specific mandal
  * @param user - User session object
  * @param mandalName - Mandal name to filter by
- * @returns Array of accessible secretariat names (empty array means all secretariats for ADMIN/PANCHAYAT_SECRETARY)
+ * @returns Array of accessible secretariat names (empty array means all secretariats for ADMIN/Mandal Officer)
  */
 export function getAccessibleSecretariats(
   user: UserSession,
@@ -165,7 +165,7 @@ export function getAccessibleSecretariats(
     return []
   }
 
-  // PANCHAYAT_SECRETARY: Can access all secretariats in their mandal
+  // PANCHAYAT_SECRETARY (Mandal Officer): Can access all secretariats in their mandal
   if (user.role === "PANCHAYAT_SECRETARY") {
     if (mandalName && mandalName !== user.mandalName) {
       return [] // No access to secretariats in other mandals
@@ -210,7 +210,7 @@ export function validateSearchFilters(
     return { isValid: true }
   }
 
-  // PANCHAYAT_SECRETARY: Can only search within their mandal
+  // PANCHAYAT_SECRETARY (Mandal Officer): Can only search within their mandal
   if (user.role === "PANCHAYAT_SECRETARY") {
     if (filters.mandal && filters.mandal !== user.mandalName) {
       return {

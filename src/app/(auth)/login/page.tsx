@@ -32,7 +32,7 @@ export default function LoginPage() {
         if (session?.user?.role === "ADMIN") {
           router.push("/admin")
         } else if (session?.user?.role === "PANCHAYAT_SECRETARY") {
-          router.push("/panchayat")
+          router.push("/mandal-officer")
         } else {
           router.push("/field-officer")
         }

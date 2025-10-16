@@ -1,10 +1,10 @@
 /**
  * Role Hierarchy and Permission Management
- * 
- * Hierarchy: ADMIN → PANCHAYAT_SECRETARY → FIELD_OFFICER
- * 
- * - ADMIN: Highest level, can manage all users including other admins, panchayat secretaries, and field officers
- * - PANCHAYAT_SECRETARY: Mid level, can only manage field officers within their assigned mandal
+ *
+ * Hierarchy: ADMIN → MANDAL_OFFICER (PANCHAYAT_SECRETARY) → FIELD_OFFICER
+ *
+ * - ADMIN: Highest level, can manage all users including other admins, mandal officers, and field officers
+ * - PANCHAYAT_SECRETARY (Mandal Officer): Mid level, can only manage field officers within their assigned mandal
  * - FIELD_OFFICER: Lowest level, cannot manage any users
  */
 
@@ -50,7 +50,7 @@ export function getManageableRoles(userRole: Role): Role[] {
       // Admin can manage all roles including other admins
       return ["ADMIN", "PANCHAYAT_SECRETARY", "FIELD_OFFICER"]
     case "PANCHAYAT_SECRETARY":
-      // Panchayat Secretary can only manage field officers
+      // Mandal Officer can only manage field officers
       return ["FIELD_OFFICER"]
     case "FIELD_OFFICER":
       // Field Officer cannot manage any users
@@ -83,7 +83,7 @@ export function canViewRole(userRole: Role, targetRole: Role): boolean {
     return true
   }
   
-  // Panchayat Secretary can view field officers
+  // Mandal Officer can view field officers
   if (userRole === "PANCHAYAT_SECRETARY" && targetRole === "FIELD_OFFICER") {
     return true
   }
@@ -106,7 +106,7 @@ export function getRoleDisplayName(role: Role): string {
     case "ADMIN":
       return "Admin"
     case "PANCHAYAT_SECRETARY":
-      return "Panchayat Secretary"
+      return "Mandal Officer"
     case "FIELD_OFFICER":
       return "Field Officer"
     default:
