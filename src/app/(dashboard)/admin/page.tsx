@@ -56,7 +56,7 @@ interface AnalyticsData {
     // Separate update counts by field type
     mobileUpdatesCount?: number
     healthIdUpdatesCount?: number
-    // Enhanced mobile and health ID statistics
+    // Enhanced mobile and ABHA ID statistics
     mobileUpdatesAllTime?: number
     mobileUpdatesToday?: number
     healthIdUpdatesAllTime?: number
@@ -274,12 +274,12 @@ export default function AdminDashboard() {
         "Mandal Name",
         "Total Residents",
         "Mobile %",
-        "Health ID %",
+        "ABHA ID %",
         "Mobile Updates (All Time)",
         "Mobile Updates (Today)",
-        "Health IDs (Original)",
-        "Health IDs (Added)",
-        "Health IDs (Today)",
+        "ABHA IDs (Original)",
+        "ABHA IDs (Added)",
+        "ABHA IDs (Today)",
       ]
       csvRows.push(headers.join(","))
 
@@ -391,12 +391,12 @@ export default function AdminDashboard() {
           "Mandal Name": mandal.mandalName,
           "Total Residents": mandal.totalResidents,
           "Mobile %": `${mandal.mobileCompletionRate}%`,
-          "Health ID %": `${mandal.healthIdCompletionRate}%`,
+          "ABHA ID %": `${mandal.healthIdCompletionRate}%`,
           "Mobile Updates (All Time)": mandal.mobileUpdatesAllTime,
           "Mobile Updates (Today)": mandal.mobileUpdatesToday,
-          "Health IDs (Original)": mandal.healthIdsOriginal,
-          "Health IDs (Added)": mandal.healthIdsAddedViaUpdates,
-          "Health IDs (Today)": mandal.healthIdUpdatesToday,
+          "ABHA IDs (Original)": mandal.healthIdsOriginal,
+          "ABHA IDs (Added)": mandal.healthIdsAddedViaUpdates,
+          "ABHA IDs (Today)": mandal.healthIdUpdatesToday,
         })
       })
 
@@ -415,7 +415,7 @@ export default function AdminDashboard() {
         "Mandal Name": "TOTAL (All Mandals)",
         "Total Residents": totalResidents,
         "Mobile %": `${avgMobile}% avg`,
-        "Health ID %": `${avgHealthId}% avg`,
+        "ABHA ID %": `${avgHealthId}% avg`,
         "Mobile Updates (All Time)": analytics.mandalHierarchy.reduce(
           (sum, m) => sum + m.mobileUpdatesAllTime,
           0
@@ -424,15 +424,15 @@ export default function AdminDashboard() {
           (sum, m) => sum + m.mobileUpdatesToday,
           0
         ),
-        "Health IDs (Original)": analytics.mandalHierarchy.reduce(
+        "ABHA IDs (Original)": analytics.mandalHierarchy.reduce(
           (sum, m) => sum + m.healthIdsOriginal,
           0
         ),
-        "Health IDs (Added)": analytics.mandalHierarchy.reduce(
+        "ABHA IDs (Added)": analytics.mandalHierarchy.reduce(
           (sum, m) => sum + m.healthIdsAddedViaUpdates,
           0
         ),
-        "Health IDs (Today)": analytics.mandalHierarchy.reduce(
+        "ABHA IDs (Today)": analytics.mandalHierarchy.reduce(
           (sum, m) => sum + m.healthIdUpdatesToday,
           0
         ),
@@ -446,12 +446,12 @@ export default function AdminDashboard() {
         { wch: 25 }, // Name
         { wch: 15 }, // Total Residents
         { wch: 12 }, // Mobile %
-        { wch: 12 }, // Health ID %
+        { wch: 12 }, // ABHA ID %
         { wch: 22 }, // Mobile Updates (All Time)
         { wch: 22 }, // Mobile Updates (Today)
-        { wch: 20 }, // Health IDs (Original)
-        { wch: 18 }, // Health IDs (Added)
-        { wch: 18 }, // Health IDs (Today)
+        { wch: 20 }, // ABHA IDs (Original)
+        { wch: 18 }, // ABHA IDs (Added)
+        { wch: 18 }, // ABHA IDs (Today)
       ]
 
       // Create workbook
@@ -782,12 +782,12 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Health IDs */}
+              {/* ABHA IDs */}
               <Card className="border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-white">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <CreditCard className="h-5 w-5 text-purple-600" />
-                    Health IDs
+                    ABHA IDs
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -851,14 +851,14 @@ export default function AdminDashboard() {
                     </p>
                   </div>
 
-                  {/* Health IDs Updated */}
+                  {/* ABHA IDs Updated */}
                   <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-orange-100">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-blue-100 rounded-lg">
                         <CreditCard className="h-5 w-5 text-blue-600" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-700">Health IDs</p>
+                        <p className="text-sm font-medium text-gray-700">ABHA IDs</p>
                         <p className="text-xs text-gray-500">Updated</p>
                       </div>
                     </div>
@@ -945,18 +945,18 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
-                    {/* Health ID Placeholders */}
+                    {/* ABHA ID Placeholders */}
                     {(analytics.overview.residentsWithHealthIdPlaceholder || 0) > 0 && (
                       <div className="p-4 bg-white rounded-lg border border-amber-200">
                         <div className="flex items-center gap-2 mb-2">
                           <CreditCard className="h-4 w-4 text-amber-600" />
-                          <span className="text-sm font-medium text-gray-700">Missing Health IDs</span>
+                          <span className="text-sm font-medium text-gray-700">Missing ABHA IDs</span>
                         </div>
                         <p className="text-2xl font-bold text-amber-600">
                           {(analytics.overview.residentsWithHealthIdPlaceholder || 0).toLocaleString()}
                         </p>
                         <p className="text-xs text-gray-600 mt-1">
-                          Records with NULL, N/A, or empty health ID
+                          Records with NULL, N/A, or empty ABHA ID
                         </p>
                       </div>
                     )}
@@ -1010,7 +1010,7 @@ export default function AdminDashboard() {
                     Data Completion Overview
                   </CardTitle>
                   <CardDescription>
-                    Mobile numbers and health IDs completion
+                    Mobile numbers and ABHA IDs completion
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1090,7 +1090,7 @@ export default function AdminDashboard() {
                       Mandal-wise Completion Rates
                     </CardTitle>
                     <CardDescription>
-                      Mobile and Health ID completion by mandal
+                      Mobile and ABHA ID completion by mandal
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
@@ -1175,7 +1175,7 @@ export default function AdminDashboard() {
                           onClick={() => handleMandalSort("healthId")}
                         >
                           <div className="flex items-center justify-end">
-                            Health ID %
+                            ABHA ID %
                             <SortIcon
                               column="healthId"
                               currentColumn={mandalSortColumn}
@@ -1199,21 +1199,21 @@ export default function AdminDashboard() {
                         </th>
                         <th className="text-right py-2 px-4 bg-purple-50">
                           <div className="text-xs font-semibold text-purple-700">
-                            Health IDs
+                            ABHA IDs
                             <br />
                             (Original)
                           </div>
                         </th>
                         <th className="text-right py-2 px-4 bg-purple-50">
                           <div className="text-xs font-semibold text-purple-700">
-                            Health IDs
+                            ABHA IDs
                             <br />
                             (Added)
                           </div>
                         </th>
                         <th className="text-right py-2 px-4 bg-purple-50">
                           <div className="text-xs font-semibold text-purple-700">
-                            Health IDs
+                            ABHA IDs
                             <br />
                             (Today)
                           </div>

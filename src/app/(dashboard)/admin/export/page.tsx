@@ -427,7 +427,7 @@ export default function AdminExportPage() {
               <li>UID: Full Aadhaar number (unmasked) - Admin only</li>
               <li>
                 All 31 columns: ID, Resident ID, UID, Household ID, Name, DOB, Age, Gender, Mobile,
-                Health ID, Location, Demographic, Socio-Economic, Addresses, Timestamps
+                ABHA ID, Location, Demographic, Socio-Economic, Addresses, Timestamps
               </li>
               <li>File name: residents_export_YYYY-MM-DD_HH-mm-ss.csv or .xlsx</li>
             </ul>

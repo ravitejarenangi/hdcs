@@ -675,10 +675,10 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
 
-              {/* Health ID Completion */}
+              {/* ABHA ID Completion */}
               <Card className="border-2 border-blue-200 hover:shadow-lg transition-shadow">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-gray-600">Health ID Completion</CardTitle>
+                  <CardTitle className="text-sm font-medium text-gray-600">ABHA ID Completion</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-blue-600">
@@ -712,7 +712,7 @@ export default function ReportsPage() {
                   <BarChart3 className="h-5 w-5 text-orange-600" />
                   Data Completion Overview
                 </CardTitle>
-                <CardDescription>Mobile number and health ID completion rates</CardDescription>
+                <CardDescription>Mobile number and ABHA ID completion rates</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -724,7 +724,7 @@ export default function ReportsPage() {
                         missing: 100 - analytics.overview.mobileCompletionRate,
                       },
                       {
-                        name: "Health IDs",
+                        name: "ABHA IDs",
                         completion: analytics.overview.healthIdCompletionRate,
                         missing: 100 - analytics.overview.healthIdCompletionRate,
                       },
@@ -781,7 +781,7 @@ export default function ReportsPage() {
 
               <Card className="border-2 border-blue-200">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-gray-600">Avg Health ID Completion</CardTitle>
+                  <CardTitle className="text-sm font-medium text-gray-600">Avg ABHA ID Completion</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-bold text-blue-600">
@@ -881,7 +881,7 @@ export default function ReportsPage() {
                           onClick={() => handleMandalSort("healthId")}
                         >
                           <div className="flex items-center justify-end">
-                            Health IDs Updated
+                            ABHA IDs Updated
                             <SortIcon
                               column="healthId"
                               currentColumn={mandalSortColumn}
@@ -894,7 +894,7 @@ export default function ReportsPage() {
                           onClick={() => handleMandalSort("pendingHealthId")}
                         >
                           <div className="flex items-center justify-end">
-                            Pending Health ID Updation
+                            Pending ABHA ID Updation
                             <SortIcon
                               column="pendingHealthId"
                               currentColumn={mandalSortColumn}
@@ -907,7 +907,7 @@ export default function ReportsPage() {
                           onClick={() => handleMandalSort("healthIdPercent")}
                         >
                           <div className="flex items-center justify-end">
-                            Health ID Completion %
+                            ABHA ID Completion %
                             <SortIcon
                               column="healthIdPercent"
                               currentColumn={mandalSortColumn}
@@ -1221,7 +1221,7 @@ export default function ReportsPage() {
                           onClick={() => handleOfficerSort("healthIdUpdates")}
                         >
                           <div className="flex items-center justify-end">
-                            Health IDs Updated
+                            ABHA IDs Updated
                             <OfficerSortIcon
                               column="healthIdUpdates"
                               currentColumn={officerSortColumn}
