@@ -30,6 +30,13 @@ interface Analytics {
     mobileCompletionRate: number
     healthIdCompletionRate: number
     recentUpdatesCount: number
+    mobileUpdatesCount: number
+    mobileUpdatesToday: number
+    healthIdOriginalCount: number
+    healthIdUpdatesCount: number
+    healthIdUpdatesToday: number
+    recentMobileUpdatesCount: number
+    recentHealthIdUpdatesCount: number
   }
   secretariatStatistics: Array<{
     secretariatName: string
@@ -409,6 +416,20 @@ export default function PanchayatDashboard() {
               <p className="text-sm text-gray-600 mt-2">
                 {analytics.overview.residentsWithMobile.toLocaleString()} residents
               </p>
+              <div className="mt-4 pt-4 border-t border-green-200 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600">Mobile Updated:</span>
+                  <span className="text-sm font-semibold text-blue-600">
+                    {analytics.overview.mobileUpdatesCount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600">Updated Today:</span>
+                  <span className="text-sm font-semibold text-green-600">
+                    {analytics.overview.mobileUpdatesToday.toLocaleString()}
+                  </span>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -427,6 +448,26 @@ export default function PanchayatDashboard() {
               <p className="text-sm text-gray-600 mt-2">
                 {analytics.overview.residentsWithHealthId.toLocaleString()} residents
               </p>
+              <div className="mt-4 pt-4 border-t border-orange-200 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600">Original Data:</span>
+                  <span className="text-sm font-semibold text-purple-600">
+                    {analytics.overview.healthIdOriginalCount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600">Health ID Updated:</span>
+                  <span className="text-sm font-semibold text-blue-600">
+                    {analytics.overview.healthIdUpdatesCount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600">Updated Today:</span>
+                  <span className="text-sm font-semibold text-green-600">
+                    {analytics.overview.healthIdUpdatesToday.toLocaleString()}
+                  </span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -462,6 +503,20 @@ export default function PanchayatDashboard() {
                 {analytics.overview.recentUpdatesCount.toLocaleString()}
               </p>
               <p className="text-sm text-gray-600 mt-2">Last 6 hours</p>
+              <div className="mt-4 pt-4 border-t border-yellow-200 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600">Mobile Numbers:</span>
+                  <span className="text-sm font-semibold text-green-600">
+                    {analytics.overview.recentMobileUpdatesCount.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-600">Health IDs:</span>
+                  <span className="text-sm font-semibold text-orange-600">
+                    {analytics.overview.recentHealthIdUpdatesCount.toLocaleString()}
+                  </span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

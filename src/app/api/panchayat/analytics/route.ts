@@ -72,6 +72,13 @@ export async function GET() {
       residentsWithMobile,
       residentsWithHealthId,
       recentUpdatesCount,
+      mobileUpdatesCount,
+      mobileUpdatesToday,
+      healthIdOriginalCount,
+      healthIdUpdatesCount,
+      healthIdUpdatesToday,
+      recentMobileUpdatesCount,
+      recentHealthIdUpdatesCount,
     ] = await Promise.all([
       // 1. Total residents in mandal (excluding placeholder names)
       prisma.resident.count({
@@ -107,6 +114,77 @@ export async function GET() {
       // 4. Recent updates in mandal (last 6 hours)
       prisma.updateLog.count({
         where: {
+          updateTimestamp: { gte: sixHoursAgo },
+          resident: baseWhere,
+        },
+      }),
+
+      // 5. Mobile numbers updated (total count of residents with mobile updates)
+      prisma.updateLog.groupBy({
+        by: ['residentId'],
+        where: {
+          fieldUpdated: { in: ['citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber'] },
+          resident: baseWhere,
+        },
+      }).then(result => result.length),
+
+      // 6. Mobile numbers updated today
+      prisma.updateLog.groupBy({
+        by: ['residentId'],
+        where: {
+          fieldUpdated: { in: ['citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber'] },
+          updateTimestamp: { gte: startOfToday },
+          resident: baseWhere,
+        },
+      }).then(result => result.length),
+
+      // 7. Health IDs in original data (residents with health ID but no update logs)
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(DISTINCT r.resident_id) as count
+        FROM residents r
+        LEFT JOIN update_logs ul ON r.resident_id = ul.resident_id
+          AND ul.field_updated IN ('health_id', 'healthId', 'citizen_health_id', 'citizenHealthId')
+        WHERE r.mandal_name = ${mandalName}
+          AND r.name NOT LIKE 'UNKNOWN_NAME_%'
+          AND r.health_id IS NOT NULL
+          AND r.health_id != 'N/A'
+          AND r.health_id != '0'
+          AND r.health_id != ''
+          AND ul.id IS NULL
+      `.then(result => Number(result[0]?.count || 0)),
+
+      // 8. Health IDs updated (total count of residents with health ID updates)
+      prisma.updateLog.groupBy({
+        by: ['residentId'],
+        where: {
+          fieldUpdated: { in: ['health_id', 'healthId', 'citizen_health_id', 'citizenHealthId'] },
+          resident: baseWhere,
+        },
+      }).then(result => result.length),
+
+      // 9. Health IDs updated today
+      prisma.updateLog.groupBy({
+        by: ['residentId'],
+        where: {
+          fieldUpdated: { in: ['health_id', 'healthId', 'citizen_health_id', 'citizenHealthId'] },
+          updateTimestamp: { gte: startOfToday },
+          resident: baseWhere,
+        },
+      }).then(result => result.length),
+
+      // 10. Recent mobile updates (last 6 hours)
+      prisma.updateLog.count({
+        where: {
+          fieldUpdated: { in: ['citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber'] },
+          updateTimestamp: { gte: sixHoursAgo },
+          resident: baseWhere,
+        },
+      }),
+
+      // 11. Recent health ID updates (last 6 hours)
+      prisma.updateLog.count({
+        where: {
+          fieldUpdated: { in: ['health_id', 'healthId', 'citizen_health_id', 'citizenHealthId'] },
           updateTimestamp: { gte: sixHoursAgo },
           resident: baseWhere,
         },
@@ -387,6 +465,13 @@ export async function GET() {
         mobileCompletionRate,
         healthIdCompletionRate,
         recentUpdatesCount,
+        mobileUpdatesCount,
+        mobileUpdatesToday,
+        healthIdOriginalCount,
+        healthIdUpdatesCount,
+        healthIdUpdatesToday,
+        recentMobileUpdatesCount,
+        recentHealthIdUpdatesCount,
       },
       secretariatStatistics,
       secretariatCompletion: secretariatCompletionFormatted,
