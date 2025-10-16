@@ -14,12 +14,12 @@ async function testPanchayatLayout() {
   console.log('='.repeat(80))
 
   try {
-    // Test 1: Verify Panchayat Secretary user exists
-    console.log('\n📋 Test 1: Verifying Panchayat Secretary User')
+    // Test 1: Verify Mandal Officer user exists
+    console.log('\n📋 Test 1: Verifying Mandal Officer User')
     console.log('-'.repeat(80))
-    
+
     const user = await prisma.user.findUnique({
-      where: { username: 'ps_chittoor' },
+      where: { username: 'mo_chittoor' },
       select: {
         id: true,
         username: true,
@@ -31,7 +31,7 @@ async function testPanchayatLayout() {
     })
 
     if (!user) {
-      console.log('❌ FAILED: User ps_chittoor not found')
+      console.log('❌ FAILED: User mo_chittoor not found')
       return
     }
 
@@ -59,16 +59,16 @@ async function testPanchayatLayout() {
     
     const fs = require('fs')
     const path = require('path')
-    const dashboardPath = path.join(process.cwd(), 'src/app/(dashboard)/panchayat/page.tsx')
-    
+    const dashboardPath = path.join(process.cwd(), 'src/app/(dashboard)/mandal-officer/page.tsx')
+
     if (!fs.existsSync(dashboardPath)) {
-      console.log('❌ FAILED: Panchayat dashboard route does not exist')
+      console.log('❌ FAILED: Mandal Officer dashboard route does not exist')
       console.log(`   Expected path: ${dashboardPath}`)
       return
     }
-    
-    console.log('✅ PASSED: Panchayat dashboard route exists')
-    console.log(`   Path: /panchayat`)
+
+    console.log('✅ PASSED: Mandal Officer dashboard route exists')
+    console.log(`   Path: /mandal-officer`)
 
     // Test 4: Verify DashboardLayout component is imported
     console.log('\n📋 Test 4: Verifying DashboardLayout Import')
@@ -115,21 +115,21 @@ async function testPanchayatLayout() {
     const sidebarPath = path.join(process.cwd(), 'src/components/layout/Sidebar.tsx')
     const sidebarContent = fs.readFileSync(sidebarPath, 'utf-8')
     
-    const hasPanchayatDashboard = sidebarContent.includes('href: "/panchayat"')
-    const hasPanchayatOfficers = sidebarContent.includes('href: "/panchayat/officers"')
-    const hasPanchayatRole = sidebarContent.includes('roles: ["PANCHAYAT_SECRETARY"]')
-    
-    if (!hasPanchayatDashboard || !hasPanchayatOfficers || !hasPanchayatRole) {
-      console.log('❌ FAILED: Sidebar missing PANCHAYAT_SECRETARY menu items')
-      console.log(`   Dashboard link: ${hasPanchayatDashboard ? '✅' : '❌'}`)
-      console.log(`   Officers link: ${hasPanchayatOfficers ? '✅' : '❌'}`)
-      console.log(`   Role filter: ${hasPanchayatRole ? '✅' : '❌'}`)
+    const hasMandalOfficerDashboard = sidebarContent.includes('href: "/mandal-officer"')
+    const hasMandalOfficerOfficers = sidebarContent.includes('href: "/mandal-officer/officers"')
+    const hasMandalOfficerRole = sidebarContent.includes('roles: ["PANCHAYAT_SECRETARY"]')
+
+    if (!hasMandalOfficerDashboard || !hasMandalOfficerOfficers || !hasMandalOfficerRole) {
+      console.log('❌ FAILED: Sidebar missing PANCHAYAT_SECRETARY (Mandal Officer) menu items')
+      console.log(`   Dashboard link: ${hasMandalOfficerDashboard ? '✅' : '❌'}`)
+      console.log(`   Officers link: ${hasMandalOfficerOfficers ? '✅' : '❌'}`)
+      console.log(`   Role filter: ${hasMandalOfficerRole ? '✅' : '❌'}`)
       return
     }
-    
-    console.log('✅ PASSED: Sidebar has PANCHAYAT_SECRETARY menu items')
-    console.log('   - Dashboard (/panchayat)')
-    console.log('   - Field Officers (/panchayat/officers)')
+
+    console.log('✅ PASSED: Sidebar has PANCHAYAT_SECRETARY (Mandal Officer) menu items')
+    console.log('   - Dashboard (/mandal-officer)')
+    console.log('   - Field Officers (/mandal-officer/officers)')
 
     // Test 8: Verify Header component exists
     console.log('\n📋 Test 8: Verifying Header Component')
@@ -149,19 +149,19 @@ async function testPanchayatLayout() {
     console.log('✅ ALL TESTS PASSED!')
     console.log('='.repeat(80))
     console.log('\n📝 Summary:')
-    console.log('   ✅ Panchayat Secretary user exists and is active')
-    console.log('   ✅ Dashboard route exists (/panchayat)')
+    console.log('   ✅ Mandal Officer user exists and is active')
+    console.log('   ✅ Dashboard route exists (/mandal-officer)')
     console.log('   ✅ DashboardLayout component imported and configured')
-    console.log('   ✅ DashboardLayout supports PANCHAYAT_SECRETARY role')
-    console.log('   ✅ Sidebar has PANCHAYAT_SECRETARY menu items')
+    console.log('   ✅ DashboardLayout supports PANCHAYAT_SECRETARY (Mandal Officer) role')
+    console.log('   ✅ Sidebar has PANCHAYAT_SECRETARY (Mandal Officer) menu items')
     console.log('   ✅ Header component exists')
     console.log('\n🎯 Expected Layout Components:')
     console.log('   1. Header: Application title, user info, logout button')
     console.log('   2. Sidebar: Dashboard and Field Officers navigation')
-    console.log('   3. Main Content: Panchayat Secretary dashboard analytics')
+    console.log('   3. Main Content: Mandal Officer dashboard analytics')
     console.log('\n🚀 To Test in Browser:')
-    console.log('   1. Login with: ps_chittoor / Panchayat@123')
-    console.log('   2. Navigate to: /panchayat')
+    console.log('   1. Login with: mo_chittoor / MandalOfficer@123')
+    console.log('   2. Navigate to: /mandal-officer')
     console.log('   3. Verify: Header and sidebar are visible')
     console.log('   4. Test: Click sidebar menu items')
     console.log('   5. Test: Click logout button in header')

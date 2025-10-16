@@ -1,7 +1,7 @@
 /**
- * Test Script: Panchayat Secretary Login Flow
- * 
- * This script tests the Panchayat Secretary login functionality
+ * Test Script: Mandal Officer Login Flow
+ *
+ * This script tests the Mandal Officer login functionality
  * to ensure proper authentication and role-based routing.
  */
 
@@ -11,16 +11,16 @@ import bcrypt from 'bcryptjs'
 const prisma = new PrismaClient()
 
 async function testPanchayatLogin() {
-  console.log('🧪 Testing Panchayat Secretary Login Flow\n')
+  console.log('🧪 Testing Mandal Officer Login Flow\n')
   console.log('='.repeat(80))
 
   try {
     // Test 1: Check if user exists
     console.log('\n📋 Test 1: Checking User Existence')
     console.log('-'.repeat(80))
-    
+
     const user = await prisma.user.findUnique({
-      where: { username: 'ps_chittoor' },
+      where: { username: 'mo_chittoor' },
       select: {
         id: true,
         username: true,
@@ -34,7 +34,7 @@ async function testPanchayatLogin() {
     })
 
     if (!user) {
-      console.log('❌ FAILED: User ps_chittoor not found')
+      console.log('❌ FAILED: User mo_chittoor not found')
       return
     }
 
@@ -112,14 +112,14 @@ async function testPanchayatLogin() {
     console.log('='.repeat(80))
     console.log('\n📝 Summary:')
     console.log('   ✅ User exists and is active')
-    console.log('   ✅ Role is PANCHAYAT_SECRETARY')
-    console.log('   ✅ Password is correct (Panchayat@123)')
-    console.log('   ✅ Dashboard route exists (/panchayat)')
+    console.log('   ✅ Role is PANCHAYAT_SECRETARY (Mandal Officer)')
+    console.log('   ✅ Password is correct (MandalOfficer@123)')
+    console.log('   ✅ Dashboard route exists (/mandal-officer)')
     console.log('\n🎯 Expected Login Flow:')
-    console.log('   1. User enters: ps_chittoor / Panchayat@123')
+    console.log('   1. User enters: mo_chittoor / MandalOfficer@123')
     console.log('   2. Authentication succeeds')
     console.log('   3. Session created with role: PANCHAYAT_SECRETARY')
-    console.log('   4. User redirected to: /panchayat')
+    console.log('   4. User redirected to: /mandal-officer')
     console.log('\n💡 If login still fails, check:')
     console.log('   - Browser console for errors')
     console.log('   - Network tab for failed API calls')

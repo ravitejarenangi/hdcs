@@ -11,7 +11,7 @@ interface MandalInfo {
 }
 
 async function createPanchayatSecretaries() {
-  console.log("🔐 Creating Panchayat Secretary User Accounts\n")
+  console.log("🔐 Creating Mandal Officer User Accounts\n")
   console.log("=" .repeat(80))
 
   try {
@@ -90,7 +90,7 @@ async function createPanchayatSecretaries() {
 
     // Step 2: Create users
     console.log("=" .repeat(80))
-    console.log("👥 Step 2: Creating Panchayat Secretary Accounts...\n")
+    console.log("👥 Step 2: Creating Mandal Officer Accounts...\n")
 
     const password = "Welcome@123"
     const hashedPassword = await bcrypt.hash(password, 10)
@@ -104,8 +104,8 @@ async function createPanchayatSecretaries() {
     }> = []
 
     for (const mandal of mandals) {
-      const username = `ps_${mandal.preferredCode}`
-      const fullName = `PS ${mandal.mandalName}`
+      const username = `mo_${mandal.preferredCode}`
+      const fullName = `MO ${mandal.mandalName}`
 
       try {
         // Check if user already exists
@@ -213,7 +213,7 @@ Sample Login Credentials:
       console.log("=" .repeat(80))
       console.log(`
 The following mandals have multiple codes in the database.
-The Panchayat Secretary will have access to ALL residents in their mandal,
+The Mandal Officer will have access to ALL residents in their mandal,
 regardless of which code is assigned to the resident.
 
 `)
@@ -230,7 +230,7 @@ regardless of which code is assigned to the resident.
     }
 
     console.log("\n" + "=".repeat(80))
-    console.log("✅ PANCHAYAT SECRETARY ACCOUNT CREATION COMPLETE!")
+    console.log("✅ MANDAL OFFICER ACCOUNT CREATION COMPLETE!")
     console.log("=" .repeat(80))
   } catch (error) {
     console.error("❌ Fatal Error:", error)

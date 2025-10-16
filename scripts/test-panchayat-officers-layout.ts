@@ -20,16 +20,16 @@ async function testOfficersPageLayout() {
     
     const fs = require('fs')
     const path = require('path')
-    const officersPagePath = path.join(process.cwd(), 'src/app/(dashboard)/panchayat/officers/page.tsx')
-    
+    const officersPagePath = path.join(process.cwd(), 'src/app/(dashboard)/mandal-officer/officers/page.tsx')
+
     if (!fs.existsSync(officersPagePath)) {
       console.log('❌ FAILED: Field Officers page does not exist')
       console.log(`   Expected path: ${officersPagePath}`)
       return
     }
-    
+
     console.log('✅ PASSED: Field Officers page exists')
-    console.log(`   Path: /panchayat/officers`)
+    console.log(`   Path: /mandal-officer/officers`)
 
     // Test 2: Verify DashboardLayout component is imported
     console.log('\n📋 Test 2: Verifying DashboardLayout Import')
@@ -132,25 +132,25 @@ async function testOfficersPageLayout() {
     console.log('\n📋 Test 8: Verifying API Endpoint')
     console.log('-'.repeat(80))
     
-    const apiPath = path.join(process.cwd(), 'src/app/api/panchayat/officers/route.ts')
-    
+    const apiPath = path.join(process.cwd(), 'src/app/api/mandal-officer/officers/route.ts')
+
     if (!fs.existsSync(apiPath)) {
       console.log('❌ FAILED: API endpoint does not exist')
       console.log(`   Expected path: ${apiPath}`)
       return
     }
-    
+
     console.log('✅ PASSED: API endpoint exists')
-    console.log('   Endpoint: /api/panchayat/officers')
+    console.log('   Endpoint: /api/mandal-officer/officers')
 
     // Summary
     console.log('\n' + '='.repeat(80))
     console.log('✅ ALL TESTS PASSED!')
     console.log('='.repeat(80))
     console.log('\n📝 Summary:')
-    console.log('   ✅ Field Officers page exists (/panchayat/officers)')
+    console.log('   ✅ Field Officers page exists (/mandal-officer/officers)')
     console.log('   ✅ DashboardLayout component imported and configured')
-    console.log('   ✅ PANCHAYAT_SECRETARY role properly set')
+    console.log('   ✅ PANCHAYAT_SECRETARY (Mandal Officer) role properly set')
     console.log('   ✅ Loading state with Loader2 icon')
     console.log('   ✅ Old custom layout removed')
     console.log('   ✅ JSX structure is correct')
@@ -161,11 +161,11 @@ async function testOfficersPageLayout() {
     console.log('   2. Sidebar: Dashboard and Field Officers navigation')
     console.log('   3. Main Content: Field Officers management interface')
     console.log('\n📊 Sidebar Navigation:')
-    console.log('   - Dashboard (/panchayat) - Not highlighted')
-    console.log('   - Field Officers (/panchayat/officers) - Highlighted as active')
+    console.log('   - Dashboard (/mandal-officer) - Not highlighted')
+    console.log('   - Field Officers (/mandal-officer/officers) - Highlighted as active')
     console.log('\n🚀 To Test in Browser:')
-    console.log('   1. Login with: ps_chittoor / Panchayat@123')
-    console.log('   2. Navigate to: /panchayat/officers')
+    console.log('   1. Login with: mo_chittoor / MandalOfficer@123')
+    console.log('   2. Navigate to: /mandal-officer/officers')
     console.log('   3. Verify: Header and sidebar are visible')
     console.log('   4. Verify: "Field Officers" menu item is highlighted')
     console.log('   5. Test: Click "Dashboard" to navigate back')

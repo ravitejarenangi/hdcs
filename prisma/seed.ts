@@ -22,14 +22,14 @@ async function main() {
 
   console.log('✅ Created admin user:', admin.username)
 
-  // Create panchayat secretary user
-  const panchayatSecretaryPasswordHash = await bcrypt.hash('Panchayat@123', 12)
-  const panchayatSecretary = await prisma.user.upsert({
-    where: { username: 'ps_chittoor' },
+  // Create mandal officer user (formerly panchayat secretary)
+  const mandalOfficerPasswordHash = await bcrypt.hash('MandalOfficer@123', 12)
+  const mandalOfficer = await prisma.user.upsert({
+    where: { username: 'mo_chittoor' },
     update: {},
     create: {
-      username: 'ps_chittoor',
-      passwordHash: panchayatSecretaryPasswordHash,
+      username: 'mo_chittoor',
+      passwordHash: mandalOfficerPasswordHash,
       fullName: 'Rajesh Kumar',
       role: 'PANCHAYAT_SECRETARY',
       mobileNumber: '9876543210',
@@ -39,7 +39,7 @@ async function main() {
     },
   })
 
-  console.log('✅ Created panchayat secretary user:', panchayatSecretary.username)
+  console.log('✅ Created mandal officer user:', mandalOfficer.username)
 
   // Create field officer users
   const fieldOfficers = [
