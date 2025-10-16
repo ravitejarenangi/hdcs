@@ -367,7 +367,7 @@ export default function PanchayatDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-green-600 bg-clip-text text-transparent">
-                Panchayat Secretary Dashboard
+                Mandal Officer Dashboard
               </h1>
               <p className="text-gray-600 mt-1 flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
