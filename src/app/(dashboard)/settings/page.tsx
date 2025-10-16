@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
+import { getRoleDisplayName } from "@/lib/roles"
 import {
   User,
   Mail,
@@ -341,7 +342,7 @@ export default function SettingsPage() {
                     variant="default"
                     className="bg-gradient-to-r from-orange-500 to-green-600"
                   >
-                    {profileData.role.replace("_", " ")}
+                    {getRoleDisplayName(profileData.role as "ADMIN" | "PANCHAYAT_SECRETARY" | "FIELD_OFFICER")}
                   </Badge>
                 </div>
               </div>
