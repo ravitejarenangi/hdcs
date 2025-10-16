@@ -67,6 +67,10 @@ export async function GET() {
     const sixHoursAgo = new Date()
     sixHoursAgo.setHours(sixHoursAgo.getHours() - 6)
 
+    // Start of today (midnight)
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+
     const [
       totalResidents,
       residentsWithMobile,
