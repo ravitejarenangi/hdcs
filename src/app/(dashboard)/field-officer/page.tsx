@@ -355,7 +355,7 @@ export default function FieldOfficerDashboard() {
     }
   }
 
-  const handleAdvancedSearch = async (page = 1) => {
+  const handleAdvancedSearch = async (page = 1, limit?: number) => {
     if (!selectedMandal && !selectedSecretariat && !selectedPhc) {
       setAdvancedError("Please select at least one filter")
       toast.error("Validation Error", {
@@ -373,7 +373,8 @@ export default function FieldOfficerDashboard() {
       if (selectedSecretariat) params.append("secretariat", selectedSecretariat)
       if (selectedPhc) params.append("phc", selectedPhc)
       params.append("page", page.toString())
-      params.append("limit", pageSize.toString())
+      // Use the provided limit or fall back to pageSize state
+      params.append("limit", (limit !== undefined ? limit : pageSize).toString())
 
       const response = await fetch(`/api/residents/search?${params.toString()}`)
       const data = await response.json()
@@ -412,9 +413,9 @@ export default function FieldOfficerDashboard() {
 
     // If text search is active, re-run text search with new page size
     if (textSearchQuery && textSearchQuery.trim().length >= 2) {
-      performTextSearch(textSearchQuery, 1)
+      performTextSearch(textSearchQuery, 1, newSize)
     } else {
-      handleAdvancedSearch(1)
+      handleAdvancedSearch(1, newSize)
     }
   }
 
@@ -435,7 +436,7 @@ export default function FieldOfficerDashboard() {
   // Real-time text search with debouncing
   // If Advanced Filter is active, search is scoped to those filters (mandal, secretariat, PHC)
   // Otherwise, search the entire database (with role-based access control)
-  const performTextSearch = useCallback(async (searchQuery: string, page = 1) => {
+  const performTextSearch = useCallback(async (searchQuery: string, page = 1, limit?: number) => {
     if (!searchQuery || searchQuery.trim().length < 4) {
       setTextSearchResult(null)
       setTextSearchError("")
@@ -450,7 +451,8 @@ export default function FieldOfficerDashboard() {
         mode: "text",
         q: searchQuery.trim(),
         page: page.toString(),
-        limit: pageSize.toString(),
+        // Use the provided limit or fall back to pageSize state
+        limit: (limit !== undefined ? limit : pageSize).toString(),
       })
 
       // If Advanced Filter is active, add location filters to scope the search
@@ -1103,6 +1105,7 @@ export default function FieldOfficerDashboard() {
                           <SelectItem value="25">25</SelectItem>
                           <SelectItem value="50">50</SelectItem>
                           <SelectItem value="100">100</SelectItem>
+                          <SelectItem value="999999">All</SelectItem>
                         </SelectContent>
                       </Select>
                       <span className="text-xs md:text-sm text-gray-600 whitespace-nowrap">per page</span>
@@ -1140,6 +1143,12 @@ export default function FieldOfficerDashboard() {
                       if (tableSearchTerm) {
                         return `Showing ${totalOnPage} of ${totalAll} residents (filtered)`
                       }
+
+                      // Handle "All" option (pageSize = 999999)
+                      if (pageSize >= 999999) {
+                        return `Showing all ${totalAll} results`
+                      }
+
                       return `Showing ${((currentPage - 1) * pageSize) + 1} to ${Math.min(currentPage * pageSize, totalAll)} of ${totalAll} results`
                     })()}
                   </div>
@@ -1190,7 +1199,8 @@ export default function FieldOfficerDashboard() {
                   {/* Pagination Controls */}
                   {(() => {
                     const currentResult = getCurrentSearchResult()
-                    if (!currentResult || currentResult.pagination.totalPages <= 1) return null
+                    // Hide pagination if showing all results or only one page
+                    if (!currentResult || currentResult.pagination.totalPages <= 1 || pageSize >= 999999) return null
 
                     const isTextSearch = textSearchQuery && textSearchQuery.trim().length >= 2
                     const isSearching = isTextSearch ? isTextSearching : isAdvancedSearching
