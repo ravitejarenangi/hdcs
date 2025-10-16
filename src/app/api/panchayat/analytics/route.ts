@@ -147,39 +147,79 @@ export async function GET() {
         },
       }),
 
-      // 6. Secretariat completion statistics
+      // 6. Secretariat completion statistics with update counts
       prisma.$queryRaw<
         Array<{
           secName: string
           totalResidents: bigint
           withMobile: bigint
           withHealthId: bigint
+          mobileUpdatesCount: bigint
+          mobileUpdatesToday: bigint
+          healthIdOriginal: bigint
+          healthIdUpdatesCount: bigint
+          healthIdUpdatesToday: bigint
         }>
       >`
         SELECT
-          sec_name as secName,
-          COUNT(*) as totalResidents,
+          r.sec_name as secName,
+          COUNT(DISTINCT r.id) as totalResidents,
           SUM(CASE
-            WHEN mobile_number IS NOT NULL
-              AND mobile_number != 'N/A'
-              AND mobile_number != '0'
-              AND mobile_number != ''
+            WHEN r.mobile_number IS NOT NULL
+              AND r.mobile_number != 'N/A'
+              AND r.mobile_number != '0'
+              AND r.mobile_number != ''
             THEN 1
             ELSE 0
           END) as withMobile,
           SUM(CASE
-            WHEN health_id IS NOT NULL
-              AND health_id != 'N/A'
-              AND health_id != '0'
-              AND health_id != ''
+            WHEN r.health_id IS NOT NULL
+              AND r.health_id != 'N/A'
+              AND r.health_id != '0'
+              AND r.health_id != ''
             THEN 1
             ELSE 0
-          END) as withHealthId
-        FROM residents
-        WHERE mandal_name = ${mandalName}
-          AND sec_name IS NOT NULL
-          AND name NOT LIKE 'UNKNOWN_NAME_%'
-        GROUP BY sec_name
+          END) as withHealthId,
+          COUNT(DISTINCT CASE
+            WHEN ul_mobile.id IS NOT NULL
+            THEN r.resident_id
+            ELSE NULL
+          END) as mobileUpdatesCount,
+          COUNT(DISTINCT CASE
+            WHEN ul_mobile.id IS NOT NULL
+              AND DATE(ul_mobile.update_timestamp) = CURDATE()
+            THEN r.resident_id
+            ELSE NULL
+          END) as mobileUpdatesToday,
+          SUM(CASE
+            WHEN r.health_id IS NOT NULL
+              AND r.health_id != 'N/A'
+              AND r.health_id != '0'
+              AND r.health_id != ''
+              AND ul_health.id IS NULL
+            THEN 1
+            ELSE 0
+          END) as healthIdOriginal,
+          COUNT(DISTINCT CASE
+            WHEN ul_health.id IS NOT NULL
+            THEN r.resident_id
+            ELSE NULL
+          END) as healthIdUpdatesCount,
+          COUNT(DISTINCT CASE
+            WHEN ul_health.id IS NOT NULL
+              AND DATE(ul_health.update_timestamp) = CURDATE()
+            THEN r.resident_id
+            ELSE NULL
+          END) as healthIdUpdatesToday
+        FROM residents r
+        LEFT JOIN update_logs ul_mobile ON r.resident_id = ul_mobile.resident_id
+          AND ul_mobile.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+        LEFT JOIN update_logs ul_health ON r.resident_id = ul_health.resident_id
+          AND ul_health.field_updated IN ('health_id', 'healthId', 'citizen_health_id', 'citizenHealthId')
+        WHERE r.mandal_name = ${mandalName}
+          AND r.sec_name IS NOT NULL
+          AND r.name NOT LIKE 'UNKNOWN_NAME_%'
+        GROUP BY r.sec_name
         ORDER BY totalResidents DESC
       `,
     ])
@@ -196,6 +236,11 @@ export async function GET() {
       totalResidents: Number(stat.totalResidents),
       withMobile: Number(stat.withMobile),
       withHealthId: Number(stat.withHealthId),
+      mobileUpdatesCount: Number(stat.mobileUpdatesCount),
+      mobileUpdatesToday: Number(stat.mobileUpdatesToday),
+      healthIdOriginal: Number(stat.healthIdOriginal),
+      healthIdUpdatesCount: Number(stat.healthIdUpdatesCount),
+      healthIdUpdatesToday: Number(stat.healthIdUpdatesToday),
       mobileCompletionRate:
         Number(stat.totalResidents) > 0
           ? Math.round((Number(stat.withMobile) / Number(stat.totalResidents)) * 100)

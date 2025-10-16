@@ -29,7 +29,6 @@ interface ResidentToDelete {
   mobileNumber: string | null
   healthId: string | null
   gender: string | null
-  dob: Date | null
   _count?: {
     updateLogs: number
   }
@@ -48,12 +47,12 @@ async function main() {
     console.log(`   Total residents in database: ${totalResidents.toLocaleString()}`)
 
     // Fetch residents to delete with update log counts
+    // Note: MySQL doesn't support mode: 'insensitive', so we use OR conditions
     const residentsToDelete = await prisma.resident.findMany({
       where: {
-        mandalName: {
-          in: MANDALS_TO_DELETE,
-          mode: 'insensitive',
-        },
+        OR: MANDALS_TO_DELETE.map(mandal => ({
+          mandalName: mandal,
+        })),
       },
       select: {
         id: true,
@@ -64,7 +63,6 @@ async function main() {
         mobileNumber: true,
         healthId: true,
         gender: true,
-        dob: true,
         _count: {
           select: {
             updateLogs: true,

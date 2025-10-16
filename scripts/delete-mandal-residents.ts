@@ -63,12 +63,12 @@ async function main() {
     const totalResidents = await prisma.resident.count()
 
     // Fetch residents to delete
+    // Note: MySQL doesn't support mode: 'insensitive', so we use OR conditions
     const residentsToDelete = await prisma.resident.findMany({
       where: {
-        mandalName: {
-          in: MANDALS_TO_DELETE,
-          mode: 'insensitive',
-        },
+        OR: MANDALS_TO_DELETE.map(mandal => ({
+          mandalName: mandal,
+        })),
       },
       select: {
         id: true,

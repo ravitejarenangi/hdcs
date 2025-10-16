@@ -39,6 +39,11 @@ interface Analytics {
     totalResidents: number
     withMobile: number
     withHealthId: number
+    mobileUpdatesCount: number
+    mobileUpdatesToday: number
+    healthIdOriginal: number
+    healthIdUpdatesCount: number
+    healthIdUpdatesToday: number
     mobileCompletionRate: number
     healthIdCompletionRate: number
   }>
@@ -69,7 +74,7 @@ interface Analytics {
 
 // Removed unused COLORS constant
 
-type SortColumn = "secretariat" | "total" | "mobile" | "healthId" | "avgQuality"
+type SortColumn = "secretariat" | "total" | "mobile" | "healthId" | "avgQuality" | "mobileUpdates" | "mobileToday" | "healthIdOriginal" | "healthIdUpdates" | "healthIdToday"
 type SortDirection = "asc" | "desc" | null
 
 export default function PanchayatDashboard() {
@@ -149,6 +154,26 @@ export default function PanchayatDashboard() {
         case "avgQuality":
           aValue = (a.mobileCompletionRate + a.healthIdCompletionRate) / 2
           bValue = (b.mobileCompletionRate + b.healthIdCompletionRate) / 2
+          break
+        case "mobileUpdates":
+          aValue = a.mobileUpdatesCount
+          bValue = b.mobileUpdatesCount
+          break
+        case "mobileToday":
+          aValue = a.mobileUpdatesToday
+          bValue = b.mobileUpdatesToday
+          break
+        case "healthIdOriginal":
+          aValue = a.healthIdOriginal
+          bValue = b.healthIdOriginal
+          break
+        case "healthIdUpdates":
+          aValue = a.healthIdUpdatesCount
+          bValue = b.healthIdUpdatesCount
+          break
+        case "healthIdToday":
+          aValue = a.healthIdUpdatesToday
+          bValue = b.healthIdUpdatesToday
           break
         default:
           return 0
@@ -421,6 +446,51 @@ export default function PanchayatDashboard() {
                     </th>
                     <th
                       className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("mobileUpdates")}
+                    >
+                      <div className="flex items-center justify-end">
+                        Mobile Updated
+                        <SortIcon column="mobileUpdates" />
+                      </div>
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("mobileToday")}
+                    >
+                      <div className="flex items-center justify-end">
+                        Mobile Today
+                        <SortIcon column="mobileToday" />
+                      </div>
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("healthIdOriginal")}
+                    >
+                      <div className="flex items-center justify-end">
+                        Health ID Original
+                        <SortIcon column="healthIdOriginal" />
+                      </div>
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("healthIdUpdates")}
+                    >
+                      <div className="flex items-center justify-end">
+                        Health ID Updated
+                        <SortIcon column="healthIdUpdates" />
+                      </div>
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort("healthIdToday")}
+                    >
+                      <div className="flex items-center justify-end">
+                        Health ID Today
+                        <SortIcon column="healthIdToday" />
+                      </div>
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold cursor-pointer hover:bg-gray-100 transition-colors"
                       onClick={() => handleSort("avgQuality")}
                     >
                       <div className="flex items-center justify-end">
@@ -466,6 +536,31 @@ export default function PanchayatDashboard() {
                           </span>
                         </td>
                         <td className="p-3 text-right">
+                          <span className="text-blue-600 font-medium">
+                            {sec.mobileUpdatesCount.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <span className="text-green-600 font-medium">
+                            {sec.mobileUpdatesToday.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <span className="text-purple-600 font-medium">
+                            {sec.healthIdOriginal.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <span className="text-blue-600 font-medium">
+                            {sec.healthIdUpdatesCount.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <span className="text-green-600 font-medium">
+                            {sec.healthIdUpdatesToday.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
                           <span
                             className={`font-semibold ${
                               avgQuality >= 80
@@ -481,6 +576,45 @@ export default function PanchayatDashboard() {
                       </tr>
                     )
                   })}
+                  {/* Totals Row */}
+                  {analytics && analytics.secretariatCompletion.length > 0 && (
+                    <tr className="border-t-2 border-gray-300 bg-blue-50 font-bold">
+                      <td className="p-3 font-bold text-gray-900">TOTAL</td>
+                      <td className="p-3 text-right text-gray-900">
+                        {analytics.secretariatCompletion
+                          .reduce((sum, sec) => sum + sec.totalResidents, 0)
+                          .toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right text-gray-600">-</td>
+                      <td className="p-3 text-right text-gray-600">-</td>
+                      <td className="p-3 text-right text-blue-700">
+                        {analytics.secretariatCompletion
+                          .reduce((sum, sec) => sum + sec.mobileUpdatesCount, 0)
+                          .toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right text-green-700">
+                        {analytics.secretariatCompletion
+                          .reduce((sum, sec) => sum + sec.mobileUpdatesToday, 0)
+                          .toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right text-purple-700">
+                        {analytics.secretariatCompletion
+                          .reduce((sum, sec) => sum + sec.healthIdOriginal, 0)
+                          .toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right text-blue-700">
+                        {analytics.secretariatCompletion
+                          .reduce((sum, sec) => sum + sec.healthIdUpdatesCount, 0)
+                          .toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right text-green-700">
+                        {analytics.secretariatCompletion
+                          .reduce((sum, sec) => sum + sec.healthIdUpdatesToday, 0)
+                          .toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right text-gray-600">-</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
