@@ -160,7 +160,9 @@ export async function GET(request: NextRequest) {
 
       // Validate pagination parameters
       const validatedPage = Math.max(1, page)
-      const validatedLimit = Math.min(Math.max(1, limit), 100) // Max 100 per page
+      // Allow unlimited results when limit is very large (e.g., "All" option = 999999)
+      // Otherwise cap at 100 per page for normal pagination
+      const validatedLimit = limit >= 999999 ? limit : Math.min(Math.max(1, limit), 100)
       const skip = (validatedPage - 1) * validatedLimit
 
       // Get total count
@@ -317,7 +319,9 @@ export async function GET(request: NextRequest) {
 
       // Validate pagination parameters
       const validatedPage = Math.max(1, page)
-      const validatedLimit = Math.min(Math.max(1, limit), 100) // Max 100 per page
+      // Allow unlimited results when limit is very large (e.g., "All" option = 999999)
+      // Otherwise cap at 100 per page for normal pagination
+      const validatedLimit = limit >= 999999 ? limit : Math.min(Math.max(1, limit), 100)
       const skip = (validatedPage - 1) * validatedLimit
 
       // Get total count
