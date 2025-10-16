@@ -491,7 +491,7 @@ export function ExportFilterDialog({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Health ID</Label>
+                <Label>ABHA ID</Label>
                 <Select
                   value={filters.healthIdStatus}
                   onValueChange={(value: "all" | "with" | "without") =>
@@ -503,8 +503,8 @@ export function ExportFilterDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Records</SelectItem>
-                    <SelectItem value="with">With Health ID</SelectItem>
-                    <SelectItem value="without">Without Health ID</SelectItem>
+                    <SelectItem value="with">With ABHA ID</SelectItem>
+                    <SelectItem value="without">Without ABHA ID</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

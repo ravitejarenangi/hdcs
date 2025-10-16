@@ -126,7 +126,7 @@ export function HouseholdMemberCard({
           </div>
         ) : (
           <>
-            {/* Display Mobile and Health ID */}
+            {/* Display Mobile and ABHA ID */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm pt-3 border-t">
               <div>
                 <div className="text-gray-600 font-medium flex items-center gap-1">
@@ -140,7 +140,7 @@ export function HouseholdMemberCard({
               <div>
                 <div className="text-gray-600 font-medium flex items-center gap-1">
                   <CreditCard className="h-3 w-3 text-blue-600" />
-                  Health ID
+                  ABHA ID
                 </div>
                 <div className="font-medium font-mono text-sm">
                   {member.healthId ? formatHealthId(member.healthId) : <span className="text-gray-400">Not set</span>}

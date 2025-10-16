@@ -44,7 +44,7 @@ function isValidMobilePattern(mobile: string): boolean {
   return true
 }
 
-// Helper functions for Health ID formatting
+// Helper functions for ABHA ID formatting
 function formatHealthId(healthId: string): string {
   // Remove all non-digit characters
   const digits = healthId.replace(/\D/g, '')
@@ -81,9 +81,9 @@ const updateSchema = z.object({
     .string()
     .refine(
       (val) => !val || isValidHealthIdFormat(val),
-      "Health ID must be 14 digits (format: XX-XXXX-XXXX-XXXX)"
+      "ABHA ID must be 14 digits (format: XX-XXXX-XXXX-XXXX)"
     )
-    // Health IDs are stored WITH dashes in database to match existing data
+    // ABHA IDs are stored WITH dashes in database to match existing data
     .optional()
     .or(z.literal("")),
 })
@@ -277,11 +277,11 @@ export function ResidentUpdateForm({
               )}
             </div>
 
-            {/* Health ID Field */}
+            {/* ABHA ID Field */}
             <div className="space-y-2">
               <Label htmlFor={`health-${resident.residentId}`} className="flex items-center gap-2">
                 <CreditCard className="h-4 w-4 text-purple-600" />
-                Health ID (ABHA)
+                ABHA ID
               </Label>
               <Controller
                 name="healthId"

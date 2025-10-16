@@ -120,9 +120,9 @@ export function HouseholdMemberEditForm({
       }
     }
 
-    // Validate health ID
+    // Validate ABHA ID
     if (healthId && !isValidHealthIdFormat(healthId)) {
-      newErrors.healthId = "Health ID must be 14 digits (format: XX-XXXX-XXXX-XXXX)"
+      newErrors.healthId = "ABHA ID must be 14 digits (format: XX-XXXX-XXXX-XXXX)"
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -178,11 +178,11 @@ export function HouseholdMemberEditForm({
         )}
       </div>
 
-      {/* Health ID */}
+      {/* ABHA ID */}
       <div className="space-y-2">
         <Label htmlFor={`health-${member.residentId}`} className="flex items-center gap-2">
           <CreditCard className="h-4 w-4 text-blue-600" />
-          Health ID
+          ABHA ID
         </Label>
         <Input
           id={`health-${member.residentId}`}

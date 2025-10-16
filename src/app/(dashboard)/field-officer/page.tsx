@@ -1025,12 +1025,12 @@ export default function FieldOfficerDashboard() {
                           </CardContent>
                         </Card>
 
-                        {/* Health IDs Updated */}
+                        {/* ABHA IDs Updated */}
                         <Card>
                           <CardContent className="pt-6">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="text-sm font-medium text-gray-600">Health ID Updated</p>
+                                <p className="text-sm font-medium text-gray-600">ABHA ID Updated</p>
                                 <p className="text-3xl font-bold text-purple-600">{secretariatStats.healthIdUpdated}</p>
                                 <p className="text-xs text-gray-500 mt-1">
                                   {secretariatStats.total > 0 ? Math.round((secretariatStats.healthIdUpdated / secretariatStats.total) * 100) : 0}% complete

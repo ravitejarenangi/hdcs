@@ -230,12 +230,12 @@ export default function PanchayatDashboard() {
       "Secretariat",
       "Total Residents",
       "Mobile %",
-      "Health ID %",
+      "ABHA ID %",
       "Mobile Updated",
       "Mobile Today",
-      "Health ID Original",
-      "Health ID Updated",
-      "Health ID Today",
+      "ABHA ID Original",
+      "ABHA ID Updated",
+      "ABHA ID Today",
       "Avg Quality %"
     ]
 
@@ -306,12 +306,12 @@ export default function PanchayatDashboard() {
       "Secretariat": sec.secretariatName,
       "Total Residents": sec.totalResidents,
       "Mobile %": sec.mobileCompletionRate,
-      "Health ID %": sec.healthIdCompletionRate,
+      "ABHA ID %": sec.healthIdCompletionRate,
       "Mobile Updated": sec.mobileUpdatesCount,
       "Mobile Today": sec.mobileUpdatesToday,
-      "Health ID Original": sec.healthIdOriginal,
-      "Health ID Updated": sec.healthIdUpdatesCount,
-      "Health ID Today": sec.healthIdUpdatesToday,
+      "ABHA ID Original": sec.healthIdOriginal,
+      "ABHA ID Updated": sec.healthIdUpdatesCount,
+      "ABHA ID Today": sec.healthIdUpdatesToday,
       "Avg Quality %": Math.round((sec.mobileCompletionRate + sec.healthIdCompletionRate) / 2)
     }))
 
@@ -320,12 +320,12 @@ export default function PanchayatDashboard() {
       "Secretariat": "TOTAL",
       "Total Residents": totalResidents,
       "Mobile %": avgMobileRate,
-      "Health ID %": avgHealthIdRate,
+      "ABHA ID %": avgHealthIdRate,
       "Mobile Updated": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.mobileUpdatesCount, 0),
       "Mobile Today": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.mobileUpdatesToday, 0),
-      "Health ID Original": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdOriginal, 0),
-      "Health ID Updated": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdUpdatesCount, 0),
-      "Health ID Today": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdUpdatesToday, 0),
+      "ABHA ID Original": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdOriginal, 0),
+      "ABHA ID Updated": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdUpdatesCount, 0),
+      "ABHA ID Today": analytics.secretariatCompletion.reduce((sum, sec) => sum + sec.healthIdUpdatesToday, 0),
       "Avg Quality %": avgQuality
     })
 
@@ -433,12 +433,12 @@ export default function PanchayatDashboard() {
             </CardContent>
           </Card>
 
-          {/* Health ID Completion */}
+          {/* ABHA ID Completion */}
           <Card className="border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-white">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <UserCheck className="h-5 w-5 text-orange-600" />
-                Health IDs
+                ABHA IDs
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -456,7 +456,7 @@ export default function PanchayatDashboard() {
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-600">Health ID Updated:</span>
+                  <span className="text-xs text-gray-600">ABHA ID Updated:</span>
                   <span className="text-sm font-semibold text-blue-600">
                     {analytics.overview.healthIdUpdatesCount.toLocaleString()}
                   </span>
@@ -511,7 +511,7 @@ export default function PanchayatDashboard() {
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-600">Health IDs:</span>
+                  <span className="text-xs text-gray-600">ABHA IDs:</span>
                   <span className="text-sm font-semibold text-orange-600">
                     {analytics.overview.recentHealthIdUpdatesCount.toLocaleString()}
                   </span>
@@ -588,7 +588,7 @@ export default function PanchayatDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle>Secretariat-wise Data Completion</CardTitle>
-                <CardDescription>Mobile number and Health ID completion rates</CardDescription>
+                <CardDescription>Mobile number and ABHA ID completion rates</CardDescription>
               </div>
               <div className="flex gap-2">
                 <Button
@@ -649,7 +649,7 @@ export default function PanchayatDashboard() {
                       onClick={() => handleSort("healthId")}
                     >
                       <div className="flex items-center justify-end">
-                        Health ID %
+                        ABHA ID %
                         <SortIcon column="healthId" />
                       </div>
                     </th>
@@ -676,7 +676,7 @@ export default function PanchayatDashboard() {
                       onClick={() => handleSort("healthIdOriginal")}
                     >
                       <div className="flex items-center justify-end">
-                        Health ID Original
+                        ABHA ID Original
                         <SortIcon column="healthIdOriginal" />
                       </div>
                     </th>
@@ -685,7 +685,7 @@ export default function PanchayatDashboard() {
                       onClick={() => handleSort("healthIdUpdates")}
                     >
                       <div className="flex items-center justify-end">
-                        Health ID Updated
+                        ABHA ID Updated
                         <SortIcon column="healthIdUpdates" />
                       </div>
                     </th>
@@ -694,7 +694,7 @@ export default function PanchayatDashboard() {
                       onClick={() => handleSort("healthIdToday")}
                     >
                       <div className="flex items-center justify-end">
-                        Health ID Today
+                        ABHA ID Today
                         <SortIcon column="healthIdToday" />
                       </div>
                     </th>
