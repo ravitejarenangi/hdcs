@@ -361,7 +361,7 @@ export default function OfficersPage() {
                               <Badge className="bg-purple-100 text-purple-700">Admin</Badge>
                             )}
                             {officer.role === "PANCHAYAT_SECRETARY" && (
-                              <Badge className="bg-blue-100 text-blue-700">Panchayat Sec</Badge>
+                              <Badge className="bg-blue-100 text-blue-700">Mandal Officer</Badge>
                             )}
                             {officer.role === "FIELD_OFFICER" && (
                               <Badge className="bg-green-100 text-green-700">Field Officer</Badge>
