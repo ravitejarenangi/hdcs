@@ -30,7 +30,7 @@ async function main() {
     create: {
       username: 'mo_chittoor',
       passwordHash: mandalOfficerPasswordHash,
-      fullName: 'Rajesh Kumar',
+      fullName: 'MO CHITTOOR',
       role: 'PANCHAYAT_SECRETARY',
       mobileNumber: '9876543210',
       mandalName: 'CHITTOOR',
