@@ -38,6 +38,20 @@ function isValidHealthIdFormat(healthId: string): boolean {
   return digits.length === 14 && /^\d{14}$/.test(digits)
 }
 
+// Helper function to normalize Health ID to standard format with dashes
+function normalizeHealthId(healthId: string): string {
+  // Remove all non-digit characters
+  const digits = healthId.replace(/\D/g, '')
+
+  // Format as XX-XXXX-XXXX-XXXX (14 digits)
+  if (digits.length === 14) {
+    return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 10)}-${digits.slice(10, 14)}`
+  }
+
+  // Return as-is if not 14 digits (shouldn't happen due to validation)
+  return healthId
+}
+
 // Validation schema for update requests
 const updateSchema = z.object({
   citizenMobile: z
@@ -140,7 +154,8 @@ export async function PUT(
     }
 
     if (validatedData.healthId !== undefined) {
-      updateData.healthId = validatedData.healthId
+      // Normalize healthId to always store with dashes (XX-XXXX-XXXX-XXXX format)
+      updateData.healthId = validatedData.healthId ? normalizeHealthId(validatedData.healthId) : null
     }
 
     // Update resident
@@ -169,18 +184,21 @@ export async function PUT(
       })
     }
 
-    if (
-      validatedData.healthId !== undefined &&
-      validatedData.healthId !== currentResident.healthId
-    ) {
-      changes.push({
-        residentId,
-        userId: session.user.id,
-        fieldUpdated: "health_id",
-        oldValue: currentResident.healthId || "null",
-        newValue: validatedData.healthId || "null",
-        ipAddress,
-      })
+    if (validatedData.healthId !== undefined) {
+      // Normalize both old and new values for comparison to avoid false positives
+      const normalizedNewHealthId = validatedData.healthId ? normalizeHealthId(validatedData.healthId) : null
+      const normalizedOldHealthId = currentResident.healthId ? normalizeHealthId(currentResident.healthId) : null
+
+      if (normalizedNewHealthId !== normalizedOldHealthId) {
+        changes.push({
+          residentId,
+          userId: session.user.id,
+          fieldUpdated: "health_id",
+          oldValue: normalizedOldHealthId || "null",
+          newValue: normalizedNewHealthId || "null",
+          ipAddress,
+        })
+      }
     }
 
     // Create update logs if there are changes
