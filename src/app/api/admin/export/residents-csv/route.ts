@@ -1,20 +1,41 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+
+// Helper function to convert async iterator to ReadableStream
+function iteratorToStream(iterator: AsyncGenerator<Uint8Array>) {
+  return new ReadableStream({
+    async pull(controller) {
+      const { value, done } = await iterator.next()
+
+      if (done) {
+        controller.close()
+      } else {
+        controller.enqueue(value)
+      }
+    },
+  })
+}
 
 export async function GET(request: NextRequest) {
   try {
     // Authentication check
     const session = await auth()
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" }
+      })
     }
 
     // Authorization check - Admin or Super Admin only
     if (session.user.role !== "ADMIN" && session.user.role !== "SUPER_ADMIN") {
-      return NextResponse.json(
-        { error: "Access denied. Admin privileges required." },
-        { status: 403 }
+      return new Response(
+        JSON.stringify({ error: "Access denied. Admin privileges required." }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" }
+        }
       )
     }
 
@@ -37,7 +58,7 @@ export async function GET(request: NextRequest) {
     }
     const whereClause = whereConditions.join(" AND ")
 
-    // First, get the total count to check if we need batch processing
+    // Get the total count
     const countResult = await prisma.$queryRawUnsafe<[{ count: bigint }]>(`
       SELECT COUNT(*) as count
       FROM residents
@@ -47,23 +68,33 @@ export async function GET(request: NextRequest) {
 
     console.log(`CSV Export: Total records to export: ${totalCount}`)
 
-    // If more than 50,000 records, use batch processing to avoid memory issues
-    const BATCH_SIZE = 50000
-    const useBatchProcessing = totalCount > BATCH_SIZE
+    // Log export activity
+    console.log("CSV Export Activity:", {
+      userId: session.user.id,
+      recordCount: totalCount,
+      filters: { mandalName, secName, phcName },
+      timestamp: new Date().toISOString(),
+      ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
+    })
 
-    let csvContent = ""
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+    const filename = `residents_export_${timestamp}.csv`
 
-    if (useBatchProcessing) {
-      console.log(`Using batch processing with batch size: ${BATCH_SIZE}`)
+    // Create async generator for streaming CSV data
+    async function* generateCSVStream() {
+      const encoder = new TextEncoder()
+      const BATCH_SIZE = 10000 // Reduced batch size for better streaming
 
-      // Generate CSV header
-      csvContent = getCSVHeaders() + "\n"
+      // Yield CSV header first
+      yield encoder.encode(getCSVHeaders() + "\n")
 
-      // Process in batches
+      // Process data in batches
       const totalBatches = Math.ceil(totalCount / BATCH_SIZE)
+
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const offset = batchIndex * BATCH_SIZE
-        console.log(`Processing batch ${batchIndex + 1}/${totalBatches} (offset: ${offset})`)
+        console.log(`Streaming batch ${batchIndex + 1}/${totalBatches} (offset: ${offset})`)
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const batchResidents = await prisma.$queryRawUnsafe<any[]>(`
@@ -111,80 +142,23 @@ export async function GET(request: NextRequest) {
 
         // Generate CSV rows for this batch
         const batchRows = generateCSVRows(batchResidents)
-        csvContent += batchRows.join("\n")
+        const csvChunk = batchRows.join("\n") + (batchIndex < totalBatches - 1 ? "\n" : "")
 
-        // Add newline if not the last batch
-        if (batchIndex < totalBatches - 1) {
-          csvContent += "\n"
-        }
+        // Yield this batch as a chunk
+        yield encoder.encode(csvChunk)
 
-        console.log(`Batch ${batchIndex + 1}/${totalBatches} completed (${batchResidents.length} records)`)
+        console.log(`Batch ${batchIndex + 1}/${totalBatches} streamed (${batchResidents.length} records)`)
       }
-    } else {
-      // For smaller datasets, fetch all at once
-      console.log(`Fetching all ${totalCount} records at once`)
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const residents = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT
-          id,
-          resident_id,
-          uid,
-          hh_id,
-          name,
-          CASE
-            WHEN dob IS NULL OR dob = '0000-00-00' OR DAY(dob) = 0 OR MONTH(dob) = 0
-            THEN NULL
-            ELSE dob
-          END as dob,
-          gender,
-          mobile_number,
-          health_id,
-          dist_name,
-          mandal_name,
-          mandal_code,
-          sec_name,
-          sec_code,
-          rural_urban,
-          cluster_name,
-          qualification,
-          occupation,
-          caste,
-          sub_caste,
-          caste_category,
-          caste_category_detailed,
-          hof_member,
-          door_number,
-          address_ekyc,
-          address_hh,
-          citizen_mobile,
-          age,
-          phc_name,
-          created_at,
-          updated_at
-        FROM residents
-        WHERE ${whereClause}
-        ORDER BY mandal_name ASC, sec_name ASC, name ASC
-      `)
-
-      csvContent = generateCSV(residents)
+      console.log(`CSV Export completed: ${totalCount} records streamed`)
     }
 
-    // Log export activity to console
-    console.log("CSV Export Activity:", {
-      userId: session.user.id,
-      recordCount: totalCount,
-      filters: { mandalName, secName, phcName },
-      timestamp: new Date().toISOString(),
-      ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
-    })
+    // Create the stream from the async generator
+    const iterator = generateCSVStream()
+    const stream = iteratorToStream(iterator)
 
-    // Generate filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
-    const filename = `residents_export_${timestamp}.csv`
-
-    // Return CSV file as downloadable response
-    return new NextResponse(csvContent, {
+    // Return streaming response
+    return new Response(stream, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
@@ -198,12 +172,15 @@ export async function GET(request: NextRequest) {
     console.error("CSV export error:", error)
     console.error("Error details:", error instanceof Error ? error.message : String(error))
     console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace")
-    return NextResponse.json(
-      {
+    return new Response(
+      JSON.stringify({
         error: "Failed to generate CSV export",
         details: error instanceof Error ? error.message : String(error)
-      },
-      { status: 500 }
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      }
     )
   }
 }
@@ -334,14 +311,6 @@ function generateCSVRows(residents: any[]): string[] {
 
     return rowData.join(",")
   })
-}
-
-// Helper function to generate complete CSV content (header + rows)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function generateCSV(residents: any[]): string {
-  const headerRow = getCSVHeaders()
-  const dataRows = generateCSVRows(residents)
-  return [headerRow, ...dataRows].join("\n")
 }
 
 // Helper function to escape CSV values
