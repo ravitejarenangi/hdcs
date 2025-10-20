@@ -24,75 +24,156 @@ export async function GET(request: NextRequest) {
     const secName = searchParams.get("secName")
     const phcName = searchParams.get("phcName")
 
-    // Build where clause based on filters
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const whereClause: any = {}
+    // Build WHERE clause for SQL query
+    const whereConditions: string[] = ["1=1"]
     if (mandalName && mandalName !== "all") {
-      whereClause.mandalName = mandalName
+      whereConditions.push(`mandal_name = '${mandalName.replace(/'/g, "''")}'`)
     }
     if (secName && secName !== "all") {
-      whereClause.secName = secName
+      whereConditions.push(`sec_name = '${secName.replace(/'/g, "''")}'`)
     }
     if (phcName && phcName !== "all") {
-      whereClause.phcName = phcName
+      whereConditions.push(`phc_name = '${phcName.replace(/'/g, "''")}'`)
+    }
+    const whereClause = whereConditions.join(" AND ")
+
+    // First, get the total count to check if we need batch processing
+    const countResult = await prisma.$queryRawUnsafe<[{ count: bigint }]>(`
+      SELECT COUNT(*) as count
+      FROM residents
+      WHERE ${whereClause}
+    `)
+    const totalCount = Number(countResult[0].count)
+
+    console.log(`CSV Export: Total records to export: ${totalCount}`)
+
+    // If more than 50,000 records, use batch processing to avoid memory issues
+    const BATCH_SIZE = 50000
+    const useBatchProcessing = totalCount > BATCH_SIZE
+
+    let csvContent = ""
+
+    if (useBatchProcessing) {
+      console.log(`Using batch processing with batch size: ${BATCH_SIZE}`)
+
+      // Generate CSV header
+      csvContent = getCSVHeaders() + "\n"
+
+      // Process in batches
+      const totalBatches = Math.ceil(totalCount / BATCH_SIZE)
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const offset = batchIndex * BATCH_SIZE
+        console.log(`Processing batch ${batchIndex + 1}/${totalBatches} (offset: ${offset})`)
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const batchResidents = await prisma.$queryRawUnsafe<any[]>(`
+          SELECT
+            id,
+            resident_id,
+            uid,
+            hh_id,
+            name,
+            CASE
+              WHEN dob IS NULL OR dob = '0000-00-00' OR DAY(dob) = 0 OR MONTH(dob) = 0
+              THEN NULL
+              ELSE dob
+            END as dob,
+            gender,
+            mobile_number,
+            health_id,
+            dist_name,
+            mandal_name,
+            mandal_code,
+            sec_name,
+            sec_code,
+            rural_urban,
+            cluster_name,
+            qualification,
+            occupation,
+            caste,
+            sub_caste,
+            caste_category,
+            caste_category_detailed,
+            hof_member,
+            door_number,
+            address_ekyc,
+            address_hh,
+            citizen_mobile,
+            age,
+            phc_name,
+            created_at,
+            updated_at
+          FROM residents
+          WHERE ${whereClause}
+          ORDER BY mandal_name ASC, sec_name ASC, name ASC
+          LIMIT ${BATCH_SIZE} OFFSET ${offset}
+        `)
+
+        // Generate CSV rows for this batch
+        const batchRows = generateCSVRows(batchResidents)
+        csvContent += batchRows.join("\n")
+
+        // Add newline if not the last batch
+        if (batchIndex < totalBatches - 1) {
+          csvContent += "\n"
+        }
+
+        console.log(`Batch ${batchIndex + 1}/${totalBatches} completed (${batchResidents.length} records)`)
+      }
+    } else {
+      // For smaller datasets, fetch all at once
+      console.log(`Fetching all ${totalCount} records at once`)
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const residents = await prisma.$queryRawUnsafe<any[]>(`
+        SELECT
+          id,
+          resident_id,
+          uid,
+          hh_id,
+          name,
+          CASE
+            WHEN dob IS NULL OR dob = '0000-00-00' OR DAY(dob) = 0 OR MONTH(dob) = 0
+            THEN NULL
+            ELSE dob
+          END as dob,
+          gender,
+          mobile_number,
+          health_id,
+          dist_name,
+          mandal_name,
+          mandal_code,
+          sec_name,
+          sec_code,
+          rural_urban,
+          cluster_name,
+          qualification,
+          occupation,
+          caste,
+          sub_caste,
+          caste_category,
+          caste_category_detailed,
+          hof_member,
+          door_number,
+          address_ekyc,
+          address_hh,
+          citizen_mobile,
+          age,
+          phc_name,
+          created_at,
+          updated_at
+        FROM residents
+        WHERE ${whereClause}
+        ORDER BY mandal_name ASC, sec_name ASC, name ASC
+      `)
+
+      csvContent = generateCSV(residents)
     }
 
-    // Fetch residents data using raw query to handle invalid dates
-    // Prisma cannot handle dates with day/month = 0 (e.g., 0000-00-00, 2000-00-00)
-    // Select ALL columns from residents table
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const residents = await prisma.$queryRawUnsafe<any[]>(`
-      SELECT
-        id,
-        resident_id,
-        uid,
-        hh_id,
-        name,
-        CASE
-          WHEN dob IS NULL OR dob = '0000-00-00' OR DAY(dob) = 0 OR MONTH(dob) = 0
-          THEN NULL
-          ELSE dob
-        END as dob,
-        gender,
-        mobile_number,
-        health_id,
-        dist_name,
-        mandal_name,
-        mandal_code,
-        sec_name,
-        sec_code,
-        rural_urban,
-        cluster_name,
-        qualification,
-        occupation,
-        caste,
-        sub_caste,
-        caste_category,
-        caste_category_detailed,
-        hof_member,
-        door_number,
-        address_ekyc,
-        address_hh,
-        citizen_mobile,
-        age,
-        phc_name,
-        created_at,
-        updated_at
-      FROM residents
-      WHERE 1=1
-        ${mandalName && mandalName !== "all" ? `AND mandal_name = '${mandalName.replace(/'/g, "''")}'` : ""}
-        ${secName && secName !== "all" ? `AND sec_name = '${secName.replace(/'/g, "''")}'` : ""}
-        ${phcName && phcName !== "all" ? `AND phc_name = '${phcName.replace(/'/g, "''")}'` : ""}
-      ORDER BY mandal_name ASC, sec_name ASC, name ASC
-    `)
-
-    // Generate CSV content
-    const csvContent = generateCSV(residents)
-
-    // Log export activity to console (UpdateLog requires valid residentId foreign key)
+    // Log export activity to console
     console.log("CSV Export Activity:", {
       userId: session.user.id,
-      recordCount: residents.length,
+      recordCount: totalCount,
       filters: { mandalName, secName, phcName },
       timestamp: new Date().toISOString(),
       ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
@@ -127,10 +208,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Helper function to generate CSV content
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function generateCSV(residents: any[]): string {
-  // Define CSV headers - ALL columns from residents table
+// Helper function to get CSV headers
+function getCSVHeaders(): string {
   const headers = [
     "id",
     "resident_id",
@@ -164,12 +243,13 @@ function generateCSV(residents: any[]): string {
     "created_at",
     "updated_at",
   ]
+  return headers.join(",")
+}
 
-  // Create CSV header row
-  const headerRow = headers.join(",")
-
-  // Create CSV data rows
-  const dataRows = residents.map((resident) => {
+// Helper function to generate CSV rows from residents data
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function generateCSVRows(residents: any[]): string[] {
+  return residents.map((resident) => {
     // Calculate age from date of birth (handle invalid dates)
     let age = null
     let dob = ""
@@ -254,8 +334,13 @@ function generateCSV(residents: any[]): string {
 
     return rowData.join(",")
   })
+}
 
-  // Combine header and data rows
+// Helper function to generate complete CSV content (header + rows)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function generateCSV(residents: any[]): string {
+  const headerRow = getCSVHeaders()
+  const dataRows = generateCSVRows(residents)
   return [headerRow, ...dataRows].join("\n")
 }
 
