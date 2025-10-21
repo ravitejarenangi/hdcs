@@ -846,7 +846,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-gray-500">Updated</p>
                       </div>
                     </div>
-                    <p className="text-2xl font-bold text-green-600">
+                    <p className="text-lg md:text-2xl font-bold text-green-600">
                       {(analytics.overview.mobileUpdatesCount || 0).toLocaleString()}
                     </p>
                   </div>
@@ -862,7 +862,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-gray-500">Updated</p>
                       </div>
                     </div>
-                    <p className="text-2xl font-bold text-blue-600">
+                    <p className="text-lg md:text-2xl font-bold text-blue-600">
                       {(analytics.overview.healthIdUpdatesCount || 0).toLocaleString()}
                     </p>
                   </div>
