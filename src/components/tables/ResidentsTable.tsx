@@ -331,7 +331,7 @@ export function ResidentsTable({
           description: data.error || "Please try again",
         })
       }
-    } catch (error) {
+    } catch {
       toast.error("Network error", {
         description: "Please check your connection and try again",
       })

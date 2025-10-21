@@ -5,7 +5,7 @@ import { getProgress } from "@/lib/export-progress"
 // Server-Sent Events (SSE) endpoint for real-time export progress updates
 export async function GET(
   request: NextRequest,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
     // Authentication check
@@ -28,7 +28,8 @@ export async function GET(
       )
     }
 
-    const { sessionId } = params
+    // Await params in Next.js 15+
+    const { sessionId } = await params
 
     // Create a ReadableStream for Server-Sent Events
     const encoder = new TextEncoder()

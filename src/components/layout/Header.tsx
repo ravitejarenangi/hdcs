@@ -13,7 +13,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Menu, LogOut, User, Settings, Shield } from "lucide-react"
-import Image from "next/image"
 
 interface HeaderProps {
   onMenuClick: () => void
