@@ -158,6 +158,7 @@ export async function GET(request: NextRequest) {
     const stream = iteratorToStream(iterator)
 
     // Return streaming response
+    // Note: We intentionally do NOT set Content-Length to enable true streaming
     return new Response(stream, {
       status: 200,
       headers: {
@@ -166,6 +167,8 @@ export async function GET(request: NextRequest) {
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "Pragma": "no-cache",
         "Expires": "0",
+        "X-Content-Type-Options": "nosniff",
+        // Transfer-Encoding: chunked is automatically set by the browser for streaming responses
       },
     })
   } catch (error) {

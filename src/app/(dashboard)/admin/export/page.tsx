@@ -198,46 +198,40 @@ export default function AdminExportPage() {
   const handleExportCsv = async () => {
     try {
       setIsExportingCsv(true)
-      toast.info("Generating CSV export...")
+      toast.info("Starting CSV export... Download will begin shortly.")
 
       const params = new URLSearchParams()
       if (selectedMandal !== "all") params.append("mandalName", selectedMandal)
       if (selectedSecretariat !== "all") params.append("secName", selectedSecretariat)
       if (selectedPhc !== "all") params.append("phcName", selectedPhc)
 
-      const response = await fetch(`/api/admin/export/residents-csv?${params.toString()}`)
+      // Use direct navigation to trigger immediate browser download
+      // This allows the browser to show download progress immediately as data streams
+      const downloadUrl = `/api/admin/export/residents-csv?${params.toString()}`
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to export data")
-      }
-
-      // Get the CSV content
-      const blob = await response.blob()
-
-      // Create download link
-      const url = window.URL.createObjectURL(blob)
+      // Create a hidden link and click it to trigger download
       const a = document.createElement("a")
-      a.href = url
-
-      // Get filename from Content-Disposition header or use default
-      const contentDisposition = response.headers.get("Content-Disposition")
-      const filenameMatch = contentDisposition?.match(/filename="(.+)"/)
-      const filename = filenameMatch
-        ? filenameMatch[1]
-        : `residents_export_${new Date().toISOString().slice(0, 10)}.csv`
-
-      a.download = filename
+      a.href = downloadUrl
+      a.style.display = "none"
       document.body.appendChild(a)
       a.click()
-      document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
 
-      toast.success(`Successfully exported ${recordCount} records to CSV!`)
+      // Clean up after a short delay
+      setTimeout(() => {
+        document.body.removeChild(a)
+      }, 100)
+
+      toast.success(`CSV export started! (${recordCount?.toLocaleString()} records)`, {
+        description: "Your download should begin shortly. Large exports may take several minutes."
+      })
+
+      // Keep the loading state for a few seconds to prevent rapid re-clicks
+      setTimeout(() => {
+        setIsExportingCsv(false)
+      }, 3000)
     } catch (error) {
       console.error("CSV export error:", error)
       toast.error(error instanceof Error ? error.message : "Failed to export CSV")
-    } finally {
       setIsExportingCsv(false)
     }
   }
