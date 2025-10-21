@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { Download, FileDown, FileSpreadsheet, Loader2, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
+import { ExportProgressModal } from "@/components/export-progress-modal"
 
 interface FilterOptions {
   mandals: string[]
@@ -37,6 +38,10 @@ export default function AdminExportPage() {
   const [isLoadingCount, setIsLoadingCount] = useState(false)
   const [isExportingCsv, setIsExportingCsv] = useState(false)
   const [isExportingExcel, setIsExportingExcel] = useState(false)
+
+  // Progress modal state
+  const [showProgressModal, setShowProgressModal] = useState(false)
+  const [exportSessionId, setExportSessionId] = useState<string | null>(null)
 
   // Fetch filter options on mount
   useEffect(() => {
@@ -198,12 +203,17 @@ export default function AdminExportPage() {
   const handleExportCsv = async () => {
     try {
       setIsExportingCsv(true)
-      toast.info("Starting CSV export... Download will begin shortly.")
+
+      // Generate a unique session ID for progress tracking
+      const sessionId = `export-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      setExportSessionId(sessionId)
+      setShowProgressModal(true)
 
       const params = new URLSearchParams()
       if (selectedMandal !== "all") params.append("mandalName", selectedMandal)
       if (selectedSecretariat !== "all") params.append("secName", selectedSecretariat)
       if (selectedPhc !== "all") params.append("phcName", selectedPhc)
+      params.append("sessionId", sessionId) // Add session ID for progress tracking
 
       // Use direct navigation to trigger immediate browser download
       // This allows the browser to show download progress immediately as data streams
@@ -222,17 +232,18 @@ export default function AdminExportPage() {
       }, 100)
 
       toast.success(`CSV export started! (${recordCount?.toLocaleString()} records)`, {
-        description: "Your download should begin shortly. Large exports may take several minutes."
+        description: "Track progress in the modal. Your download will begin shortly."
       })
 
-      // Keep the loading state for a few seconds to prevent rapid re-clicks
+      // Reset loading state after a short delay
       setTimeout(() => {
         setIsExportingCsv(false)
-      }, 3000)
+      }, 2000)
     } catch (error) {
       console.error("CSV export error:", error)
       toast.error(error instanceof Error ? error.message : "Failed to export CSV")
       setIsExportingCsv(false)
+      setShowProgressModal(false)
     }
   }
 
@@ -469,6 +480,14 @@ export default function AdminExportPage() {
         </CardContent>
       </Card>
       </div>
+
+      {/* Progress Modal */}
+      <ExportProgressModal
+        open={showProgressModal}
+        onOpenChange={setShowProgressModal}
+        sessionId={exportSessionId}
+        totalRecords={recordCount || 0}
+      />
     </DashboardLayout>
   )
 }

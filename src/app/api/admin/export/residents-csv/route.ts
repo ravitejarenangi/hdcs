@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { createProgress, updateProgress, completeProgress, errorProgress } from "@/lib/export-progress"
 
 // Helper function to convert async iterator to ReadableStream
 function iteratorToStream(iterator: AsyncGenerator<Uint8Array>) {
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
     const mandalName = searchParams.get("mandalName")
     const secName = searchParams.get("secName")
     const phcName = searchParams.get("phcName")
+    const sessionId = searchParams.get("sessionId") // Get session ID for progress tracking
 
     // Build WHERE clause for SQL query
     const whereConditions: string[] = ["1=1"]
@@ -77,6 +79,15 @@ export async function GET(request: NextRequest) {
       ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
     })
 
+    // Initialize progress tracking if sessionId is provided
+    const BATCH_SIZE = 10000
+    const totalBatches = Math.ceil(totalCount / BATCH_SIZE)
+
+    if (sessionId) {
+      createProgress(sessionId, totalCount, totalBatches)
+      console.log(`Progress tracking initialized for session: ${sessionId}`)
+    }
+
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
     const filename = `residents_export_${timestamp}.csv`
@@ -84,17 +95,33 @@ export async function GET(request: NextRequest) {
     // Create async generator for streaming CSV data
     async function* generateCSVStream() {
       const encoder = new TextEncoder()
-      const BATCH_SIZE = 10000 // Reduced batch size for better streaming
+
+      // Update progress: processing started
+      if (sessionId) {
+        updateProgress(sessionId, {
+          status: "processing",
+          message: "Starting CSV export...",
+        })
+      }
 
       // Yield CSV header first
       yield encoder.encode(getCSVHeaders() + "\n")
 
       // Process data in batches
-      const totalBatches = Math.ceil(totalCount / BATCH_SIZE)
-
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const offset = batchIndex * BATCH_SIZE
-        console.log(`Streaming batch ${batchIndex + 1}/${totalBatches} (offset: ${offset})`)
+        const currentBatch = batchIndex + 1
+
+        console.log(`Streaming batch ${currentBatch}/${totalBatches} (offset: ${offset})`)
+
+        // Update progress before fetching batch
+        if (sessionId) {
+          updateProgress(sessionId, {
+            currentBatch,
+            processedRecords: offset,
+            message: `Processing batch ${currentBatch} of ${totalBatches}...`,
+          })
+        }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const batchResidents = await prisma.$queryRawUnsafe<any[]>(`
@@ -147,10 +174,25 @@ export async function GET(request: NextRequest) {
         // Yield this batch as a chunk
         yield encoder.encode(csvChunk)
 
-        console.log(`Batch ${batchIndex + 1}/${totalBatches} streamed (${batchResidents.length} records)`)
+        // Update progress after batch is streamed
+        const processedRecords = Math.min(offset + batchResidents.length, totalCount)
+        if (sessionId) {
+          updateProgress(sessionId, {
+            currentBatch,
+            processedRecords,
+            message: `Streamed batch ${currentBatch} of ${totalBatches} (${processedRecords.toLocaleString()} / ${totalCount.toLocaleString()} records)`,
+          })
+        }
+
+        console.log(`Batch ${currentBatch}/${totalBatches} streamed (${batchResidents.length} records)`)
       }
 
       console.log(`CSV Export completed: ${totalCount} records streamed`)
+
+      // Mark progress as completed
+      if (sessionId) {
+        completeProgress(sessionId, `Export completed! ${totalCount.toLocaleString()} records exported successfully.`)
+      }
     }
 
     // Create the stream from the async generator
@@ -175,6 +217,17 @@ export async function GET(request: NextRequest) {
     console.error("CSV export error:", error)
     console.error("Error details:", error instanceof Error ? error.message : String(error))
     console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace")
+
+    // Update progress to error state if sessionId exists
+    const searchParams = request.nextUrl.searchParams
+    const sessionId = searchParams.get("sessionId")
+    if (sessionId) {
+      errorProgress(
+        sessionId,
+        `Export failed: ${error instanceof Error ? error.message : "Unknown error"}`
+      )
+    }
+
     return new Response(
       JSON.stringify({
         error: "Failed to generate CSV export",
