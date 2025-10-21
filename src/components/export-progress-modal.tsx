@@ -105,15 +105,14 @@ export function ExportProgressModal({
   }
 
   const handleClose = () => {
-    // Only allow closing if completed or errored
-    if (progress?.status === "completed" || progress?.status === "error" || error) {
-      onOpenChange(false)
-    }
+    // Allow closing at any time
+    // The download will continue in the background
+    onOpenChange(false)
   }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {progress?.status === "completed" ? (
@@ -209,19 +208,19 @@ export function ExportProgressModal({
             </div>
           )}
 
-          {/* Close Button (only when completed or errored) */}
-          {(progress?.status === "completed" || progress?.status === "error" || error) && (
-            <Button onClick={handleClose} className="w-full">
-              Close
-            </Button>
-          )}
-
           {/* Info for ongoing export */}
           {progress?.status === "processing" && (
-            <p className="text-center text-xs text-muted-foreground">
-              You can stay on this page or navigate away. The download will continue in the background.
-            </p>
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+              <p className="text-center text-sm text-blue-800">
+                You can close this dialog. The download will continue in the background.
+              </p>
+            </div>
           )}
+
+          {/* Close Button - Always available */}
+          <Button onClick={handleClose} className="w-full" variant={progress?.status === "processing" ? "outline" : "default"}>
+            {progress?.status === "processing" ? "Close (Download Continues)" : "Close"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
