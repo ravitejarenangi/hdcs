@@ -262,85 +262,53 @@ export async function GET(request: NextRequest) {
 
     XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary")
 
-    // Sheet 2: Detailed Resident Data
+    // Helper function to mask UID (show only last 4 digits)
+    const maskUID = (uid: string | null): string => {
+      if (!uid || uid.length < 4) return ""
+      const lastFour = uid.slice(-4)
+      const masked = "*".repeat(uid.length - 4) + lastFour
+      return masked
+    }
+
+    // Sheet 2: Detailed Resident Data (only 11 specified columns)
     const detailedSheetName = hasFilters ? "Filtered Data" : "Detailed Data"
     const detailedData = residents.map((resident) => ({
-      "System ID": resident.id,
+      "Mandal Name": resident.mandalName || "",
+      "Secretariat Name": resident.secName || "",
       "Resident ID": resident.residentId,
-      "UID (Aadhar)": resident.uid || "",
-      "Household ID": resident.hhId || "",
-      Name: resident.name,
-      "Date of Birth": resident.dob ? new Date(resident.dob).toLocaleDateString() : "",
-      Gender: resident.gender || "",
-      Age: resident.age?.toString() || "",
-      "Mobile Number": resident.mobileNumber || "",
-      "Citizen Mobile": resident.citizenMobile || "",
-      "Health ID": resident.healthId || "",
-      District: resident.distName || "",
-      Mandal: resident.mandalName || "",
-      "Mandal Code": resident.mandalCode || "",
-      Secretariat: resident.secName || "",
-      "Secretariat Code": resident.secCode || "",
-      "Rural/Urban": resident.ruralUrban || "",
-      PHC: resident.phcName || "",
-      Cluster: resident.clusterName || "",
-      "Door Number": resident.doorNumber || "",
+      "Health ID (ABHA ID)": resident.healthId || "",
+      "UID": maskUID(resident.uid),
+      "Mobile Number": resident.citizenMobile || "",
+      "Name": resident.name,
+      "Door No": resident.doorNumber || "",
       "Address (eKYC)": resident.addressEkyc || "",
       "Address (Household)": resident.addressHh || "",
-      Qualification: resident.qualification || "",
-      Occupation: resident.occupation || "",
-      Caste: resident.caste || "",
-      "Sub Caste": resident.subCaste || "",
-      "Caste Category": resident.casteCategory || "",
-      "Caste Category (Detailed)": resident.casteCategoryDetailed || "",
-      "Head of Family": resident.hofMember || "",
-      "Created At": resident.createdAt ? new Date(resident.createdAt).toLocaleString() : "",
-      "Updated At": resident.updatedAt ? new Date(resident.updatedAt).toLocaleString() : "",
+      "HHID": resident.hhId || "",
     }))
 
     const detailedSheet = XLSX.utils.json_to_sheet(detailedData)
 
-    // Auto-size columns (31 columns total)
+    // Auto-size columns (11 columns total)
     const detailedCols = [
-      { wch: 25 }, // System ID
+      { wch: 25 }, // Mandal Name
+      { wch: 25 }, // Secretariat Name
       { wch: 15 }, // Resident ID
-      { wch: 15 }, // UID (Aadhar)
-      { wch: 15 }, // Household ID
-      { wch: 25 }, // Name
-      { wch: 15 }, // Date of Birth
-      { wch: 10 }, // Gender
-      { wch: 8 },  // Age
+      { wch: 20 }, // Health ID (ABHA ID)
+      { wch: 18 }, // UID (masked)
       { wch: 15 }, // Mobile Number
-      { wch: 15 }, // Citizen Mobile
-      { wch: 20 }, // Health ID
-      { wch: 20 }, // District
-      { wch: 20 }, // Mandal
-      { wch: 15 }, // Mandal Code
-      { wch: 25 }, // Secretariat
-      { wch: 15 }, // Secretariat Code
-      { wch: 12 }, // Rural/Urban
-      { wch: 25 }, // PHC
-      { wch: 20 }, // Cluster
-      { wch: 15 }, // Door Number
+      { wch: 25 }, // Name
+      { wch: 15 }, // Door No
       { wch: 40 }, // Address (eKYC)
       { wch: 40 }, // Address (Household)
-      { wch: 20 }, // Qualification
-      { wch: 20 }, // Occupation
-      { wch: 15 }, // Caste
-      { wch: 15 }, // Sub Caste
-      { wch: 18 }, // Caste Category
-      { wch: 25 }, // Caste Category (Detailed)
-      { wch: 20 }, // Head of Family
-      { wch: 20 }, // Created At
-      { wch: 20 }, // Updated At
+      { wch: 15 }, // HHID
     ]
     detailedSheet["!cols"] = detailedCols
 
     // Freeze top row
     detailedSheet["!freeze"] = { xSplit: 0, ySplit: 1 }
 
-    // Add autofilter (31 columns: A to AE)
-    detailedSheet["!autofilter"] = { ref: `A1:AE${residents.length + 1}` }
+    // Add autofilter (11 columns: A to K)
+    detailedSheet["!autofilter"] = { ref: `A1:K${residents.length + 1}` }
 
     XLSX.utils.book_append_sheet(workbook, detailedSheet, detailedSheetName)
 

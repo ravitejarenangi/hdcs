@@ -152,74 +152,42 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Prepare data for CSV (all 31 fields)
+    // Helper function to mask UID (show only last 4 digits)
+    const maskUID = (uid: string | null): string => {
+      if (!uid || uid.length < 4) return ""
+      const lastFour = uid.slice(-4)
+      const masked = "*".repeat(uid.length - 4) + lastFour
+      return masked
+    }
+
+    // Prepare data for CSV (only 11 specified columns)
     const csvData = residents.map((resident) => ({
-      "System ID": resident.id,
+      "Mandal Name": resident.mandalName || "",
+      "Secretariat Name": resident.secName || "",
       "Resident ID": resident.residentId,
-      "UID (Aadhar)": resident.uid || "",
-      "Household ID": resident.hhId || "",
-      Name: resident.name,
-      "Date of Birth": resident.dob ? new Date(resident.dob).toLocaleDateString() : "",
-      Gender: resident.gender || "",
-      Age: resident.age?.toString() || "",
-      "Mobile Number": resident.mobileNumber || "",
-      "Citizen Mobile": resident.citizenMobile || "",
-      "Health ID": resident.healthId || "",
-      District: resident.distName || "",
-      Mandal: resident.mandalName || "",
-      "Mandal Code": resident.mandalCode || "",
-      Secretariat: resident.secName || "",
-      "Secretariat Code": resident.secCode || "",
-      "Rural/Urban": resident.ruralUrban || "",
-      PHC: resident.phcName || "",
-      Cluster: resident.clusterName || "",
-      "Door Number": resident.doorNumber || "",
+      "Health ID (ABHA ID)": resident.healthId || "",
+      "UID": maskUID(resident.uid),
+      "Mobile Number": resident.citizenMobile || "",
+      "Name": resident.name,
+      "Door No": resident.doorNumber || "",
       "Address (eKYC)": resident.addressEkyc || "",
       "Address (Household)": resident.addressHh || "",
-      Qualification: resident.qualification || "",
-      Occupation: resident.occupation || "",
-      Caste: resident.caste || "",
-      "Sub Caste": resident.subCaste || "",
-      "Caste Category": resident.casteCategory || "",
-      "Caste Category (Detailed)": resident.casteCategoryDetailed || "",
-      "Head of Family": resident.hofMember || "",
-      "Created At": resident.createdAt ? new Date(resident.createdAt).toLocaleString() : "",
-      "Updated At": resident.updatedAt ? new Date(resident.updatedAt).toLocaleString() : "",
+      "HHID": resident.hhId || "",
     }))
 
-    // Define headers in the order we want them (31 columns total)
+    // Define headers in the exact order required (11 columns total)
     const headers = [
-      "System ID",
+      "Mandal Name",
+      "Secretariat Name",
       "Resident ID",
-      "UID (Aadhar)",
-      "Household ID",
-      "Name",
-      "Date of Birth",
-      "Gender",
-      "Age",
+      "Health ID (ABHA ID)",
+      "UID",
       "Mobile Number",
-      "Citizen Mobile",
-      "Health ID",
-      "District",
-      "Mandal",
-      "Mandal Code",
-      "Secretariat",
-      "Secretariat Code",
-      "Rural/Urban",
-      "PHC",
-      "Cluster",
-      "Door Number",
+      "Name",
+      "Door No",
       "Address (eKYC)",
       "Address (Household)",
-      "Qualification",
-      "Occupation",
-      "Caste",
-      "Sub Caste",
-      "Caste Category",
-      "Caste Category (Detailed)",
-      "Head of Family",
-      "Created At",
-      "Updated At",
+      "HHID",
     ]
 
     // Build filter summary for CSV header comments
