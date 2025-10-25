@@ -77,6 +77,82 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Field Officer filter - filter by assigned secretariats
+    if (officersParam) {
+      const officerIds = officersParam.split(",").filter((o) => o.trim())
+      if (officerIds.length > 0) {
+        // Fetch the selected field officers and their assigned secretariats
+        const officers = await prisma.user.findMany({
+          where: {
+            id: { in: officerIds },
+            role: "FIELD_OFFICER",
+          },
+          select: {
+            assignedSecretariats: true,
+          },
+        })
+
+        // Parse and collect all secretariat assignments
+        interface SecretariatAssignment {
+          mandalName: string
+          secName: string
+        }
+
+        const allSecretariats: SecretariatAssignment[] = []
+
+        for (const officer of officers) {
+          if (officer.assignedSecretariats) {
+            try {
+              const parsed = JSON.parse(officer.assignedSecretariats)
+              if (Array.isArray(parsed)) {
+                // Filter valid secretariat objects
+                const validSecretariats = parsed.filter(
+                  (item): item is SecretariatAssignment =>
+                    typeof item === "object" &&
+                    item !== null &&
+                    typeof item.mandalName === "string" &&
+                    typeof item.secName === "string"
+                )
+                allSecretariats.push(...validSecretariats)
+              }
+            } catch (error) {
+              console.error("Failed to parse assignedSecretariats:", error)
+            }
+          }
+        }
+
+        // Build OR clause for secretariat filtering (mandalName + secName combinations)
+        if (allSecretariats.length > 0) {
+          // If mandal filter is already applied, combine with AND
+          if (whereClause.mandalName) {
+            // Filter secretariats to only include those in the selected mandals
+            const selectedMandals = Array.isArray(whereClause.mandalName.in)
+              ? whereClause.mandalName.in
+              : [whereClause.mandalName]
+
+            const filteredSecretariats = allSecretariats.filter((sec) =>
+              selectedMandals.includes(sec.mandalName)
+            )
+
+            if (filteredSecretariats.length > 0) {
+              whereClause.OR = filteredSecretariats.map((sec) => ({
+                mandalName: sec.mandalName,
+                secName: sec.secName,
+              }))
+              // Remove the mandal filter since it's now part of the OR clause
+              delete whereClause.mandalName
+            }
+          } else {
+            // No mandal filter, use all secretariats
+            whereClause.OR = allSecretariats.map((sec) => ({
+              mandalName: sec.mandalName,
+              secName: sec.secName,
+            }))
+          }
+        }
+      }
+    }
+
     // Fetch filtered data (single query to avoid connection pool exhaustion)
     const residents = await prisma.resident.findMany({
       where: whereClause,
@@ -166,6 +242,10 @@ export async function GET(request: NextRequest) {
     if (mandalsParam) {
       const mandals = mandalsParam.split(",")
       filterSummary.push(`Mandals: ${mandals.length} selected`)
+    }
+    if (officersParam) {
+      const officers = officersParam.split(",")
+      filterSummary.push(`Field Officers: ${officers.length} selected`)
     }
     if (mobileStatus !== "all" && mobileStatus) {
       filterSummary.push(`Mobile: ${mobileStatus === "with" ? "With Mobile Only" : "Without Mobile Only"}`)
