@@ -77,50 +77,49 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch filtered data
-    const [residents, totalResidents, residentsWithMobile, residentsWithHealthId] =
-      await Promise.all([
-        prisma.resident.findMany({
-          where: whereClause,
-          orderBy: { residentId: "asc" },
-          select: {
-            id: true,
-            residentId: true,
-            uid: true,
-            hhId: true,
-            name: true,
-            dob: true,
-            gender: true,
-            mobileNumber: true,
-            healthId: true,
-            distName: true,
-            mandalName: true,
-            mandalCode: true,
-            secName: true,
-            secCode: true,
-            ruralUrban: true,
-            clusterName: true,
-            qualification: true,
-            occupation: true,
-            caste: true,
-            subCaste: true,
-            casteCategory: true,
-            casteCategoryDetailed: true,
-            hofMember: true,
-            doorNumber: true,
-            addressEkyc: true,
-            addressHh: true,
-            citizenMobile: true,
-            age: true,
-            phcName: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        }),
-        prisma.resident.count({ where: whereClause }),
-        prisma.resident.count({ where: { ...whereClause, citizenMobile: { not: null } } }),
-        prisma.resident.count({ where: { ...whereClause, healthId: { not: null } } }),
-      ])
+    // Fetch filtered data (single query to avoid connection pool exhaustion)
+    const residents = await prisma.resident.findMany({
+      where: whereClause,
+      orderBy: { residentId: "asc" },
+      select: {
+        id: true,
+        residentId: true,
+        uid: true,
+        hhId: true,
+        name: true,
+        dob: true,
+        gender: true,
+        mobileNumber: true,
+        healthId: true,
+        distName: true,
+        mandalName: true,
+        mandalCode: true,
+        secName: true,
+        secCode: true,
+        ruralUrban: true,
+        clusterName: true,
+        qualification: true,
+        occupation: true,
+        caste: true,
+        subCaste: true,
+        casteCategory: true,
+        casteCategoryDetailed: true,
+        hofMember: true,
+        doorNumber: true,
+        addressEkyc: true,
+        addressHh: true,
+        citizenMobile: true,
+        age: true,
+        phcName: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
+
+    // Calculate counts from fetched data instead of separate queries
+    const totalResidents = residents.length
+    const residentsWithMobile = residents.filter((r) => r.citizenMobile !== null).length
+    const residentsWithHealthId = residents.filter((r) => r.healthId !== null).length
 
     // Calculate completion rates
     const mobileCompletionRate =
@@ -129,71 +128,30 @@ export async function GET(request: NextRequest) {
       totalResidents > 0 ? Math.round((residentsWithHealthId / totalResidents) * 100) : 0
     const dataQualityScore = Math.round((mobileCompletionRate + healthIdCompletionRate) / 2)
 
-    // Fetch mandal-wise statistics
-    const mandalStats = await prisma.$queryRaw<
-      Array<{
-        mandalName: string
-        totalResidents: bigint
-        withMobile: bigint
-        withHealthId: bigint
-      }>
-    >`
-      SELECT
+    // Calculate mandal-wise statistics from fetched data (avoid additional DB queries)
+    const mandalMap = new Map<string, { total: number; withMobile: number; withHealthId: number }>()
+
+    residents.forEach((resident) => {
+      const mandal = resident.mandalName || "Unknown"
+      const existing = mandalMap.get(mandal) || { total: 0, withMobile: 0, withHealthId: 0 }
+      existing.total++
+      if (resident.citizenMobile) existing.withMobile++
+      if (resident.healthId) existing.withHealthId++
+      mandalMap.set(mandal, existing)
+    })
+
+    const mandalCompletion = Array.from(mandalMap.entries())
+      .map(([mandalName, stats]) => ({
         mandalName,
-        COUNT(*) as totalResidents,
-        SUM(CASE WHEN citizenMobile IS NOT NULL THEN 1 ELSE 0 END) as withMobile,
-        SUM(CASE WHEN healthId IS NOT NULL THEN 1 ELSE 0 END) as withHealthId
-      FROM residents
-      WHERE mandalName IS NOT NULL
-      GROUP BY mandalName
-      ORDER BY totalResidents DESC
-    `
-
-    const mandalCompletion = mandalStats.map((stat) => ({
-      mandalName: stat.mandalName,
-      totalResidents: Number(stat.totalResidents),
-      withMobile: Number(stat.withMobile),
-      withHealthId: Number(stat.withHealthId),
-      mobileCompletionRate:
-        Number(stat.totalResidents) > 0
-          ? Math.round((Number(stat.withMobile) / Number(stat.totalResidents)) * 100)
-          : 0,
-      healthIdCompletionRate:
-        Number(stat.totalResidents) > 0
-          ? Math.round((Number(stat.withHealthId) / Number(stat.totalResidents)) * 100)
-          : 0,
-    }))
-
-    // Fetch field officer performance
-    const fieldOfficerStats = await prisma.$queryRaw<
-      Array<{
-        officerName: string
-        totalUpdates: bigint
-        last7Days: bigint
-        last30Days: bigint
-        last90Days: bigint
-      }>
-    >`
-      SELECT 
-        u.fullName as officerName,
-        COUNT(*) as totalUpdates,
-        SUM(CASE WHEN ul.updateTimestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as last7Days,
-        SUM(CASE WHEN ul.updateTimestamp >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) as last30Days,
-        SUM(CASE WHEN ul.updateTimestamp >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) as last90Days
-      FROM update_logs ul
-      INNER JOIN users u ON ul.userId = u.id
-      WHERE u.role = 'FIELD_OFFICER'
-      GROUP BY u.id, u.fullName
-      ORDER BY totalUpdates DESC
-    `
-
-    const fieldOfficerPerformance = fieldOfficerStats.map((stat) => ({
-      officerName: stat.officerName,
-      totalUpdates: Number(stat.totalUpdates),
-      last7Days: Number(stat.last7Days),
-      last30Days: Number(stat.last30Days),
-      last90Days: Number(stat.last90Days),
-    }))
+        totalResidents: stats.total,
+        withMobile: stats.withMobile,
+        withHealthId: stats.withHealthId,
+        mobileCompletionRate:
+          stats.total > 0 ? Math.round((stats.withMobile / stats.total) * 100) : 0,
+        healthIdCompletionRate:
+          stats.total > 0 ? Math.round((stats.withHealthId / stats.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.totalResidents - a.totalResidents)
 
     // Create workbook
     const workbook = XLSX.utils.book_new()
@@ -247,8 +205,7 @@ export async function GET(request: NextRequest) {
       ["Health ID Completion Rate", `${healthIdCompletionRate}%`],
       ["Overall Data Quality Score", `${dataQualityScore}%`],
       [],
-      ["Total Mandals", mandalCompletion.length.toString()],
-      ["Active Field Officers", fieldOfficerPerformance.length.toString()]
+      ["Total Mandals", mandalCompletion.length.toString()]
     )
 
     const summarySheet = XLSX.utils.aoa_to_sheet(summaryData)
@@ -343,34 +300,6 @@ export async function GET(request: NextRequest) {
     mandalSheet["!autofilter"] = { ref: `A1:G${mandalCompletion.length + 1}` }
 
     XLSX.utils.book_append_sheet(workbook, mandalSheet, "Mandal Breakdown")
-
-    // Sheet 4: Field Officer Performance
-    const officerData = fieldOfficerPerformance.map((officer) => ({
-      "Officer Name": officer.officerName,
-      "Total Updates": officer.totalUpdates,
-      "Last 7 Days": officer.last7Days,
-      "Last 30 Days": officer.last30Days,
-      "Last 90 Days": officer.last90Days,
-      "Avg per Day (30d)": (officer.last30Days / 30).toFixed(1),
-    }))
-
-    const officerSheet = XLSX.utils.json_to_sheet(officerData)
-
-    // Auto-size columns
-    officerSheet["!cols"] = [
-      { wch: 25 }, // Officer Name
-      { wch: 15 }, // Total Updates
-      { wch: 15 }, // Last 7 Days
-      { wch: 15 }, // Last 30 Days
-      { wch: 15 }, // Last 90 Days
-      { wch: 18 }, // Avg per Day
-    ]
-
-    // Freeze top row and add autofilter
-    officerSheet["!freeze"] = { xSplit: 0, ySplit: 1 }
-    officerSheet["!autofilter"] = { ref: `A1:F${fieldOfficerPerformance.length + 1}` }
-
-    XLSX.utils.book_append_sheet(workbook, officerSheet, "Field Officer Performance")
 
     // Generate Excel file
     const excelBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" })
