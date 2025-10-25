@@ -1573,68 +1573,76 @@ export default function AdminDashboard() {
                       ))}
 
                       {/* Totals Row */}
-                      {analytics.mandalHierarchy.length > 0 && (
-                        <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
-                          <td className="py-3 px-4"></td>
-                          <td className="py-3 px-4 text-indigo-900">TOTALS</td>
-                          <td className="text-right py-3 px-4 text-gray-900">
-                            {analytics.mandalHierarchy
-                              .reduce((sum, m) => sum + m.totalResidents, 0)
-                              .toLocaleString()}
-                          </td>
-                          <td className="text-right py-3 px-4">
-                            <Badge className="bg-blue-600 text-white">
-                              {analytics.mandalHierarchy.length > 0
-                                ? Math.round(
-                                    analytics.mandalHierarchy.reduce(
-                                      (sum, m) => sum + m.mobileCompletionRate,
-                                      0
-                                    ) / analytics.mandalHierarchy.length
-                                  )
-                                : 0}
-                              % avg
-                            </Badge>
-                          </td>
-                          <td className="text-right py-3 px-4">
-                            <Badge className="bg-blue-600 text-white">
-                              {analytics.mandalHierarchy.length > 0
-                                ? Math.round(
-                                    analytics.mandalHierarchy.reduce(
-                                      (sum, m) => sum + m.healthIdCompletionRate,
-                                      0
-                                    ) / analytics.mandalHierarchy.length
-                                  )
-                                : 0}
-                              % avg
-                            </Badge>
-                          </td>
-                          <td className="text-right py-3 px-4 bg-green-100 text-green-800">
-                            {analytics.mandalHierarchy
-                              .reduce((sum, m) => sum + m.mobileUpdatesAllTime, 0)
-                              .toLocaleString()}
-                          </td>
-                          <td className="text-right py-3 px-4 bg-green-100 text-green-800">
-                            {analytics.mandalHierarchy
-                              .reduce((sum, m) => sum + m.mobileUpdatesToday, 0)
-                              .toLocaleString()}
-                          </td>
-                          <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
-                            {analytics.mandalHierarchy
-                              .reduce((sum, m) => sum + m.healthIdsOriginal, 0)
-                              .toLocaleString()}
-                          </td>
-                          <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
-                            {analytics.mandalHierarchy
-                              .reduce((sum, m) => sum + m.healthIdsAddedViaUpdates, 0)
-                              .toLocaleString()}
-                          </td>
-                          <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
-                            {analytics.mandalHierarchy
-                              .reduce((sum, m) => sum + m.healthIdUpdatesToday, 0)
-                              .toLocaleString()}
-                          </td>
-                        </tr>
-                      )}
+                      {(() => {
+                        // Use the same filtering logic as getSortedMandals
+                        const mandalsForTotal = getSortedMandals()
+                        const totalLabel = expandedMandal
+                          ? `TOTAL (${expandedMandal})`
+                          : "TOTALS"
+
+                        return mandalsForTotal.length > 0 ? (
+                          <tr className="border-t-2 border-gray-400 bg-gray-100 font-bold">
+                            <td className="py-3 px-4"></td>
+                            <td className="py-3 px-4 text-indigo-900">{totalLabel}</td>
+                            <td className="text-right py-3 px-4 text-gray-900">
+                              {mandalsForTotal
+                                .reduce((sum, m) => sum + m.totalResidents, 0)
+                                .toLocaleString()}
+                            </td>
+                            <td className="text-right py-3 px-4">
+                              <Badge className="bg-blue-600 text-white">
+                                {mandalsForTotal.length > 0
+                                  ? Math.round(
+                                      mandalsForTotal.reduce(
+                                        (sum, m) => sum + m.mobileCompletionRate,
+                                        0
+                                      ) / mandalsForTotal.length
+                                    )
+                                  : 0}
+                                % avg
+                              </Badge>
+                            </td>
+                            <td className="text-right py-3 px-4">
+                              <Badge className="bg-blue-600 text-white">
+                                {mandalsForTotal.length > 0
+                                  ? Math.round(
+                                      mandalsForTotal.reduce(
+                                        (sum, m) => sum + m.healthIdCompletionRate,
+                                        0
+                                      ) / mandalsForTotal.length
+                                    )
+                                  : 0}
+                                % avg
+                              </Badge>
+                            </td>
+                            <td className="text-right py-3 px-4 bg-green-100 text-green-800">
+                              {mandalsForTotal
+                                .reduce((sum, m) => sum + m.mobileUpdatesAllTime, 0)
+                                .toLocaleString()}
+                            </td>
+                            <td className="text-right py-3 px-4 bg-green-100 text-green-800">
+                              {mandalsForTotal
+                                .reduce((sum, m) => sum + m.mobileUpdatesToday, 0)
+                                .toLocaleString()}
+                            </td>
+                            <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
+                              {mandalsForTotal
+                                .reduce((sum, m) => sum + m.healthIdsOriginal, 0)
+                                .toLocaleString()}
+                            </td>
+                            <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
+                              {mandalsForTotal
+                                .reduce((sum, m) => sum + m.healthIdsAddedViaUpdates, 0)
+                                .toLocaleString()}
+                            </td>
+                            <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
+                              {mandalsForTotal
+                                .reduce((sum, m) => sum + m.healthIdUpdatesToday, 0)
+                                .toLocaleString()}
+                            </td>
+                          </tr>
+                        ) : null
+                      })()}
                     </tbody>
                   </table>
                 </div>
