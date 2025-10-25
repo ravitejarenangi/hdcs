@@ -148,7 +148,7 @@ export default function AdminDashboard() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
-  const [expandedMandals, setExpandedMandals] = useState<Set<string>>(new Set())
+  const [expandedMandal, setExpandedMandal] = useState<string | null>(null)
 
   // Pagination state for Field Officer Performance table
   const [currentPage, setCurrentPage] = useState(1)
@@ -201,14 +201,15 @@ export default function AdminDashboard() {
   }
 
   const toggleMandal = (mandalName: string) => {
-    setExpandedMandals((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(mandalName)) {
-        newSet.delete(mandalName)
+    // Accordion behavior: only one mandal can be expanded at a time
+    setExpandedMandal((prev) => {
+      if (prev === mandalName) {
+        // Clicking the same mandal collapses it
+        return null
       } else {
-        newSet.add(mandalName)
+        // Clicking a different mandal expands it and collapses others
+        return mandalName
       }
-      return newSet
     })
   }
 
@@ -264,82 +265,155 @@ export default function AdminDashboard() {
 
     try {
       setIsExportingCsv(true)
-      toast.info("Generating CSV export...")
+
+      // Determine what to export based on expanded state
+      const isFiltered = expandedMandal !== null
+      const exportMessage = isFiltered
+        ? `Generating CSV export for ${expandedMandal}...`
+        : "Generating CSV export..."
+      toast.info(exportMessage)
 
       // Prepare CSV data
       const csvRows: string[] = []
 
-      // Header row
-      const headers = [
-        "Mandal Name",
-        "Total Residents",
-        "Mobile %",
-        "ABHA ID %",
-        "Mobile Updates (All Time)",
-        "Mobile Updates (Today)",
-        "ABHA IDs (Original)",
-        "ABHA IDs (Added)",
-        "ABHA IDs (Today)",
-      ]
+      // Header row - include Secretariat column when exporting expanded mandal
+      const headers = isFiltered
+        ? [
+            "Mandal Name",
+            "Secretariat Name",
+            "Total Residents",
+            "Mobile %",
+            "ABHA ID %",
+            "Mobile Updates (All Time)",
+            "Mobile Updates (Today)",
+            "ABHA IDs (Original)",
+            "ABHA IDs (Added)",
+            "ABHA IDs (Today)",
+          ]
+        : [
+            "Mandal Name",
+            "Total Residents",
+            "Mobile %",
+            "ABHA ID %",
+            "Mobile Updates (All Time)",
+            "Mobile Updates (Today)",
+            "ABHA IDs (Original)",
+            "ABHA IDs (Added)",
+            "ABHA IDs (Today)",
+          ]
       csvRows.push(headers.join(","))
 
-      // Data rows - Mandals only (no secretariats)
-      analytics.mandalHierarchy.forEach((mandal) => {
-        csvRows.push([
-          `"${mandal.mandalName}"`,
-          mandal.totalResidents,
-          `${mandal.mobileCompletionRate}%`,
-          `${mandal.healthIdCompletionRate}%`,
-          mandal.mobileUpdatesAllTime,
-          mandal.mobileUpdatesToday,
-          mandal.healthIdsOriginal,
-          mandal.healthIdsAddedViaUpdates,
-          mandal.healthIdUpdatesToday,
-        ].join(","))
+      // Filter mandals based on expanded state
+      const mandalsToExport = isFiltered
+        ? analytics.mandalHierarchy.filter(m => m.mandalName === expandedMandal)
+        : analytics.mandalHierarchy
+
+      // Data rows
+      mandalsToExport.forEach((mandal) => {
+        if (isFiltered) {
+          // Export mandal row with secretariat column
+          csvRows.push([
+            `"${mandal.mandalName}"`,
+            `"${mandal.mandalName} (Total)"`,
+            mandal.totalResidents,
+            `${mandal.mobileCompletionRate}%`,
+            `${mandal.healthIdCompletionRate}%`,
+            mandal.mobileUpdatesAllTime,
+            mandal.mobileUpdatesToday,
+            mandal.healthIdsOriginal,
+            mandal.healthIdsAddedViaUpdates,
+            mandal.healthIdUpdatesToday,
+          ].join(","))
+
+          // Export secretariat rows
+          mandal.secretariats.forEach((secretariat) => {
+            csvRows.push([
+              `"${mandal.mandalName}"`,
+              `"${secretariat.secName}"`,
+              secretariat.totalResidents,
+              `${secretariat.mobileCompletionRate}%`,
+              `${secretariat.healthIdCompletionRate}%`,
+              secretariat.mobileUpdatesAllTime,
+              secretariat.mobileUpdatesToday,
+              secretariat.healthIdsOriginal,
+              secretariat.healthIdsAddedViaUpdates,
+              secretariat.healthIdUpdatesToday,
+            ].join(","))
+          })
+        } else {
+          // Export mandal only (no secretariats)
+          csvRows.push([
+            `"${mandal.mandalName}"`,
+            mandal.totalResidents,
+            `${mandal.mobileCompletionRate}%`,
+            `${mandal.healthIdCompletionRate}%`,
+            mandal.mobileUpdatesAllTime,
+            mandal.mobileUpdatesToday,
+            mandal.healthIdsOriginal,
+            mandal.healthIdsAddedViaUpdates,
+            mandal.healthIdUpdatesToday,
+          ].join(","))
+        }
       })
 
       // Totals row
-      const totalResidents = analytics.mandalHierarchy.reduce((sum, m) => sum + m.totalResidents, 0)
+      const totalResidents = mandalsToExport.reduce((sum, m) => sum + m.totalResidents, 0)
       const avgMobile = Math.round(
-        analytics.mandalHierarchy.reduce((sum, m) => sum + m.mobileCompletionRate, 0) /
-          analytics.mandalHierarchy.length
+        mandalsToExport.reduce((sum, m) => sum + m.mobileCompletionRate, 0) /
+          mandalsToExport.length
       )
       const avgHealthId = Math.round(
-        analytics.mandalHierarchy.reduce((sum, m) => sum + m.healthIdCompletionRate, 0) /
-          analytics.mandalHierarchy.length
+        mandalsToExport.reduce((sum, m) => sum + m.healthIdCompletionRate, 0) /
+          mandalsToExport.length
       )
-      const totalMobileUpdatesAllTime = analytics.mandalHierarchy.reduce(
+      const totalMobileUpdatesAllTime = mandalsToExport.reduce(
         (sum, m) => sum + m.mobileUpdatesAllTime,
         0
       )
-      const totalMobileUpdatesToday = analytics.mandalHierarchy.reduce(
+      const totalMobileUpdatesToday = mandalsToExport.reduce(
         (sum, m) => sum + m.mobileUpdatesToday,
         0
       )
-      const totalHealthIdsOriginal = analytics.mandalHierarchy.reduce(
+      const totalHealthIdsOriginal = mandalsToExport.reduce(
         (sum, m) => sum + m.healthIdsOriginal,
         0
       )
-      const totalHealthIdsAdded = analytics.mandalHierarchy.reduce(
+      const totalHealthIdsAdded = mandalsToExport.reduce(
         (sum, m) => sum + m.healthIdsAddedViaUpdates,
         0
       )
-      const totalHealthIdsToday = analytics.mandalHierarchy.reduce(
+      const totalHealthIdsToday = mandalsToExport.reduce(
         (sum, m) => sum + m.healthIdUpdatesToday,
         0
       )
 
-      csvRows.push([
-        '"TOTAL (All Mandals)"',
-        totalResidents,
-        `"${avgMobile}% avg"`,
-        `"${avgHealthId}% avg"`,
-        totalMobileUpdatesAllTime,
-        totalMobileUpdatesToday,
-        totalHealthIdsOriginal,
-        totalHealthIdsAdded,
-        totalHealthIdsToday,
-      ].join(","))
+      const totalLabel = isFiltered ? `"TOTAL (${expandedMandal})"` : '"TOTAL (All Mandals)"'
+      const totalRow = isFiltered
+        ? [
+            totalLabel,
+            '""', // Empty secretariat column
+            totalResidents,
+            `"${avgMobile}% avg"`,
+            `"${avgHealthId}% avg"`,
+            totalMobileUpdatesAllTime,
+            totalMobileUpdatesToday,
+            totalHealthIdsOriginal,
+            totalHealthIdsAdded,
+            totalHealthIdsToday,
+          ]
+        : [
+            totalLabel,
+            totalResidents,
+            `"${avgMobile}% avg"`,
+            `"${avgHealthId}% avg"`,
+            totalMobileUpdatesAllTime,
+            totalMobileUpdatesToday,
+            totalHealthIdsOriginal,
+            totalHealthIdsAdded,
+            totalHealthIdsToday,
+          ]
+
+      csvRows.push(totalRow.join(","))
 
       // Create CSV content with BOM for Excel compatibility
       const BOM = "\uFEFF"
@@ -352,7 +426,10 @@ export default function AdminDashboard() {
       link.href = url
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
-      link.download = `mandal_completion_rates_${timestamp}.csv`
+      const filename = isFiltered
+        ? `${expandedMandal?.toLowerCase().replace(/\s+/g, "_")}_completion_rates_${timestamp}.csv`
+        : `mandal_completion_rates_${timestamp}.csv`
+      link.download = filename
 
       document.body.appendChild(link)
       link.click()
@@ -360,7 +437,7 @@ export default function AdminDashboard() {
       window.URL.revokeObjectURL(url)
 
       toast.success("CSV exported successfully", {
-        description: `File: mandal_completion_rates_${timestamp}.csv`,
+        description: `File: ${filename}`,
       })
     } catch (error) {
       console.error("CSV export error:", error)
@@ -380,79 +457,167 @@ export default function AdminDashboard() {
 
     try {
       setIsExportingExcel(true)
-      toast.info("Generating Excel export...")
+
+      // Determine what to export based on expanded state
+      const isFiltered = expandedMandal !== null
+      const exportMessage = isFiltered
+        ? `Generating Excel export for ${expandedMandal}...`
+        : "Generating Excel export..."
+      toast.info(exportMessage)
 
       // Prepare data for Excel
       const excelData: Array<Record<string, string | number>> = []
 
-      // Add mandals only (no secretariats)
-      analytics.mandalHierarchy.forEach((mandal) => {
-        excelData.push({
-          "Mandal Name": mandal.mandalName,
-          "Total Residents": mandal.totalResidents,
-          "Mobile %": `${mandal.mobileCompletionRate}%`,
-          "ABHA ID %": `${mandal.healthIdCompletionRate}%`,
-          "Mobile Updates (All Time)": mandal.mobileUpdatesAllTime,
-          "Mobile Updates (Today)": mandal.mobileUpdatesToday,
-          "ABHA IDs (Original)": mandal.healthIdsOriginal,
-          "ABHA IDs (Added)": mandal.healthIdsAddedViaUpdates,
-          "ABHA IDs (Today)": mandal.healthIdUpdatesToday,
-        })
+      // Filter mandals based on expanded state
+      const mandalsToExport = isFiltered
+        ? analytics.mandalHierarchy.filter(m => m.mandalName === expandedMandal)
+        : analytics.mandalHierarchy
+
+      // Add data rows
+      mandalsToExport.forEach((mandal) => {
+        if (isFiltered) {
+          // Add mandal row with secretariat column
+          excelData.push({
+            "Mandal Name": mandal.mandalName,
+            "Secretariat Name": `${mandal.mandalName} (Total)`,
+            "Total Residents": mandal.totalResidents,
+            "Mobile %": `${mandal.mobileCompletionRate}%`,
+            "ABHA ID %": `${mandal.healthIdCompletionRate}%`,
+            "Mobile Updates (All Time)": mandal.mobileUpdatesAllTime,
+            "Mobile Updates (Today)": mandal.mobileUpdatesToday,
+            "ABHA IDs (Original)": mandal.healthIdsOriginal,
+            "ABHA IDs (Added)": mandal.healthIdsAddedViaUpdates,
+            "ABHA IDs (Today)": mandal.healthIdUpdatesToday,
+          })
+
+          // Add secretariat rows
+          mandal.secretariats.forEach((secretariat) => {
+            excelData.push({
+              "Mandal Name": mandal.mandalName,
+              "Secretariat Name": secretariat.secName,
+              "Total Residents": secretariat.totalResidents,
+              "Mobile %": `${secretariat.mobileCompletionRate}%`,
+              "ABHA ID %": `${secretariat.healthIdCompletionRate}%`,
+              "Mobile Updates (All Time)": secretariat.mobileUpdatesAllTime,
+              "Mobile Updates (Today)": secretariat.mobileUpdatesToday,
+              "ABHA IDs (Original)": secretariat.healthIdsOriginal,
+              "ABHA IDs (Added)": secretariat.healthIdsAddedViaUpdates,
+              "ABHA IDs (Today)": secretariat.healthIdUpdatesToday,
+            })
+          })
+        } else {
+          // Add mandal only (no secretariats)
+          excelData.push({
+            "Mandal Name": mandal.mandalName,
+            "Total Residents": mandal.totalResidents,
+            "Mobile %": `${mandal.mobileCompletionRate}%`,
+            "ABHA ID %": `${mandal.healthIdCompletionRate}%`,
+            "Mobile Updates (All Time)": mandal.mobileUpdatesAllTime,
+            "Mobile Updates (Today)": mandal.mobileUpdatesToday,
+            "ABHA IDs (Original)": mandal.healthIdsOriginal,
+            "ABHA IDs (Added)": mandal.healthIdsAddedViaUpdates,
+            "ABHA IDs (Today)": mandal.healthIdUpdatesToday,
+          })
+        }
       })
 
       // Totals row
-      const totalResidents = analytics.mandalHierarchy.reduce((sum, m) => sum + m.totalResidents, 0)
+      const totalResidents = mandalsToExport.reduce((sum, m) => sum + m.totalResidents, 0)
       const avgMobile = Math.round(
-        analytics.mandalHierarchy.reduce((sum, m) => sum + m.mobileCompletionRate, 0) /
-          analytics.mandalHierarchy.length
+        mandalsToExport.reduce((sum, m) => sum + m.mobileCompletionRate, 0) /
+          mandalsToExport.length
       )
       const avgHealthId = Math.round(
-        analytics.mandalHierarchy.reduce((sum, m) => sum + m.healthIdCompletionRate, 0) /
-          analytics.mandalHierarchy.length
+        mandalsToExport.reduce((sum, m) => sum + m.healthIdCompletionRate, 0) /
+          mandalsToExport.length
       )
 
-      excelData.push({
-        "Mandal Name": "TOTAL (All Mandals)",
-        "Total Residents": totalResidents,
-        "Mobile %": `${avgMobile}% avg`,
-        "ABHA ID %": `${avgHealthId}% avg`,
-        "Mobile Updates (All Time)": analytics.mandalHierarchy.reduce(
-          (sum, m) => sum + m.mobileUpdatesAllTime,
-          0
-        ),
-        "Mobile Updates (Today)": analytics.mandalHierarchy.reduce(
-          (sum, m) => sum + m.mobileUpdatesToday,
-          0
-        ),
-        "ABHA IDs (Original)": analytics.mandalHierarchy.reduce(
-          (sum, m) => sum + m.healthIdsOriginal,
-          0
-        ),
-        "ABHA IDs (Added)": analytics.mandalHierarchy.reduce(
-          (sum, m) => sum + m.healthIdsAddedViaUpdates,
-          0
-        ),
-        "ABHA IDs (Today)": analytics.mandalHierarchy.reduce(
-          (sum, m) => sum + m.healthIdUpdatesToday,
-          0
-        ),
-      })
+      const totalLabel = isFiltered ? `TOTAL (${expandedMandal})` : "TOTAL (All Mandals)"
+      const totalRow = isFiltered
+        ? {
+            "Mandal Name": totalLabel,
+            "Secretariat Name": "",
+            "Total Residents": totalResidents,
+            "Mobile %": `${avgMobile}% avg`,
+            "ABHA ID %": `${avgHealthId}% avg`,
+            "Mobile Updates (All Time)": mandalsToExport.reduce(
+              (sum, m) => sum + m.mobileUpdatesAllTime,
+              0
+            ),
+            "Mobile Updates (Today)": mandalsToExport.reduce(
+              (sum, m) => sum + m.mobileUpdatesToday,
+              0
+            ),
+            "ABHA IDs (Original)": mandalsToExport.reduce(
+              (sum, m) => sum + m.healthIdsOriginal,
+              0
+            ),
+            "ABHA IDs (Added)": mandalsToExport.reduce(
+              (sum, m) => sum + m.healthIdsAddedViaUpdates,
+              0
+            ),
+            "ABHA IDs (Today)": mandalsToExport.reduce(
+              (sum, m) => sum + m.healthIdUpdatesToday,
+              0
+            ),
+          }
+        : {
+            "Mandal Name": totalLabel,
+            "Total Residents": totalResidents,
+            "Mobile %": `${avgMobile}% avg`,
+            "ABHA ID %": `${avgHealthId}% avg`,
+            "Mobile Updates (All Time)": mandalsToExport.reduce(
+              (sum, m) => sum + m.mobileUpdatesAllTime,
+              0
+            ),
+            "Mobile Updates (Today)": mandalsToExport.reduce(
+              (sum, m) => sum + m.mobileUpdatesToday,
+              0
+            ),
+            "ABHA IDs (Original)": mandalsToExport.reduce(
+              (sum, m) => sum + m.healthIdsOriginal,
+              0
+            ),
+            "ABHA IDs (Added)": mandalsToExport.reduce(
+              (sum, m) => sum + m.healthIdsAddedViaUpdates,
+              0
+            ),
+            "ABHA IDs (Today)": mandalsToExport.reduce(
+              (sum, m) => sum + m.healthIdUpdatesToday,
+              0
+            ),
+          }
+
+      excelData.push(totalRow)
 
       // Create worksheet
       const worksheet = XLSX.utils.json_to_sheet(excelData)
 
-      // Set column widths
-      worksheet["!cols"] = [
-        { wch: 25 }, // Name
-        { wch: 15 }, // Total Residents
-        { wch: 12 }, // Mobile %
-        { wch: 12 }, // ABHA ID %
-        { wch: 22 }, // Mobile Updates (All Time)
-        { wch: 22 }, // Mobile Updates (Today)
-        { wch: 20 }, // ABHA IDs (Original)
-        { wch: 18 }, // ABHA IDs (Added)
-        { wch: 18 }, // ABHA IDs (Today)
-      ]
+      // Set column widths based on whether secretariat column is included
+      worksheet["!cols"] = isFiltered
+        ? [
+            { wch: 25 }, // Mandal Name
+            { wch: 25 }, // Secretariat Name
+            { wch: 15 }, // Total Residents
+            { wch: 12 }, // Mobile %
+            { wch: 12 }, // ABHA ID %
+            { wch: 22 }, // Mobile Updates (All Time)
+            { wch: 22 }, // Mobile Updates (Today)
+            { wch: 20 }, // ABHA IDs (Original)
+            { wch: 18 }, // ABHA IDs (Added)
+            { wch: 18 }, // ABHA IDs (Today)
+          ]
+        : [
+            { wch: 25 }, // Mandal Name
+            { wch: 15 }, // Total Residents
+            { wch: 12 }, // Mobile %
+            { wch: 12 }, // ABHA ID %
+            { wch: 22 }, // Mobile Updates (All Time)
+            { wch: 22 }, // Mobile Updates (Today)
+            { wch: 20 }, // ABHA IDs (Original)
+            { wch: 18 }, // ABHA IDs (Added)
+            { wch: 18 }, // ABHA IDs (Today)
+          ]
 
       // Create workbook
       const workbook = XLSX.utils.book_new()
@@ -460,7 +625,9 @@ export default function AdminDashboard() {
 
       // Generate Excel file
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
-      const filename = `mandal_completion_rates_${timestamp}.xlsx`
+      const filename = isFiltered
+        ? `${expandedMandal?.toLowerCase().replace(/\s+/g, "_")}_completion_rates_${timestamp}.xlsx`
+        : `mandal_completion_rates_${timestamp}.xlsx`
 
       XLSX.writeFile(workbook, filename)
 
@@ -498,11 +665,21 @@ export default function AdminDashboard() {
 
   // Get sorted mandal data
   const getSortedMandals = () => {
-    if (!analytics || !mandalSortColumn || !mandalSortDirection) {
-      return analytics?.mandalHierarchy || []
+    if (!analytics) return []
+
+    let mandals = analytics.mandalHierarchy || []
+
+    // Filter to show only the expanded mandal if one is selected
+    if (expandedMandal) {
+      mandals = mandals.filter(m => m.mandalName === expandedMandal)
     }
 
-    return [...analytics.mandalHierarchy].sort((a, b) => {
+    // Apply sorting if configured
+    if (!mandalSortColumn || !mandalSortDirection) {
+      return mandals
+    }
+
+    return [...mandals].sort((a, b) => {
       let aValue: number | string
       let bValue: number | string
 
@@ -1229,7 +1406,7 @@ export default function AdminDashboard() {
                             onClick={() => toggleMandal(mandal.mandalName)}
                           >
                             <td className="py-2 px-4">
-                              {expandedMandals.has(mandal.mandalName) ? (
+                              {expandedMandal === mandal.mandalName ? (
                                 <ChevronDown className="h-4 w-4 text-gray-600" />
                               ) : (
                                 <ChevronRight className="h-4 w-4 text-gray-600" />
@@ -1309,7 +1486,7 @@ export default function AdminDashboard() {
                           </tr>
 
                           {/* Level 2: Secretariat Rows (shown when mandal is expanded) */}
-                          {expandedMandals.has(mandal.mandalName) &&
+                          {expandedMandal === mandal.mandalName &&
                             mandal.secretariats.map((secretariat, secIndex) => (
                               <tr
                                 key={`sec-${mandalIndex}-${secIndex}`}
