@@ -40,23 +40,29 @@ export function ExportProgressModal({
       return
     }
 
+    // Track if we've received a completed/error status
+    let hasFinished = false
+
     // Connect to SSE endpoint for progress updates
     const eventSource = new EventSource(`/api/admin/export/progress/${sessionId}`)
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        
+
         if (data.error) {
           setError(data.error)
+          hasFinished = true
           eventSource.close()
           return
         }
 
         setProgress(data)
 
-        // Close connection when export is completed or errored
+        // Mark as finished when export is completed or errored
         if (data.status === "completed" || data.status === "error") {
+          hasFinished = true
+          // Close connection after a delay to ensure client receives final message
           setTimeout(() => {
             eventSource.close()
           }, 2000)
@@ -67,8 +73,13 @@ export function ExportProgressModal({
     }
 
     eventSource.onerror = (err) => {
-      console.error("SSE connection error:", err)
-      setError("Lost connection to progress updates")
+      // Only treat as error if we haven't received a completed/error status
+      // When SSE connection closes normally (after completion), onerror is triggered
+      // but this is expected behavior, not an actual error
+      if (!hasFinished) {
+        console.error("SSE connection error:", err)
+        setError("Lost connection to progress updates")
+      }
       eventSource.close()
     }
 
