@@ -11,6 +11,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { ExportFilterDialog, ExportFilters } from "@/components/reports/ExportFilterDialog"
+import { ExportProgressModal } from "@/components/export-progress-modal"
 import { format } from "date-fns"
 import {
   FileText,
@@ -118,6 +119,11 @@ export default function ReportsPage() {
   const [showFilterDialog, setShowFilterDialog] = useState(false)
   const [exportFormat, setExportFormat] = useState<"excel" | "csv" | null>(null)
   const [activeFilters, setActiveFilters] = useState<ExportFilters | null>(null)
+
+  // Progress modal state
+  const [showProgressModal, setShowProgressModal] = useState(false)
+  const [exportSessionId, setExportSessionId] = useState<string | null>(null)
+  const [exportTotalRecords, setExportTotalRecords] = useState(0)
 
   // Sorting state for Mandal Statistics table
   type MandalSortColumn = "name" | "total" | "mobile" | "withoutMobile" | "mobilePercent" | "healthId" | "pendingHealthId" | "healthIdPercent"
@@ -439,14 +445,33 @@ export default function ReportsPage() {
       const filterCount = getActiveFilterCount(filters)
       const filterText = filterCount > 0 ? ` with ${filterCount} filter(s)` : ""
 
+      // Generate a unique session ID for progress tracking
+      const sessionId = `export-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      setExportSessionId(sessionId)
+
+      // Estimate total records based on analytics data
+      let estimatedRecords = analytics?.overview.totalResidents || 0
+      if (filters.mandals.length > 0 && analytics) {
+        // If specific mandals are selected, estimate based on those mandals
+        const selectedMandalStats = analytics.mandalStatistics.filter(m =>
+          filters.mandals.includes(m.mandalName)
+        )
+        estimatedRecords = selectedMandalStats.reduce((sum, m) => sum + m.residentCount, 0)
+      }
+      setExportTotalRecords(estimatedRecords)
+
+      // Show progress modal
+      setShowProgressModal(true)
+
       // Show loading toast
       toast.loading(`Applying filters and generating ${exportFormat.toUpperCase()} export...`, {
         id: "export-loading",
       })
 
-      // Build query string
+      // Build query string with sessionId
       const queryString = buildFilterQueryString(filters)
-      const endpoint = `/api/admin/export/${exportFormat}${queryString ? `?${queryString}` : ""}`
+      const separator = queryString ? "&" : "?"
+      const endpoint = `/api/admin/export/${exportFormat}${queryString ? `?${queryString}` : ""}${separator}sessionId=${sessionId}`
 
       const response = await fetch(endpoint)
 
@@ -1886,6 +1911,14 @@ export default function ReportsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Export Progress Modal */}
+      <ExportProgressModal
+        open={showProgressModal}
+        onOpenChange={setShowProgressModal}
+        sessionId={exportSessionId}
+        totalRecords={exportTotalRecords}
+      />
     </DashboardLayout>
   )
 }

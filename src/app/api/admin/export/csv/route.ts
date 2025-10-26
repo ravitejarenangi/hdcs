@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { createProgress, updateProgress, completeProgress, errorProgress } from "@/lib/export-progress"
 
 // Helper function to escape CSV values
 function escapeCSV(value: string | null | undefined): string {
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
     const mobileStatus = searchParams.get("mobileStatus")
     const healthIdStatus = searchParams.get("healthIdStatus")
     const ruralUrbanParam = searchParams.get("ruralUrban")
+    const sessionId = searchParams.get("sessionId") // For progress tracking
 
     // Build where clause for filters
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -234,6 +236,12 @@ export async function GET(request: NextRequest) {
       where: whereClause,
     })
 
+    // Initialize progress tracking if sessionId is provided
+    if (sessionId) {
+      const totalBatches = Math.ceil(totalCount / 1000)
+      createProgress(sessionId, totalCount, totalBatches)
+    }
+
     // Build filter summary for CSV header comments
     const filterComments: string[] = []
     filterComments.push("# Chittoor District Health Data Collection System")
@@ -297,8 +305,10 @@ export async function GET(request: NextRequest) {
           // Stream data in batches using cursor-based pagination
           let cursor: string | undefined = undefined
           let processedCount = 0
+          let currentBatch = 0
 
           while (true) {
+            currentBatch++
             // Fetch batch of residents
             type ResidentBatch = Array<{
               id: string
@@ -362,6 +372,16 @@ export async function GET(request: NextRequest) {
             processedCount += batch.length
             console.log(`[CSV Export] Streamed ${processedCount}/${totalCount} records`)
 
+            // Update progress if sessionId is provided
+            if (sessionId) {
+              updateProgress(sessionId, {
+                processedRecords: processedCount,
+                currentBatch,
+                status: "processing",
+                message: `Processing batch ${currentBatch}... (${processedCount.toLocaleString()} / ${totalCount.toLocaleString()} records)`,
+              })
+            }
+
             // Update cursor for next batch
             cursor = batch[batch.length - 1].id
 
@@ -372,9 +392,21 @@ export async function GET(request: NextRequest) {
           }
 
           console.log(`[CSV Export] Completed - Total records: ${processedCount}`)
+
+          // Mark progress as completed
+          if (sessionId) {
+            completeProgress(sessionId, `Export completed successfully! ${processedCount.toLocaleString()} records exported.`)
+          }
+
           controller.close()
         } catch (error) {
           console.error("[CSV Export] Streaming error:", error)
+
+          // Mark progress as error
+          if (sessionId) {
+            errorProgress(sessionId, error instanceof Error ? error.message : "Unknown error occurred")
+          }
+
           controller.error(error)
         }
       },

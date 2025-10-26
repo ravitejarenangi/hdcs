@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import ExcelJS from "exceljs"
+import { createProgress, updateProgress, completeProgress, errorProgress } from "@/lib/export-progress"
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
     const mobileStatus = searchParams.get("mobileStatus")
     const healthIdStatus = searchParams.get("healthIdStatus")
     const ruralUrbanParam = searchParams.get("ruralUrban")
+    const sessionId = searchParams.get("sessionId") // For progress tracking
 
     // Build where clause for filters
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -227,6 +229,12 @@ export async function GET(request: NextRequest) {
       totalCount > 0 ? Math.round((withHealthIdCount / totalCount) * 100) : 0
     const dataQualityScore = Math.round((mobileCompletionRate + healthIdCompletionRate) / 2)
 
+    // Initialize progress tracking if sessionId is provided
+    if (sessionId) {
+      const totalBatches = Math.ceil(totalCount / 1000)
+      createProgress(sessionId, totalCount, totalBatches)
+    }
+
     // Get mandal-wise statistics
     const mandalStats = await prisma.resident.groupBy({
       by: ["mandalName"],
@@ -342,8 +350,10 @@ export async function GET(request: NextRequest) {
     // Fetch and add data in batches
     let cursor: string | undefined = undefined
     let processedCount = 0
+    let currentBatch = 0
 
     while (true) {
+      currentBatch++
       type ResidentBatch = Array<{
         id: string
         residentId: string
@@ -404,6 +414,16 @@ export async function GET(request: NextRequest) {
       processedCount += batch.length
       console.log(`[Excel Export] Processed ${processedCount}/${totalCount} records`)
 
+      // Update progress if sessionId is provided
+      if (sessionId) {
+        updateProgress(sessionId, {
+          processedRecords: processedCount,
+          currentBatch,
+          status: "processing",
+          message: `Processing batch ${currentBatch}... (${processedCount.toLocaleString()} / ${totalCount.toLocaleString()} records)`,
+        })
+      }
+
       cursor = batch[batch.length - 1].id
 
       if (batch.length < BATCH_SIZE) {
@@ -441,6 +461,11 @@ export async function GET(request: NextRequest) {
     // Generate Excel buffer
     const buffer = await workbook.xlsx.writeBuffer()
 
+    // Mark progress as completed
+    if (sessionId) {
+      completeProgress(sessionId, `Export completed successfully! ${processedCount.toLocaleString()} records exported.`)
+    }
+
     // Return the Excel file
     return new NextResponse(buffer, {
       status: 200,
@@ -452,6 +477,14 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("Excel export error:", error)
+
+    // Mark progress as error
+    const searchParams = request.nextUrl.searchParams
+    const sessionId = searchParams.get("sessionId")
+    if (sessionId) {
+      errorProgress(sessionId, error instanceof Error ? error.message : "Unknown error occurred")
+    }
+
     return NextResponse.json(
       { error: "Failed to generate Excel export" },
       { status: 500 }
