@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 
 // GET /api/settings/profile - Fetch current user's profile
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     // Check authentication
     const session = await auth()

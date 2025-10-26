@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import bcrypt from "bcryptjs"
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   // Check authentication
   const session = await auth()
 

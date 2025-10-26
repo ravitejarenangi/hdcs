@@ -77,6 +77,45 @@ export function OfficerDialog({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Define fetch functions with useCallback
+  const fetchMandals = useCallback(async () => {
+    try {
+      setLoadingMandals(true)
+      const response = await fetch("/api/admin/mandals")
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch mandals")
+      }
+
+      const data = await response.json()
+      setMandals(data.mandals || [])
+    } catch (error) {
+      console.error("Error fetching mandals:", error)
+      toast.error("Failed to load mandals")
+    } finally {
+      setLoadingMandals(false)
+    }
+  }, [])
+
+  const fetchSecretariats = useCallback(async () => {
+    try {
+      setLoadingSecretariats(true)
+      const response = await fetch("/api/admin/secretariats")
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch secretariats")
+      }
+
+      const data = await response.json()
+      setSecretariats(data.secretariats || [])
+    } catch (error) {
+      console.error("Error fetching secretariats:", error)
+      toast.error("Failed to load secretariats")
+    } finally {
+      setLoadingSecretariats(false)
+    }
+  }, [])
+
   // Fetch mandals and secretariats when dialog opens
   useEffect(() => {
     if (open) {
@@ -119,44 +158,6 @@ export function OfficerDialog({
       setErrors({})
     }
   }, [open, officer])
-
-  const fetchMandals = useCallback(async () => {
-    try {
-      setLoadingMandals(true)
-      const response = await fetch("/api/admin/mandals")
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch mandals")
-      }
-
-      const data = await response.json()
-      setMandals(data.mandals || [])
-    } catch (error) {
-      console.error("Error fetching mandals:", error)
-      toast.error("Failed to load mandals")
-    } finally {
-      setLoadingMandals(false)
-    }
-  }, [])
-
-  const fetchSecretariats = useCallback(async () => {
-    try {
-      setLoadingSecretariats(true)
-      const response = await fetch("/api/admin/secretariats")
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch secretariats")
-      }
-
-      const data = await response.json()
-      setSecretariats(data.secretariats || [])
-    } catch (error) {
-      console.error("Error fetching secretariats:", error)
-      toast.error("Failed to load secretariats")
-    } finally {
-      setLoadingSecretariats(false)
-    }
-  }, [])
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}

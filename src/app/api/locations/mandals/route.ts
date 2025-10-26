@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import {
@@ -7,7 +7,7 @@ import {
   type UserSession,
 } from "@/lib/access-control"
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   // Check authentication
   const session = await auth()
 

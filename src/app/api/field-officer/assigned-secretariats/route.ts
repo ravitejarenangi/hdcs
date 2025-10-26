@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { parseAssignedSecretariats } from "@/lib/access-control"
 
@@ -6,7 +6,7 @@ import { parseAssignedSecretariats } from "@/lib/access-control"
  * GET /api/field-officer/assigned-secretariats
  * Get the field officer's assigned secretariats
  */
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     // Check authentication
     const session = await auth()
