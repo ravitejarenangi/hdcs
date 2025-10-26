@@ -23,12 +23,14 @@ interface ExportProgressModalProps {
   onOpenChange: (open: boolean) => void
   sessionId: string | null
   totalRecords: number
+  exportFormat?: "excel" | "csv"
 }
 
 export function ExportProgressModal({
   open,
   onOpenChange,
   sessionId,
+  exportFormat = "csv",
 }: ExportProgressModalProps) {
   const [progress, setProgress] = useState<ExportProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -150,13 +152,13 @@ export function ExportProgressModal({
             ) : (
               <>
                 <Loader2 className="h-5 w-5 animate-spin text-orange-600" />
-                Exporting CSV
+                Exporting {exportFormat.toUpperCase()}
               </>
             )}
           </DialogTitle>
           <DialogDescription>
             {progress?.status === "completed"
-              ? "Your CSV file has been downloaded successfully."
+              ? `Your ${exportFormat.toUpperCase()} file has been downloaded successfully.`
               : progress?.status === "error" || error
               ? "An error occurred during the export."
               : "Please wait while we export your data. This may take several minutes for large datasets."}

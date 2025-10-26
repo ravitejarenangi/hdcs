@@ -382,7 +382,9 @@ export default function ReportsPage() {
   }
 
   const handleExportClick = (format: "excel" | "csv") => {
+    console.log(`[Reports Page] handleExportClick called with format: ${format}`)
     setExportFormat(format)
+    console.log(`[Reports Page] exportFormat state will be set to: ${format}`)
     setShowFilterDialog(true)
   }
 
@@ -436,7 +438,12 @@ export default function ReportsPage() {
   }
 
   const handleApplyFilters = async (filters: ExportFilters) => {
-    if (!exportFormat) return
+    console.log(`[Reports Page] handleApplyFilters called with exportFormat:`, exportFormat)
+
+    if (!exportFormat) {
+      console.log(`[Reports Page] ERROR: exportFormat is null/undefined!`)
+      return
+    }
 
     setActiveFilters(filters)
     setIsExporting(true)
@@ -448,6 +455,7 @@ export default function ReportsPage() {
       // Generate a unique session ID for progress tracking
       const sessionId = `export-${Date.now()}-${Math.random().toString(36).substring(7)}`
       console.log(`[Reports Page] Generated sessionId: ${sessionId}`)
+      console.log(`[Reports Page] Export format: ${exportFormat}`)
       setExportSessionId(sessionId)
 
       // Estimate total records based on analytics data
@@ -1926,6 +1934,7 @@ export default function ReportsPage() {
         onOpenChange={setShowProgressModal}
         sessionId={exportSessionId}
         totalRecords={exportTotalRecords}
+        exportFormat={exportFormat || "csv"}
       />
     </DashboardLayout>
   )
