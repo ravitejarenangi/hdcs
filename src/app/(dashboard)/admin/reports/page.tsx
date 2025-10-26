@@ -389,10 +389,20 @@ export default function ReportsPage() {
     if (filters.endDate) {
       params.append("endDate", filters.endDate.toISOString().split("T")[0])
     }
-    if (filters.mandals.length > 0) {
+    // Only add mandals filter if it's a subset (not all mandals selected)
+    if (
+      filters.mandals.length > 0 &&
+      analytics &&
+      filters.mandals.length < analytics.mandalStatistics.length
+    ) {
       params.append("mandals", filters.mandals.join(","))
     }
-    if (filters.officers.length > 0) {
+    // Only add officers filter if it's a subset (not all officers selected)
+    if (
+      filters.officers.length > 0 &&
+      analytics &&
+      filters.officers.length < analytics.fieldOfficerPerformance.length
+    ) {
       params.append("officers", filters.officers.join(","))
     }
     if (filters.mobileStatus !== "all") {
