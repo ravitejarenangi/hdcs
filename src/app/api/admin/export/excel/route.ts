@@ -284,194 +284,170 @@ export async function GET(request: NextRequest) {
       .replace("T", "_")
     const filename = `chittoor_health_report_${timestamp}.xlsx`
 
-    // Create a streaming response using ExcelJS
+    // Create workbook using ExcelJS (in-memory with batching for efficiency)
+    const workbook = new ExcelJS.Workbook()
     const BATCH_SIZE = 1000 // Process 1000 records at a time
 
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          // Create workbook with streaming
-          const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
-            stream: new WritableStream({
-              write(chunk) {
-                controller.enqueue(chunk)
-              },
-            }),
-          })
+    // Sheet 1: Summary Statistics
+    const summarySheet = workbook.addWorksheet("Summary")
+    summarySheet.columns = [
+      { header: "", key: "label", width: 35 },
+      { header: "", key: "value", width: 20 },
+    ]
 
-          // Sheet 1: Summary Statistics
-          const summarySheet = workbook.addWorksheet("Summary")
-          summarySheet.columns = [
-            { header: "", key: "label", width: 35 },
-            { header: "", key: "value", width: 20 },
-          ]
+    // Add summary data
+    summarySheet.addRow(["Chittoor District Health Data Collection System", ""])
+    summarySheet.addRow([hasFilters ? "Filtered Export Summary Report" : "Export Summary Report", ""])
+    summarySheet.addRow([`Generated: ${new Date().toLocaleString()}`, ""])
+    summarySheet.addRow(["", ""])
 
-          // Add summary data
-          summarySheet.addRow(["Chittoor District Health Data Collection System", ""])
-          summarySheet.addRow([hasFilters ? "Filtered Export Summary Report" : "Export Summary Report", ""])
-          summarySheet.addRow([`Generated: ${new Date().toLocaleString()}`, ""])
-          summarySheet.addRow(["", ""])
+    // Add filter information if filters are applied
+    if (hasFilters) {
+      summarySheet.addRow(["Applied Filters", ""])
+      filterSummary.forEach((filter) => {
+        summarySheet.addRow([filter, ""])
+      })
+      summarySheet.addRow(["", ""])
+    }
 
-          // Add filter information if filters are applied
-          if (hasFilters) {
-            summarySheet.addRow(["Applied Filters", ""])
-            filterSummary.forEach((filter) => {
-              summarySheet.addRow([filter, ""])
-            })
-            summarySheet.addRow(["", ""])
-          }
+    summarySheet.addRow(["Metric", "Value"])
+    summarySheet.addRow(["Total Residents (Filtered)", totalCount.toString()])
+    summarySheet.addRow(["Residents with Mobile Number", withMobileCount.toString()])
+    summarySheet.addRow(["Mobile Number Completion Rate", `${mobileCompletionRate}%`])
+    summarySheet.addRow(["Residents with Health ID", withHealthIdCount.toString()])
+    summarySheet.addRow(["Health ID Completion Rate", `${healthIdCompletionRate}%`])
+    summarySheet.addRow(["Overall Data Quality Score", `${dataQualityScore}%`])
+    summarySheet.addRow(["", ""])
+    summarySheet.addRow(["Total Mandals", mandalCompletion.length.toString()])
 
-          summarySheet.addRow(["Metric", "Value"])
-          summarySheet.addRow(["Total Residents (Filtered)", totalCount.toString()])
-          summarySheet.addRow(["Residents with Mobile Number", withMobileCount.toString()])
-          summarySheet.addRow(["Mobile Number Completion Rate", `${mobileCompletionRate}%`])
-          summarySheet.addRow(["Residents with Health ID", withHealthIdCount.toString()])
-          summarySheet.addRow(["Health ID Completion Rate", `${healthIdCompletionRate}%`])
-          summarySheet.addRow(["Overall Data Quality Score", `${dataQualityScore}%`])
-          summarySheet.addRow(["", ""])
-          summarySheet.addRow(["Total Mandals", mandalCompletion.length.toString()])
+    // Sheet 2: Detailed Resident Data (with batching)
+    const detailedSheetName = hasFilters ? "Filtered Data" : "Detailed Data"
+    const detailedSheet = workbook.addWorksheet(detailedSheetName)
 
-          await summarySheet.commit()
+    // Define columns (11 columns total)
+    detailedSheet.columns = [
+      { header: "Mandal Name", key: "mandalName", width: 25 },
+      { header: "Secretariat Name", key: "secName", width: 25 },
+      { header: "Resident ID", key: "residentId", width: 15 },
+      { header: "Health ID (ABHA ID)", key: "healthId", width: 20 },
+      { header: "UID", key: "uid", width: 18 },
+      { header: "Mobile Number", key: "mobile", width: 15 },
+      { header: "Name", key: "name", width: 25 },
+      { header: "Door No", key: "doorNo", width: 15 },
+      { header: "Address (eKYC)", key: "addressEkyc", width: 40 },
+      { header: "Address (Household)", key: "addressHh", width: 40 },
+      { header: "HHID", key: "hhId", width: 15 },
+    ]
 
-          // Sheet 2: Detailed Resident Data (streaming)
-          const detailedSheetName = hasFilters ? "Filtered Data" : "Detailed Data"
-          const detailedSheet = workbook.addWorksheet(detailedSheetName)
+    // Fetch and add data in batches
+    let cursor: string | undefined = undefined
+    let processedCount = 0
 
-          // Define columns (11 columns total)
-          detailedSheet.columns = [
-            { header: "Mandal Name", key: "mandalName", width: 25 },
-            { header: "Secretariat Name", key: "secName", width: 25 },
-            { header: "Resident ID", key: "residentId", width: 15 },
-            { header: "Health ID (ABHA ID)", key: "healthId", width: 20 },
-            { header: "UID", key: "uid", width: 18 },
-            { header: "Mobile Number", key: "mobile", width: 15 },
-            { header: "Name", key: "name", width: 25 },
-            { header: "Door No", key: "doorNo", width: 15 },
-            { header: "Address (eKYC)", key: "addressEkyc", width: 40 },
-            { header: "Address (Household)", key: "addressHh", width: 40 },
-            { header: "HHID", key: "hhId", width: 15 },
-          ]
+    while (true) {
+      type ResidentBatch = Array<{
+        id: string
+        residentId: string
+        uid: string | null
+        hhId: string | null
+        name: string
+        healthId: string | null
+        mandalName: string | null
+        secName: string | null
+        doorNumber: string | null
+        addressEkyc: string | null
+        addressHh: string | null
+        citizenMobile: string | null
+      }>
 
-          // Stream data in batches
-          let cursor: string | undefined = undefined
-          let processedCount = 0
+      const batch: ResidentBatch = await prisma.resident.findMany({
+        where: whereClause,
+        orderBy: { id: "asc" },
+        take: BATCH_SIZE,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        select: {
+          id: true,
+          residentId: true,
+          uid: true,
+          hhId: true,
+          name: true,
+          healthId: true,
+          mandalName: true,
+          secName: true,
+          doorNumber: true,
+          addressEkyc: true,
+          addressHh: true,
+          citizenMobile: true,
+        },
+      })
 
-          while (true) {
-            type ResidentBatch = Array<{
-              id: string
-              residentId: string
-              uid: string | null
-              hhId: string | null
-              name: string
-              healthId: string | null
-              mandalName: string | null
-              secName: string | null
-              doorNumber: string | null
-              addressEkyc: string | null
-              addressHh: string | null
-              citizenMobile: string | null
-            }>
+      if (batch.length === 0) {
+        break
+      }
 
-            const batch: ResidentBatch = await prisma.resident.findMany({
-              where: whereClause,
-              orderBy: { id: "asc" },
-              take: BATCH_SIZE,
-              ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-              select: {
-                id: true,
-                residentId: true,
-                uid: true,
-                hhId: true,
-                name: true,
-                healthId: true,
-                mandalName: true,
-                secName: true,
-                doorNumber: true,
-                addressEkyc: true,
-                addressHh: true,
-                citizenMobile: true,
-              },
-            })
+      // Add rows to sheet
+      for (const resident of batch) {
+        detailedSheet.addRow({
+          mandalName: resident.mandalName || "",
+          secName: resident.secName || "",
+          residentId: resident.residentId,
+          healthId: resident.healthId || "",
+          uid: maskUID(resident.uid),
+          mobile: resident.citizenMobile || "",
+          name: resident.name,
+          doorNo: resident.doorNumber || "",
+          addressEkyc: resident.addressEkyc || "",
+          addressHh: resident.addressHh || "",
+          hhId: resident.hhId || "",
+        })
+      }
 
-            if (batch.length === 0) {
-              break
-            }
+      processedCount += batch.length
+      console.log(`[Excel Export] Processed ${processedCount}/${totalCount} records`)
 
-            // Add rows to sheet
-            for (const resident of batch) {
-              detailedSheet.addRow({
-                mandalName: resident.mandalName || "",
-                secName: resident.secName || "",
-                residentId: resident.residentId,
-                healthId: resident.healthId || "",
-                uid: maskUID(resident.uid),
-                mobile: resident.citizenMobile || "",
-                name: resident.name,
-                doorNo: resident.doorNumber || "",
-                addressEkyc: resident.addressEkyc || "",
-                addressHh: resident.addressHh || "",
-                hhId: resident.hhId || "",
-              })
-            }
+      cursor = batch[batch.length - 1].id
 
-            processedCount += batch.length
-            console.log(`[Excel Export] Streamed ${processedCount}/${totalCount} records`)
+      if (batch.length < BATCH_SIZE) {
+        break
+      }
+    }
 
-            cursor = batch[batch.length - 1].id
+    // Sheet 3: Mandal-wise Breakdown
+    const mandalSheet = workbook.addWorksheet("Mandal Breakdown")
+    mandalSheet.columns = [
+      { header: "Mandal", key: "mandal", width: 25 },
+      { header: "Total Residents", key: "total", width: 18 },
+      { header: "With Mobile", key: "withMobile", width: 15 },
+      { header: "Mobile Completion %", key: "mobileRate", width: 20 },
+      { header: "With Health ID", key: "withHealthId", width: 18 },
+      { header: "Health ID Completion %", key: "healthIdRate", width: 22 },
+      { header: "Average Quality %", key: "avgQuality", width: 18 },
+    ]
 
-            if (batch.length < BATCH_SIZE) {
-              break
-            }
-          }
+    // Add mandal data
+    for (const mandal of mandalCompletion) {
+      mandalSheet.addRow({
+        mandal: mandal.mandalName,
+        total: mandal.totalResidents,
+        withMobile: mandal.withMobile,
+        mobileRate: mandal.mobileCompletionRate,
+        withHealthId: mandal.withHealthId,
+        healthIdRate: mandal.healthIdCompletionRate,
+        avgQuality: Math.round((mandal.mobileCompletionRate + mandal.healthIdCompletionRate) / 2),
+      })
+    }
 
-          await detailedSheet.commit()
+    console.log(`[Excel Export] Completed - Total records: ${processedCount}`)
 
-          // Sheet 3: Mandal-wise Breakdown
-          const mandalSheet = workbook.addWorksheet("Mandal Breakdown")
-          mandalSheet.columns = [
-            { header: "Mandal", key: "mandal", width: 25 },
-            { header: "Total Residents", key: "total", width: 18 },
-            { header: "With Mobile", key: "withMobile", width: 15 },
-            { header: "Mobile Completion %", key: "mobileRate", width: 20 },
-            { header: "With Health ID", key: "withHealthId", width: 18 },
-            { header: "Health ID Completion %", key: "healthIdRate", width: 22 },
-            { header: "Average Quality %", key: "avgQuality", width: 18 },
-          ]
+    // Generate Excel buffer
+    const buffer = await workbook.xlsx.writeBuffer()
 
-          // Add mandal data
-          for (const mandal of mandalCompletion) {
-            mandalSheet.addRow({
-              mandal: mandal.mandalName,
-              total: mandal.totalResidents,
-              withMobile: mandal.withMobile,
-              mobileRate: mandal.mobileCompletionRate,
-              withHealthId: mandal.withHealthId,
-              healthIdRate: mandal.healthIdCompletionRate,
-              avgQuality: Math.round((mandal.mobileCompletionRate + mandal.healthIdCompletionRate) / 2),
-            })
-          }
-
-          await mandalSheet.commit()
-
-          // Finalize workbook
-          await workbook.commit()
-
-          console.log(`[Excel Export] Completed - Total records: ${processedCount}`)
-          controller.close()
-        } catch (error) {
-          console.error("[Excel Export] Streaming error:", error)
-          controller.error(error)
-        }
-      },
-    })
-
-    // Return streaming response
-    return new NextResponse(stream, {
+    // Return the Excel file
+    return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Transfer-Encoding": "chunked",
+        "Content-Length": buffer.byteLength.toString(),
       },
     })
   } catch (error) {

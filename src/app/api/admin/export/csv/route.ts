@@ -18,28 +18,6 @@ function escapeCSV(value: string | null | undefined): string {
   return stringValue
 }
 
-// Helper function to convert array of objects to CSV
-function arrayToCSV(data: Array<Record<string, unknown>>, headers: string[]): string {
-  const rows: string[] = []
-
-  // Add header row
-  rows.push(headers.map((h) => escapeCSV(h)).join(","))
-
-  // Add data rows
-  for (const row of data) {
-    const values = headers.map((header) => {
-      const value = row[header]
-      if (value instanceof Date) {
-        return escapeCSV(value.toLocaleDateString())
-      }
-      return escapeCSV(String(value ?? ""))
-    })
-    rows.push(values.join(","))
-  }
-
-  return rows.join("\n")
-}
-
 export async function GET(request: NextRequest) {
   try {
     // Check authentication

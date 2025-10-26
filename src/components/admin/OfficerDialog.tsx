@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   Dialog,
   DialogContent,
@@ -120,7 +120,7 @@ export function OfficerDialog({
     }
   }, [open, officer])
 
-  const fetchMandals = async () => {
+  const fetchMandals = useCallback(async () => {
     try {
       setLoadingMandals(true)
       const response = await fetch("/api/admin/mandals")
@@ -137,9 +137,9 @@ export function OfficerDialog({
     } finally {
       setLoadingMandals(false)
     }
-  }
+  }, [])
 
-  const fetchSecretariats = async () => {
+  const fetchSecretariats = useCallback(async () => {
     try {
       setLoadingSecretariats(true)
       const response = await fetch("/api/admin/secretariats")
@@ -156,7 +156,7 @@ export function OfficerDialog({
     } finally {
       setLoadingSecretariats(false)
     }
-  }
+  }, [])
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}

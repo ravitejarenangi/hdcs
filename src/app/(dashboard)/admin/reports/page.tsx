@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -135,18 +135,7 @@ export default function ReportsPage() {
   const [officerStartDate, setOfficerStartDate] = useState<Date | null>(null)
   const [officerEndDate, setOfficerEndDate] = useState<Date | null>(null)
 
-  useEffect(() => {
-    fetchAnalytics()
-  }, [])
-
-  // Refetch analytics when officer date range changes
-  useEffect(() => {
-    if (analytics) {
-      fetchAnalytics()
-    }
-  }, [officerStartDate, officerEndDate])
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     setIsLoading(true)
     setError("")
 
@@ -174,7 +163,18 @@ export default function ReportsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [officerStartDate, officerEndDate])
+
+  useEffect(() => {
+    fetchAnalytics()
+  }, [fetchAnalytics])
+
+  // Refetch analytics when officer date range changes
+  useEffect(() => {
+    if (analytics) {
+      fetchAnalytics()
+    }
+  }, [officerStartDate, officerEndDate, analytics, fetchAnalytics])
 
   // Sorting functions for Mandal Statistics table
   const handleMandalSort = (column: MandalSortColumn) => {

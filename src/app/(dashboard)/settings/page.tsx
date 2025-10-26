@@ -12,8 +12,6 @@ import { toast } from "sonner"
 import { getRoleDisplayName } from "@/lib/roles"
 import {
   User,
-  Mail,
-  Phone,
   Shield,
   MapPin,
   Calendar,
@@ -48,7 +46,7 @@ interface PasswordStrength {
 }
 
 export default function SettingsPage() {
-  const { data: session } = useSession()
+  useSession() // Ensure user is authenticated
   const [loading, setLoading] = useState(true)
   const [profileData, setProfileData] = useState<ProfileData | null>(null)
 
