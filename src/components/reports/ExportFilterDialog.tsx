@@ -72,7 +72,7 @@ export function ExportFilterDialog({
       setFilters((prev) => ({
         ...prev,
         mandals: [...availableMandals],
-        officers: availableOfficers.map((o) => o.username),
+        officers: availableOfficers.map((o) => o.userId), // Use userId instead of username
       }))
       initializedRef.current = true
     } else if (!open) {
@@ -86,7 +86,7 @@ export function ExportFilterDialog({
       startDate: null,
       endDate: null,
       mandals: [...availableMandals],
-      officers: availableOfficers.map((o) => o.username),
+      officers: availableOfficers.map((o) => o.userId), // Use userId instead of username
       mobileStatus: "all",
       healthIdStatus: "all",
       ruralUrban: ["rural", "urban"],
@@ -258,32 +258,32 @@ export function ExportFilterDialog({
     }
   }, [open, availableOfficers, availableMandals, filters.mandals, filters.officers, filteredOfficers])
 
-  const toggleOfficerSelection = (username: string) => {
+  const toggleOfficerSelection = (userId: string) => {
     setFilters((prev) => ({
       ...prev,
-      officers: prev.officers.includes(username)
-        ? prev.officers.filter((o) => o !== username)
-        : [...prev.officers, username],
+      officers: prev.officers.includes(userId)
+        ? prev.officers.filter((o) => o !== userId)
+        : [...prev.officers, userId],
     }))
   }
 
   const toggleAllOfficers = () => {
     setFilters((prev) => {
       // Check if all filtered officers are selected
-      const filteredUsernames = filteredOfficers.map((o) => o.username)
-      const allFilteredSelected = filteredUsernames.every((username) =>
-        prev.officers.includes(username)
+      const filteredUserIds = filteredOfficers.map((o) => o.userId)
+      const allFilteredSelected = filteredUserIds.every((userId) =>
+        prev.officers.includes(userId)
       )
 
       if (allFilteredSelected) {
         // Deselect all filtered officers
         return {
           ...prev,
-          officers: prev.officers.filter((username) => !filteredUsernames.includes(username)),
+          officers: prev.officers.filter((userId) => !filteredUserIds.includes(userId)),
         }
       } else {
         // Select all filtered officers (merge with existing selections)
-        const newOfficers = [...new Set([...prev.officers, ...filteredUsernames])]
+        const newOfficers = [...new Set([...prev.officers, ...filteredUserIds])]
         return {
           ...prev,
           officers: newOfficers,
@@ -447,14 +447,14 @@ export function ExportFilterDialog({
               <div className="border rounded-lg p-4 max-h-48 overflow-y-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {filteredOfficers.map((officer) => (
-                    <div key={officer.username} className="flex items-center space-x-2">
+                    <div key={officer.userId} className="flex items-center space-x-2">
                       <Checkbox
-                        id={`officer-${officer.username}`}
-                        checked={filters.officers.includes(officer.username)}
-                        onCheckedChange={() => toggleOfficerSelection(officer.username)}
+                        id={`officer-${officer.userId}`}
+                        checked={filters.officers.includes(officer.userId)}
+                        onCheckedChange={() => toggleOfficerSelection(officer.userId)}
                       />
                       <label
-                        htmlFor={`officer-${officer.username}`}
+                        htmlFor={`officer-${officer.userId}`}
                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                         title={`${officer.name} (${officer.username}) - ${officer.mandals.join(", ")}`}
                       >

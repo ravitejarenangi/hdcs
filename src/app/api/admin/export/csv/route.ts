@@ -160,9 +160,8 @@ export async function GET(request: NextRequest) {
 
         // Build OR clause for secretariat filtering (mandalName + secName combinations)
         if (allSecretariats.length > 0) {
-          // If mandal filter is already applied, combine with AND
+          // If mandal filter is already applied, filter secretariats to match
           if (whereClause.mandalName) {
-            // Filter secretariats to only include those in the selected mandals
             const selectedMandals = Array.isArray(whereClause.mandalName.in)
               ? whereClause.mandalName.in
               : [whereClause.mandalName]
@@ -172,62 +171,62 @@ export async function GET(request: NextRequest) {
             )
 
             if (filteredSecretariats.length > 0) {
-              whereClause.OR = filteredSecretariats.map((sec) => ({
-                mandalName: sec.mandalName,
-                secName: sec.secName,
-              }))
-              // Remove the mandal filter since it's now part of the OR clause
+              // Remove mandal filter and replace with specific secretariat combinations
               delete whereClause.mandalName
+
+              // Use AND with OR to combine secretariat filter with other filters
+              const secretariatOrConditions = filteredSecretariats.map((sec) => ({
+                AND: [
+                  { mandalName: sec.mandalName },
+                  { secName: sec.secName },
+                ],
+              }))
+
+              // If there are other filters, wrap everything in AND
+              const otherFilters = { ...whereClause }
+              whereClause.AND = [
+                ...Object.keys(otherFilters).map((key) => ({ [key]: otherFilters[key] })),
+                { OR: secretariatOrConditions },
+              ]
+
+              // Remove the individual filter keys since they're now in AND
+              Object.keys(otherFilters).forEach((key) => {
+                if (key !== "AND") {
+                  delete whereClause[key]
+                }
+              })
             }
           } else {
             // No mandal filter, use all secretariats
-            whereClause.OR = allSecretariats.map((sec) => ({
-              mandalName: sec.mandalName,
-              secName: sec.secName,
+            const secretariatOrConditions = allSecretariats.map((sec) => ({
+              AND: [
+                { mandalName: sec.mandalName },
+                { secName: sec.secName },
+              ],
             }))
+
+            // If there are other filters, wrap everything in AND
+            const otherFilters = { ...whereClause }
+            if (Object.keys(otherFilters).length > 0) {
+              whereClause.AND = [
+                ...Object.keys(otherFilters).map((key) => ({ [key]: otherFilters[key] })),
+                { OR: secretariatOrConditions },
+              ]
+
+              // Remove the individual filter keys since they're now in AND
+              Object.keys(otherFilters).forEach((key) => {
+                if (key !== "AND") {
+                  delete whereClause[key]
+                }
+              })
+            } else {
+              // No other filters, just use OR
+              whereClause.OR = secretariatOrConditions
+            }
           }
         }
       }
     }
-
-    // Fetch filtered residents data (all 31 fields)
-    const residents = await prisma.resident.findMany({
-      where: whereClause,
-      orderBy: { residentId: "asc" },
-      select: {
-        id: true,
-        residentId: true,
-        uid: true,
-        hhId: true,
-        name: true,
-        dob: true,
-        gender: true,
-        mobileNumber: true,
-        healthId: true,
-        distName: true,
-        mandalName: true,
-        mandalCode: true,
-        secName: true,
-        secCode: true,
-        ruralUrban: true,
-        clusterName: true,
-        qualification: true,
-        occupation: true,
-        caste: true,
-        subCaste: true,
-        casteCategory: true,
-        casteCategoryDetailed: true,
-        hofMember: true,
-        doorNumber: true,
-        addressEkyc: true,
-        addressHh: true,
-        citizenMobile: true,
-        age: true,
-        phcName: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    })
 
     // Helper function to mask UID (show only last 4 digits)
     const maskUID = (uid: string | null): string => {
@@ -236,21 +235,6 @@ export async function GET(request: NextRequest) {
       const masked = "*".repeat(uid.length - 4) + lastFour
       return masked
     }
-
-    // Prepare data for CSV (only 11 specified columns)
-    const csvData = residents.map((resident) => ({
-      "Mandal Name": resident.mandalName || "",
-      "Secretariat Name": resident.secName || "",
-      "Resident ID": resident.residentId,
-      "Health ID (ABHA ID)": resident.healthId || "",
-      "UID": maskUID(resident.uid),
-      "Mobile Number": resident.citizenMobile || "",
-      "Name": resident.name,
-      "Door No": resident.doorNumber || "",
-      "Address (eKYC)": resident.addressEkyc || "",
-      "Address (Household)": resident.addressHh || "",
-      "HHID": resident.hhId || "",
-    }))
 
     // Define headers in the exact order required (11 columns total)
     const headers = [
@@ -267,11 +251,16 @@ export async function GET(request: NextRequest) {
       "HHID",
     ]
 
+    // Get total count for the filter summary
+    const totalCount = await prisma.resident.count({
+      where: whereClause,
+    })
+
     // Build filter summary for CSV header comments
     const filterComments: string[] = []
     filterComments.push("# Chittoor District Health Data Collection System")
     filterComments.push(`# Generated: ${new Date().toLocaleString()}`)
-    filterComments.push(`# Total Records: ${residents.length}`)
+    filterComments.push(`# Total Records: ${totalCount}`)
 
     // Add filter information if filters are applied
     if (startDate || endDate) {
@@ -301,13 +290,6 @@ export async function GET(request: NextRequest) {
 
     filterComments.push("#")
 
-    // Convert to CSV
-    const csvContent = arrayToCSV(csvData, headers)
-
-    // Add filter comments and UTF-8 BOM for Excel compatibility
-    const BOM = "\uFEFF"
-    const csvWithBOM = BOM + filterComments.join("\n") + "\n" + csvContent
-
     // Generate filename with timestamp
     const timestamp = new Date()
       .toISOString()
@@ -316,12 +298,102 @@ export async function GET(request: NextRequest) {
       .replace("T", "_")
     const filename = `chittoor_health_report_${timestamp}.csv`
 
-    // Return CSV file as download
-    return new NextResponse(csvWithBOM, {
+    // Create a streaming response
+    const encoder = new TextEncoder()
+    const BATCH_SIZE = 1000 // Process 1000 records at a time
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Send UTF-8 BOM for Excel compatibility
+          const BOM = "\uFEFF"
+          controller.enqueue(encoder.encode(BOM))
+
+          // Send filter comments
+          controller.enqueue(encoder.encode(filterComments.join("\n") + "\n"))
+
+          // Send CSV header row
+          const headerRow = headers.map((h) => escapeCSV(h)).join(",") + "\n"
+          controller.enqueue(encoder.encode(headerRow))
+
+          // Stream data in batches using cursor-based pagination
+          let cursor: string | undefined = undefined
+          let processedCount = 0
+
+          while (true) {
+            // Fetch batch of residents
+            const batch = await prisma.resident.findMany({
+              where: whereClause,
+              orderBy: { id: "asc" },
+              take: BATCH_SIZE,
+              ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+              select: {
+                id: true,
+                residentId: true,
+                uid: true,
+                hhId: true,
+                name: true,
+                healthId: true,
+                mandalName: true,
+                secName: true,
+                doorNumber: true,
+                addressEkyc: true,
+                addressHh: true,
+                citizenMobile: true,
+              },
+            })
+
+            // If no more records, break
+            if (batch.length === 0) {
+              break
+            }
+
+            // Process and stream each row in the batch
+            for (const resident of batch) {
+              const row = [
+                escapeCSV(resident.mandalName || ""),
+                escapeCSV(resident.secName || ""),
+                escapeCSV(resident.residentId),
+                escapeCSV(resident.healthId || ""),
+                escapeCSV(maskUID(resident.uid)),
+                escapeCSV(resident.citizenMobile || ""),
+                escapeCSV(resident.name),
+                escapeCSV(resident.doorNumber || ""),
+                escapeCSV(resident.addressEkyc || ""),
+                escapeCSV(resident.addressHh || ""),
+                escapeCSV(resident.hhId || ""),
+              ]
+              controller.enqueue(encoder.encode(row.join(",") + "\n"))
+            }
+
+            processedCount += batch.length
+            console.log(`[CSV Export] Streamed ${processedCount}/${totalCount} records`)
+
+            // Update cursor for next batch
+            cursor = batch[batch.length - 1].id
+
+            // If we got fewer records than BATCH_SIZE, we're done
+            if (batch.length < BATCH_SIZE) {
+              break
+            }
+          }
+
+          console.log(`[CSV Export] Completed - Total records: ${processedCount}`)
+          controller.close()
+        } catch (error) {
+          console.error("[CSV Export] Streaming error:", error)
+          controller.error(error)
+        }
+      },
+    })
+
+    // Return streaming response
+    return new NextResponse(stream, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
+        "Transfer-Encoding": "chunked",
       },
     })
   } catch (error) {

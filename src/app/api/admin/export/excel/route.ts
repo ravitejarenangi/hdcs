@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
-import * as XLSX from "xlsx"
+import ExcelJS from "exceljs"
 
 export async function GET(request: NextRequest) {
   try {
@@ -123,9 +123,8 @@ export async function GET(request: NextRequest) {
 
         // Build OR clause for secretariat filtering (mandalName + secName combinations)
         if (allSecretariats.length > 0) {
-          // If mandal filter is already applied, combine with AND
+          // If mandal filter is already applied, filter secretariats to match
           if (whereClause.mandalName) {
-            // Filter secretariats to only include those in the selected mandals
             const selectedMandals = Array.isArray(whereClause.mandalName.in)
               ? whereClause.mandalName.in
               : [whereClause.mandalName]
@@ -135,109 +134,127 @@ export async function GET(request: NextRequest) {
             )
 
             if (filteredSecretariats.length > 0) {
-              whereClause.OR = filteredSecretariats.map((sec) => ({
-                mandalName: sec.mandalName,
-                secName: sec.secName,
-              }))
-              // Remove the mandal filter since it's now part of the OR clause
+              // Remove mandal filter and replace with specific secretariat combinations
               delete whereClause.mandalName
+
+              // Use AND with OR to combine secretariat filter with other filters
+              const secretariatOrConditions = filteredSecretariats.map((sec) => ({
+                AND: [
+                  { mandalName: sec.mandalName },
+                  { secName: sec.secName },
+                ],
+              }))
+
+              // If there are other filters, wrap everything in AND
+              const otherFilters = { ...whereClause }
+              whereClause.AND = [
+                ...Object.keys(otherFilters).map((key) => ({ [key]: otherFilters[key] })),
+                { OR: secretariatOrConditions },
+              ]
+
+              // Remove the individual filter keys since they're now in AND
+              Object.keys(otherFilters).forEach((key) => {
+                if (key !== "AND") {
+                  delete whereClause[key]
+                }
+              })
             }
           } else {
             // No mandal filter, use all secretariats
-            whereClause.OR = allSecretariats.map((sec) => ({
-              mandalName: sec.mandalName,
-              secName: sec.secName,
+            const secretariatOrConditions = allSecretariats.map((sec) => ({
+              AND: [
+                { mandalName: sec.mandalName },
+                { secName: sec.secName },
+              ],
             }))
+
+            // If there are other filters, wrap everything in AND
+            const otherFilters = { ...whereClause }
+            if (Object.keys(otherFilters).length > 0) {
+              whereClause.AND = [
+                ...Object.keys(otherFilters).map((key) => ({ [key]: otherFilters[key] })),
+                { OR: secretariatOrConditions },
+              ]
+
+              // Remove the individual filter keys since they're now in AND
+              Object.keys(otherFilters).forEach((key) => {
+                if (key !== "AND") {
+                  delete whereClause[key]
+                }
+              })
+            } else {
+              // No other filters, just use OR
+              whereClause.OR = secretariatOrConditions
+            }
           }
         }
       }
     }
 
-    // Fetch filtered data (single query to avoid connection pool exhaustion)
-    const residents = await prisma.resident.findMany({
+    // Helper function to mask UID (show only last 4 digits)
+    const maskUID = (uid: string | null): string => {
+      if (!uid || uid.length < 4) return ""
+      const lastFour = uid.slice(-4)
+      const masked = "*".repeat(uid.length - 4) + lastFour
+      return masked
+    }
+
+    // Get total count and statistics for summary
+    const totalCount = await prisma.resident.count({
       where: whereClause,
-      orderBy: { residentId: "asc" },
-      select: {
-        id: true,
-        residentId: true,
-        uid: true,
-        hhId: true,
-        name: true,
-        dob: true,
-        gender: true,
-        mobileNumber: true,
-        healthId: true,
-        distName: true,
-        mandalName: true,
-        mandalCode: true,
-        secName: true,
-        secCode: true,
-        ruralUrban: true,
-        clusterName: true,
-        qualification: true,
-        occupation: true,
-        caste: true,
-        subCaste: true,
-        casteCategory: true,
-        casteCategoryDetailed: true,
-        hofMember: true,
-        doorNumber: true,
-        addressEkyc: true,
-        addressHh: true,
-        citizenMobile: true,
-        age: true,
-        phcName: true,
-        createdAt: true,
-        updatedAt: true,
-      },
     })
 
-    // Calculate counts from fetched data instead of separate queries
-    const totalResidents = residents.length
-    const residentsWithMobile = residents.filter((r) => r.citizenMobile !== null).length
-    const residentsWithHealthId = residents.filter((r) => r.healthId !== null).length
+    // Get counts for statistics (using aggregation for efficiency)
+    const [withMobileCount, withHealthIdCount] = await Promise.all([
+      prisma.resident.count({
+        where: {
+          ...whereClause,
+          citizenMobile: { not: null },
+        },
+      }),
+      prisma.resident.count({
+        where: {
+          ...whereClause,
+          healthId: { not: null },
+        },
+      }),
+    ])
 
     // Calculate completion rates
     const mobileCompletionRate =
-      totalResidents > 0 ? Math.round((residentsWithMobile / totalResidents) * 100) : 0
+      totalCount > 0 ? Math.round((withMobileCount / totalCount) * 100) : 0
     const healthIdCompletionRate =
-      totalResidents > 0 ? Math.round((residentsWithHealthId / totalResidents) * 100) : 0
+      totalCount > 0 ? Math.round((withHealthIdCount / totalCount) * 100) : 0
     const dataQualityScore = Math.round((mobileCompletionRate + healthIdCompletionRate) / 2)
 
-    // Calculate mandal-wise statistics from fetched data (avoid additional DB queries)
-    const mandalMap = new Map<string, { total: number; withMobile: number; withHealthId: number }>()
-
-    residents.forEach((resident) => {
-      const mandal = resident.mandalName || "Unknown"
-      const existing = mandalMap.get(mandal) || { total: 0, withMobile: 0, withHealthId: 0 }
-      existing.total++
-      if (resident.citizenMobile) existing.withMobile++
-      if (resident.healthId) existing.withHealthId++
-      mandalMap.set(mandal, existing)
+    // Get mandal-wise statistics
+    const mandalStats = await prisma.resident.groupBy({
+      by: ["mandalName"],
+      where: whereClause,
+      _count: {
+        id: true,
+        citizenMobile: true,
+        healthId: true,
+      },
     })
 
-    const mandalCompletion = Array.from(mandalMap.entries())
-      .map(([mandalName, stats]) => ({
-        mandalName,
-        totalResidents: stats.total,
-        withMobile: stats.withMobile,
-        withHealthId: stats.withHealthId,
+    const mandalCompletion = mandalStats
+      .map((stat) => ({
+        mandalName: stat.mandalName || "Unknown",
+        totalResidents: stat._count.id,
+        withMobile: stat._count.citizenMobile,
+        withHealthId: stat._count.healthId,
         mobileCompletionRate:
-          stats.total > 0 ? Math.round((stats.withMobile / stats.total) * 100) : 0,
+          stat._count.id > 0 ? Math.round((stat._count.citizenMobile / stat._count.id) * 100) : 0,
         healthIdCompletionRate:
-          stats.total > 0 ? Math.round((stats.withHealthId / stats.total) * 100) : 0,
+          stat._count.id > 0 ? Math.round((stat._count.healthId / stat._count.id) * 100) : 0,
       }))
       .sort((a, b) => b.totalResidents - a.totalResidents)
-
-    // Create workbook
-    const workbook = XLSX.utils.book_new()
 
     // Build filter summary
     const filterSummary: string[] = []
     if (startDate || endDate) {
-      filterSummary.push(
-        `Date Range: ${startDate || "Any"} to ${endDate || "Any"}`
-      )
+      filterSummary.push(`Date Range: ${startDate || "Any"} to ${endDate || "Any"}`)
     }
     if (mandalsParam) {
       const mandals = mandalsParam.split(",")
@@ -259,131 +276,6 @@ export async function GET(request: NextRequest) {
 
     const hasFilters = filterSummary.length > 0
 
-    // Sheet 1: Summary Statistics
-    const summaryData = [
-      ["Chittoor District Health Data Collection System"],
-      [hasFilters ? "Filtered Export Summary Report" : "Export Summary Report"],
-      [`Generated: ${new Date().toLocaleString()}`],
-      [],
-    ]
-
-    // Add filter information if filters are applied
-    if (hasFilters) {
-      summaryData.push(["Applied Filters", ""])
-      filterSummary.forEach((filter) => {
-        summaryData.push([filter, ""])
-      })
-      summaryData.push([])
-    }
-
-    summaryData.push(
-      ["Metric", "Value"],
-      ["Total Residents (Filtered)", totalResidents.toString()],
-      ["Residents with Mobile Number", residentsWithMobile.toString()],
-      ["Mobile Number Completion Rate", `${mobileCompletionRate}%`],
-      ["Residents with Health ID", residentsWithHealthId.toString()],
-      ["Health ID Completion Rate", `${healthIdCompletionRate}%`],
-      ["Overall Data Quality Score", `${dataQualityScore}%`],
-      [],
-      ["Total Mandals", mandalCompletion.length.toString()]
-    )
-
-    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData)
-
-    // Apply formatting to summary sheet
-    summarySheet["!cols"] = [{ wch: 35 }, { wch: 20 }]
-
-    // Make headers bold (row 5)
-    if (!summarySheet["A5"]) summarySheet["A5"] = { t: "s", v: "Metric" }
-    if (!summarySheet["B5"]) summarySheet["B5"] = { t: "s", v: "Value" }
-
-    XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary")
-
-    // Helper function to mask UID (show only last 4 digits)
-    const maskUID = (uid: string | null): string => {
-      if (!uid || uid.length < 4) return ""
-      const lastFour = uid.slice(-4)
-      const masked = "*".repeat(uid.length - 4) + lastFour
-      return masked
-    }
-
-    // Sheet 2: Detailed Resident Data (only 11 specified columns)
-    const detailedSheetName = hasFilters ? "Filtered Data" : "Detailed Data"
-    const detailedData = residents.map((resident) => ({
-      "Mandal Name": resident.mandalName || "",
-      "Secretariat Name": resident.secName || "",
-      "Resident ID": resident.residentId,
-      "Health ID (ABHA ID)": resident.healthId || "",
-      "UID": maskUID(resident.uid),
-      "Mobile Number": resident.citizenMobile || "",
-      "Name": resident.name,
-      "Door No": resident.doorNumber || "",
-      "Address (eKYC)": resident.addressEkyc || "",
-      "Address (Household)": resident.addressHh || "",
-      "HHID": resident.hhId || "",
-    }))
-
-    const detailedSheet = XLSX.utils.json_to_sheet(detailedData)
-
-    // Auto-size columns (11 columns total)
-    const detailedCols = [
-      { wch: 25 }, // Mandal Name
-      { wch: 25 }, // Secretariat Name
-      { wch: 15 }, // Resident ID
-      { wch: 20 }, // Health ID (ABHA ID)
-      { wch: 18 }, // UID (masked)
-      { wch: 15 }, // Mobile Number
-      { wch: 25 }, // Name
-      { wch: 15 }, // Door No
-      { wch: 40 }, // Address (eKYC)
-      { wch: 40 }, // Address (Household)
-      { wch: 15 }, // HHID
-    ]
-    detailedSheet["!cols"] = detailedCols
-
-    // Freeze top row
-    detailedSheet["!freeze"] = { xSplit: 0, ySplit: 1 }
-
-    // Add autofilter (11 columns: A to K)
-    detailedSheet["!autofilter"] = { ref: `A1:K${residents.length + 1}` }
-
-    XLSX.utils.book_append_sheet(workbook, detailedSheet, detailedSheetName)
-
-    // Sheet 3: Mandal-wise Breakdown
-    const mandalData = mandalCompletion.map((mandal) => ({
-      Mandal: mandal.mandalName,
-      "Total Residents": mandal.totalResidents,
-      "With Mobile": mandal.withMobile,
-      "Mobile Completion %": mandal.mobileCompletionRate,
-      "With Health ID": mandal.withHealthId,
-      "Health ID Completion %": mandal.healthIdCompletionRate,
-      "Average Quality %": Math.round(
-        (mandal.mobileCompletionRate + mandal.healthIdCompletionRate) / 2
-      ),
-    }))
-
-    const mandalSheet = XLSX.utils.json_to_sheet(mandalData)
-
-    // Auto-size columns
-    mandalSheet["!cols"] = [
-      { wch: 25 }, // Mandal
-      { wch: 18 }, // Total Residents
-      { wch: 15 }, // With Mobile
-      { wch: 20 }, // Mobile Completion %
-      { wch: 18 }, // With Health ID
-      { wch: 22 }, // Health ID Completion %
-      { wch: 18 }, // Average Quality %
-    ]
-
-    // Freeze top row and add autofilter
-    mandalSheet["!freeze"] = { xSplit: 0, ySplit: 1 }
-    mandalSheet["!autofilter"] = { ref: `A1:G${mandalCompletion.length + 1}` }
-
-    XLSX.utils.book_append_sheet(workbook, mandalSheet, "Mandal Breakdown")
-
-    // Generate Excel file
-    const excelBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" })
-
     // Generate filename with timestamp
     const timestamp = new Date()
       .toISOString()
@@ -392,12 +284,179 @@ export async function GET(request: NextRequest) {
       .replace("T", "_")
     const filename = `chittoor_health_report_${timestamp}.xlsx`
 
-    // Return file as download
-    return new NextResponse(excelBuffer, {
+    // Create a streaming response using ExcelJS
+    const BATCH_SIZE = 1000 // Process 1000 records at a time
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Create workbook with streaming
+          const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+            stream: new WritableStream({
+              write(chunk) {
+                controller.enqueue(chunk)
+              },
+            }),
+          })
+
+          // Sheet 1: Summary Statistics
+          const summarySheet = workbook.addWorksheet("Summary")
+          summarySheet.columns = [
+            { header: "", key: "label", width: 35 },
+            { header: "", key: "value", width: 20 },
+          ]
+
+          // Add summary data
+          summarySheet.addRow(["Chittoor District Health Data Collection System", ""])
+          summarySheet.addRow([hasFilters ? "Filtered Export Summary Report" : "Export Summary Report", ""])
+          summarySheet.addRow([`Generated: ${new Date().toLocaleString()}`, ""])
+          summarySheet.addRow(["", ""])
+
+          // Add filter information if filters are applied
+          if (hasFilters) {
+            summarySheet.addRow(["Applied Filters", ""])
+            filterSummary.forEach((filter) => {
+              summarySheet.addRow([filter, ""])
+            })
+            summarySheet.addRow(["", ""])
+          }
+
+          summarySheet.addRow(["Metric", "Value"])
+          summarySheet.addRow(["Total Residents (Filtered)", totalCount.toString()])
+          summarySheet.addRow(["Residents with Mobile Number", withMobileCount.toString()])
+          summarySheet.addRow(["Mobile Number Completion Rate", `${mobileCompletionRate}%`])
+          summarySheet.addRow(["Residents with Health ID", withHealthIdCount.toString()])
+          summarySheet.addRow(["Health ID Completion Rate", `${healthIdCompletionRate}%`])
+          summarySheet.addRow(["Overall Data Quality Score", `${dataQualityScore}%`])
+          summarySheet.addRow(["", ""])
+          summarySheet.addRow(["Total Mandals", mandalCompletion.length.toString()])
+
+          await summarySheet.commit()
+
+          // Sheet 2: Detailed Resident Data (streaming)
+          const detailedSheetName = hasFilters ? "Filtered Data" : "Detailed Data"
+          const detailedSheet = workbook.addWorksheet(detailedSheetName)
+
+          // Define columns (11 columns total)
+          detailedSheet.columns = [
+            { header: "Mandal Name", key: "mandalName", width: 25 },
+            { header: "Secretariat Name", key: "secName", width: 25 },
+            { header: "Resident ID", key: "residentId", width: 15 },
+            { header: "Health ID (ABHA ID)", key: "healthId", width: 20 },
+            { header: "UID", key: "uid", width: 18 },
+            { header: "Mobile Number", key: "mobile", width: 15 },
+            { header: "Name", key: "name", width: 25 },
+            { header: "Door No", key: "doorNo", width: 15 },
+            { header: "Address (eKYC)", key: "addressEkyc", width: 40 },
+            { header: "Address (Household)", key: "addressHh", width: 40 },
+            { header: "HHID", key: "hhId", width: 15 },
+          ]
+
+          // Stream data in batches
+          let cursor: string | undefined = undefined
+          let processedCount = 0
+
+          while (true) {
+            const batch = await prisma.resident.findMany({
+              where: whereClause,
+              orderBy: { id: "asc" },
+              take: BATCH_SIZE,
+              ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+              select: {
+                id: true,
+                residentId: true,
+                uid: true,
+                hhId: true,
+                name: true,
+                healthId: true,
+                mandalName: true,
+                secName: true,
+                doorNumber: true,
+                addressEkyc: true,
+                addressHh: true,
+                citizenMobile: true,
+              },
+            })
+
+            if (batch.length === 0) {
+              break
+            }
+
+            // Add rows to sheet
+            for (const resident of batch) {
+              detailedSheet.addRow({
+                mandalName: resident.mandalName || "",
+                secName: resident.secName || "",
+                residentId: resident.residentId,
+                healthId: resident.healthId || "",
+                uid: maskUID(resident.uid),
+                mobile: resident.citizenMobile || "",
+                name: resident.name,
+                doorNo: resident.doorNumber || "",
+                addressEkyc: resident.addressEkyc || "",
+                addressHh: resident.addressHh || "",
+                hhId: resident.hhId || "",
+              })
+            }
+
+            processedCount += batch.length
+            console.log(`[Excel Export] Streamed ${processedCount}/${totalCount} records`)
+
+            cursor = batch[batch.length - 1].id
+
+            if (batch.length < BATCH_SIZE) {
+              break
+            }
+          }
+
+          await detailedSheet.commit()
+
+          // Sheet 3: Mandal-wise Breakdown
+          const mandalSheet = workbook.addWorksheet("Mandal Breakdown")
+          mandalSheet.columns = [
+            { header: "Mandal", key: "mandal", width: 25 },
+            { header: "Total Residents", key: "total", width: 18 },
+            { header: "With Mobile", key: "withMobile", width: 15 },
+            { header: "Mobile Completion %", key: "mobileRate", width: 20 },
+            { header: "With Health ID", key: "withHealthId", width: 18 },
+            { header: "Health ID Completion %", key: "healthIdRate", width: 22 },
+            { header: "Average Quality %", key: "avgQuality", width: 18 },
+          ]
+
+          // Add mandal data
+          for (const mandal of mandalCompletion) {
+            mandalSheet.addRow({
+              mandal: mandal.mandalName,
+              total: mandal.totalResidents,
+              withMobile: mandal.withMobile,
+              mobileRate: mandal.mobileCompletionRate,
+              withHealthId: mandal.withHealthId,
+              healthIdRate: mandal.healthIdCompletionRate,
+              avgQuality: Math.round((mandal.mobileCompletionRate + mandal.healthIdCompletionRate) / 2),
+            })
+          }
+
+          await mandalSheet.commit()
+
+          // Finalize workbook
+          await workbook.commit()
+
+          console.log(`[Excel Export] Completed - Total records: ${processedCount}`)
+          controller.close()
+        } catch (error) {
+          console.error("[Excel Export] Streaming error:", error)
+          controller.error(error)
+        }
+      },
+    })
+
+    // Return streaming response
+    return new NextResponse(stream, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${filename}"`,
+        "Transfer-Encoding": "chunked",
       },
     })
   } catch (error) {
