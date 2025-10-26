@@ -83,8 +83,7 @@ export function OfficerDialog({
       fetchMandals()
       fetchSecretariats()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, fetchMandals, fetchSecretariats])
 
   // Reset form when dialog opens/closes or officer changes
   useEffect(() => {

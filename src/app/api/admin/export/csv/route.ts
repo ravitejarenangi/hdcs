@@ -322,7 +322,22 @@ export async function GET(request: NextRequest) {
 
           while (true) {
             // Fetch batch of residents
-            const batch = await prisma.resident.findMany({
+            type ResidentBatch = Array<{
+              id: string
+              residentId: string
+              uid: string | null
+              hhId: string | null
+              name: string
+              healthId: string | null
+              mandalName: string | null
+              secName: string | null
+              doorNumber: string | null
+              addressEkyc: string | null
+              addressHh: string | null
+              citizenMobile: string | null
+            }>
+
+            const batch: ResidentBatch = await prisma.resident.findMany({
               where: whereClause,
               orderBy: { id: "asc" },
               take: BATCH_SIZE,
