@@ -533,60 +533,33 @@ export default function AdminDashboard() {
       )
 
       const totalLabel = isFiltered ? `TOTAL (${expandedMandal})` : "TOTAL (All Mandals)"
-      const totalRow = isFiltered
-        ? {
-            "Mandal Name": totalLabel,
-            "Secretariat Name": "",
-            "Total Residents": totalResidents,
-            "Mobile %": `${avgMobile}% avg`,
-            "ABHA ID %": `${avgHealthId}% avg`,
-            "Mobile Updates (All Time)": mandalsToExport.reduce(
-              (sum, m) => sum + m.mobileUpdatesAllTime,
-              0
-            ),
-            "Mobile Updates (Today)": mandalsToExport.reduce(
-              (sum, m) => sum + m.mobileUpdatesToday,
-              0
-            ),
-            "ABHA IDs (Original)": mandalsToExport.reduce(
-              (sum, m) => sum + m.healthIdsOriginal,
-              0
-            ),
-            "ABHA IDs (Added)": mandalsToExport.reduce(
-              (sum, m) => sum + m.healthIdsAddedViaUpdates,
-              0
-            ),
-            "ABHA IDs (Today)": mandalsToExport.reduce(
-              (sum, m) => sum + m.healthIdUpdatesToday,
-              0
-            ),
-          }
-        : {
-            "Mandal Name": totalLabel,
-            "Total Residents": totalResidents,
-            "Mobile %": `${avgMobile}% avg`,
-            "ABHA ID %": `${avgHealthId}% avg`,
-            "Mobile Updates (All Time)": mandalsToExport.reduce(
-              (sum, m) => sum + m.mobileUpdatesAllTime,
-              0
-            ),
-            "Mobile Updates (Today)": mandalsToExport.reduce(
-              (sum, m) => sum + m.mobileUpdatesToday,
-              0
-            ),
-            "ABHA IDs (Original)": mandalsToExport.reduce(
-              (sum, m) => sum + m.healthIdsOriginal,
-              0
-            ),
-            "ABHA IDs (Added)": mandalsToExport.reduce(
-              (sum, m) => sum + m.healthIdsAddedViaUpdates,
-              0
-            ),
-            "ABHA IDs (Today)": mandalsToExport.reduce(
-              (sum, m) => sum + m.healthIdUpdatesToday,
-              0
-            ),
-          }
+      const totalRow: Record<string, string | number> = {
+        "Mandal Name": totalLabel,
+        ...(isFiltered ? { "Secretariat Name": "" } : {}),
+        "Total Residents": totalResidents,
+        "Mobile %": `${avgMobile}% avg`,
+        "ABHA ID %": `${avgHealthId}% avg`,
+        "Mobile Updates (All Time)": mandalsToExport.reduce(
+          (sum, m) => sum + m.mobileUpdatesAllTime,
+          0
+        ),
+        "Mobile Updates (Today)": mandalsToExport.reduce(
+          (sum, m) => sum + m.mobileUpdatesToday,
+          0
+        ),
+        "ABHA IDs (Original)": mandalsToExport.reduce(
+          (sum, m) => sum + m.healthIdsOriginal,
+          0
+        ),
+        "ABHA IDs (Added)": mandalsToExport.reduce(
+          (sum, m) => sum + m.healthIdsAddedViaUpdates,
+          0
+        ),
+        "ABHA IDs (Today)": mandalsToExport.reduce(
+          (sum, m) => sum + m.healthIdUpdatesToday,
+          0
+        ),
+      }
 
       excelData.push(totalRow)
 

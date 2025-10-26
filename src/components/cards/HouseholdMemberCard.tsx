@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { User, MapPin, Calendar, Phone, CreditCard, Edit2 } from "lucide-react"
+import { User, MapPin, Phone, CreditCard, Edit2 } from "lucide-react"
 import { HouseholdMemberEditForm } from "@/components/forms/HouseholdMemberEditForm"
 
 // Helper function to mask UID (show only last 4 digits)

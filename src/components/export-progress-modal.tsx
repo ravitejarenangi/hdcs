@@ -29,7 +29,7 @@ export function ExportProgressModal({
   open,
   onOpenChange,
   sessionId,
-  totalRecords,
+  totalRecords: _totalRecords,
 }: ExportProgressModalProps) {
   const [progress, setProgress] = useState<ExportProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
