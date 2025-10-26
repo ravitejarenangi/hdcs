@@ -47,20 +47,31 @@ export async function GET(request: NextRequest) {
     const ruralUrbanParam = searchParams.get("ruralUrban")
     const sessionId = searchParams.get("sessionId") // For progress tracking
 
+    console.log(`[CSV Export] Filter parameters:`, {
+      startDate,
+      endDate,
+      mandals: mandalsParam,
+      officers: officersParam,
+      mobileStatus,
+      healthIdStatus,
+      ruralUrban: ruralUrbanParam,
+      sessionId
+    })
+
     // Build where clause for filters
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const whereClause: any = {}
 
-    // Date range filter
+    // Date range filter - using updatedAt to track when mobile numbers and health IDs were updated
     if (startDate || endDate) {
-      whereClause.createdAt = {}
+      whereClause.updatedAt = {}
       if (startDate) {
-        whereClause.createdAt.gte = new Date(startDate)
+        whereClause.updatedAt.gte = new Date(startDate)
       }
       if (endDate) {
         const endDateTime = new Date(endDate)
         endDateTime.setHours(23, 59, 59, 999)
-        whereClause.createdAt.lte = endDateTime
+        whereClause.updatedAt.lte = endDateTime
       }
     }
 
@@ -232,14 +243,26 @@ export async function GET(request: NextRequest) {
     ]
 
     // Get total count for the filter summary
+    console.log(`[CSV Export] ========== FILTER DEBUG ==========`)
+    console.log(`[CSV Export] WHERE clause:`, JSON.stringify(whereClause, null, 2))
+    console.log(`[CSV Export] Executing count query...`)
+    const countStartTime = Date.now()
     const totalCount = await prisma.resident.count({
       where: whereClause,
     })
+    const countDuration = Date.now() - countStartTime
+    console.log(`[CSV Export] Count query completed in ${countDuration}ms`)
+    console.log(`[CSV Export] Total records matching filters: ${totalCount}`)
+    console.log(`[CSV Export] ====================================`)
 
     // Initialize progress tracking if sessionId is provided
     if (sessionId) {
       const totalBatches = Math.ceil(totalCount / 1000)
-      createProgress(sessionId, totalCount, totalBatches)
+      console.log(`[CSV Export] Creating progress for sessionId: ${sessionId}, totalCount: ${totalCount}, totalBatches: ${totalBatches}`)
+      const progress = createProgress(sessionId, totalCount, totalBatches)
+      console.log(`[CSV Export] Progress created:`, progress)
+    } else {
+      console.log(`[CSV Export] No sessionId provided - progress tracking disabled`)
     }
 
     // Build filter summary for CSV header comments

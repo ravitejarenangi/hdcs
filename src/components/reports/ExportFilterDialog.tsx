@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -113,32 +113,17 @@ export function ExportFilterDialog({
         ? prev.mandals.filter((m) => m !== mandal)
         : [...prev.mandals, mandal]
 
-      // When deselecting a mandal, remove officers that ONLY belong to that mandal
-      // Officers that belong to other selected mandals should remain
-      let newOfficers = prev.officers
+      // Calculate which officers should be visible with the new mandal selection
+      const newFilteredOfficers = getFilteredOfficers(newMandals)
+      const newFilteredOfficerIds = newFilteredOfficers.map((o) => o.userId)
 
-      if (isDeselecting) {
-        // Get officers that belong to the deselected mandal
-        const officersInDeselectedMandal = availableOfficers
-          .filter((officer) => officer.mandals.includes(mandal))
-          .map((o) => o.username)
+      // Keep only the officers that are still visible after the mandal change
+      // This ensures that filters.officers only contains officers that are in the filtered list
+      const newOfficers = prev.officers.filter((userId) =>
+        newFilteredOfficerIds.includes(userId)
+      )
 
-        // Remove officers that ONLY belong to the deselected mandal
-        // Keep officers that also belong to other selected mandals
-        newOfficers = prev.officers.filter((username) => {
-          const officer = availableOfficers.find((o) => o.username === username)
-          if (!officer) return false
 
-          // If officer is in the deselected mandal
-          if (officersInDeselectedMandal.includes(username)) {
-            // Check if they also belong to any other selected mandal
-            const remainingMandals = newMandals
-            return officer.mandals.some((m) => remainingMandals.includes(m))
-          }
-
-          return true
-        })
-      }
 
       return {
         ...prev,
@@ -151,17 +136,23 @@ export function ExportFilterDialog({
   const toggleAllMandals = () => {
     setFilters((prev) => {
       const isDeselectingAll = prev.mandals.length === availableMandals.length
+      const newMandals = isDeselectingAll ? [] : [...availableMandals]
 
-      console.log("Toggle All Mandals clicked:")
-      console.log("  Current mandals selected:", prev.mandals.length, "of", availableMandals.length)
-      console.log("  Action:", isDeselectingAll ? "DESELECTING ALL" : "SELECTING ALL")
+
+
+      // Calculate which officers should be visible with the new mandal selection
+      const newFilteredOfficers = getFilteredOfficers(newMandals)
+      const newFilteredOfficerIds = newFilteredOfficers.map((o) => o.userId)
+
+      // Keep only the officers that are still visible after the mandal change
+      const newOfficers = prev.officers.filter((userId) =>
+        newFilteredOfficerIds.includes(userId)
+      )
 
       return {
         ...prev,
-        mandals: isDeselectingAll ? [] : [...availableMandals],
-        // When deselecting all mandals, also deselect all officers
-        // When selecting all mandals, keep current officer selections
-        officers: isDeselectingAll ? [] : prev.officers,
+        mandals: newMandals,
+        officers: newOfficers,
       }
     })
   }
@@ -197,74 +188,42 @@ export function ExportFilterDialog({
   // Get currently filtered officers based on selected mandals
   const filteredOfficers = getFilteredOfficers(filters.mandals)
 
-  // Debug logging
-  useEffect(() => {
-    if (open) {
-      console.log("=== Export Filter Dialog Debug ===")
-      console.log("Total Available Officers:", availableOfficers.length)
-      console.log("Total Available Mandals:", availableMandals.length)
-      console.log("Selected Mandals:", filters.mandals.length, "of", availableMandals.length)
-      console.log("Selected Officers:", filters.officers.length)
-      console.log("Filtered Officers (visible):", filteredOfficers.length)
+  // Calculate selected count
+  const selectedOfficersCount = useMemo(() => {
+    const count = filters.officers.filter((userId) =>
+      filteredOfficers.some((o) => o.userId === userId)
+    ).length
 
-      // Count officers by mandal assignment
-      const officersWithMandals = availableOfficers.filter(o => o.mandals && o.mandals.length > 0)
-      const officersWithoutMandals = availableOfficers.filter(o => !o.mandals || o.mandals.length === 0)
+    console.log("=== Selected Officers Count Calculation ===")
+    console.log("filters.officers.length:", filters.officers.length)
+    console.log("filteredOfficers.length:", filteredOfficers.length)
+    console.log("selectedOfficersCount:", count)
+    console.log("Sample filters.officers (first 5):", filters.officers.slice(0, 5))
+    console.log("Sample filteredOfficers userIds (first 5):", filteredOfficers.slice(0, 5).map(o => o.userId))
 
-      console.log("Officers WITH mandals assigned:", officersWithMandals.length)
-      console.log("Officers WITHOUT mandals assigned:", officersWithoutMandals.length)
+    return count
+  }, [filters.officers, filteredOfficers])
 
-      // Show detailed mandal distribution
-      if (officersWithMandals.length > 0) {
-        console.log("Sample officers WITH mandals:")
-        officersWithMandals.slice(0, 5).forEach(o => {
-          console.log(`  - ${o.name} (${o.username}): mandals =`, o.mandals)
-        })
-      }
-
-      if (officersWithoutMandals.length > 0) {
-        console.log("Sample officers WITHOUT mandals:")
-        officersWithoutMandals.slice(0, 5).forEach(o => {
-          console.log(`  - ${o.name} (${o.username}): mandals =`, o.mandals)
-        })
-      }
-
-      // Show which mandals are NOT selected
-      const deselectedMandals = availableMandals.filter(m => !filters.mandals.includes(m))
-      if (deselectedMandals.length > 0 && deselectedMandals.length < 10) {
-        console.log("Deselected mandals:", deselectedMandals)
-      }
-
-      // Show filtering breakdown
-      console.log("\n--- Filtering Breakdown ---")
-      console.log("Officers that SHOULD be visible based on selected mandals:")
-      const shouldBeVisible = availableOfficers.filter(o => {
-        if (!o.mandals || o.mandals.length === 0) return true
-        return o.mandals.some(m => filters.mandals.includes(m))
-      })
-      console.log("  Count:", shouldBeVisible.length)
-
-      console.log("Officers that should be HIDDEN (work only in deselected mandals):")
-      const shouldBeHidden = availableOfficers.filter(o => {
-        if (!o.mandals || o.mandals.length === 0) return false
-        return !o.mandals.some(m => filters.mandals.includes(m))
-      })
-      console.log("  Count:", shouldBeHidden.length)
-      if (shouldBeHidden.length > 0 && shouldBeHidden.length < 10) {
-        shouldBeHidden.forEach(o => {
-          console.log(`    - ${o.name}: works only in`, o.mandals)
-        })
-      }
-    }
-  }, [open, availableOfficers, availableMandals, filters.mandals, filters.officers, filteredOfficers])
 
   const toggleOfficerSelection = (userId: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      officers: prev.officers.includes(userId)
+    console.log("=== toggleOfficerSelection ===")
+    console.log("userId:", userId)
+    console.log("Current filters.officers length:", filters.officers.length)
+    console.log("Is userId in filters.officers?", filters.officers.includes(userId))
+
+    setFilters((prev) => {
+      const newOfficers = prev.officers.includes(userId)
         ? prev.officers.filter((o) => o !== userId)
-        : [...prev.officers, userId],
-    }))
+        : [...prev.officers, userId]
+
+      console.log("New filters.officers length:", newOfficers.length)
+      console.log("Action:", prev.officers.includes(userId) ? "REMOVE" : "ADD")
+
+      return {
+        ...prev,
+        officers: newOfficers,
+      }
+    })
   }
 
   const toggleAllOfficers = () => {
@@ -431,10 +390,10 @@ export function ExportFilterDialog({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-base font-semibold">
-                Field Officers ({filters.officers.filter((username) => filteredOfficers.some((o) => o.username === username)).length} of {filteredOfficers.length} selected)
+                Field Officers ({selectedOfficersCount} of {filteredOfficers.length} selected)
               </Label>
               <Button variant="outline" size="sm" onClick={toggleAllOfficers}>
-                {filteredOfficers.every((o) => filters.officers.includes(o.username)) && filteredOfficers.length > 0
+                {filteredOfficers.every((o) => filters.officers.includes(o.userId)) && filteredOfficers.length > 0
                   ? "Deselect All"
                   : "Select All"}
               </Button>

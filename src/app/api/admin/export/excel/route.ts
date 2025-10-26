@@ -32,20 +32,31 @@ export async function GET(request: NextRequest) {
     const ruralUrbanParam = searchParams.get("ruralUrban")
     const sessionId = searchParams.get("sessionId") // For progress tracking
 
+    console.log(`[Excel Export] Filter parameters:`, {
+      startDate,
+      endDate,
+      mandals: mandalsParam,
+      officers: officersParam,
+      mobileStatus,
+      healthIdStatus,
+      ruralUrban: ruralUrbanParam,
+      sessionId
+    })
+
     // Build where clause for filters
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const whereClause: any = {}
 
-    // Date range filter
+    // Date range filter - using updatedAt to track when mobile numbers and health IDs were updated
     if (startDate || endDate) {
-      whereClause.createdAt = {}
+      whereClause.updatedAt = {}
       if (startDate) {
-        whereClause.createdAt.gte = new Date(startDate)
+        whereClause.updatedAt.gte = new Date(startDate)
       }
       if (endDate) {
         const endDateTime = new Date(endDate)
         endDateTime.setHours(23, 59, 59, 999)
-        whereClause.createdAt.lte = endDateTime
+        whereClause.updatedAt.lte = endDateTime
       }
     }
 
@@ -202,9 +213,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Get total count and statistics for summary
+    console.log(`[Excel Export] WHERE clause:`, JSON.stringify(whereClause, null, 2))
     const totalCount = await prisma.resident.count({
       where: whereClause,
     })
+    console.log(`[Excel Export] Total records matching filters: ${totalCount}`)
 
     // Get counts for statistics (using aggregation for efficiency)
     const [withMobileCount, withHealthIdCount] = await Promise.all([

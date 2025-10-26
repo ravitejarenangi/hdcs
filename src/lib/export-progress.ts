@@ -14,9 +14,21 @@ export interface ExportProgress {
   lastUpdateTime: number
 }
 
+// Use globalThis to ensure the Map is shared across all module instances
+// This is critical for Next.js with Turbopack which can create separate module instances
+declare global {
+  // eslint-disable-next-line no-var
+  var exportProgressStore: Map<string, ExportProgress> | undefined
+}
+
 // Global Map to store progress for active exports
 // Key: sessionId, Value: ExportProgress
-const progressStore = new Map<string, ExportProgress>()
+const progressStore = globalThis.exportProgressStore ?? new Map<string, ExportProgress>()
+
+// Store the reference in globalThis so it's shared across all module instances
+if (!globalThis.exportProgressStore) {
+  globalThis.exportProgressStore = progressStore
+}
 
 // Cleanup old progress entries after 1 hour
 const PROGRESS_TTL = 60 * 60 * 1000 // 1 hour in milliseconds
@@ -33,8 +45,11 @@ export function createProgress(sessionId: string, totalRecords: number, totalBat
     startTime: Date.now(),
     lastUpdateTime: Date.now(),
   }
-  
+
+  console.log(`[ProgressStore] Creating progress for sessionId: ${sessionId}`, progress)
+  console.log(`[ProgressStore] Using globalThis store:`, progressStore === globalThis.exportProgressStore)
   progressStore.set(sessionId, progress)
+  console.log(`[ProgressStore] Progress stored. Store size: ${progressStore.size}, globalThis store size: ${globalThis.exportProgressStore?.size}`)
   return progress
 }
 
@@ -58,7 +73,14 @@ export function updateProgress(
 }
 
 export function getProgress(sessionId: string): ExportProgress | null {
-  return progressStore.get(sessionId) || null
+  const progress = progressStore.get(sessionId) || null
+  console.log(`[ProgressStore] Getting progress for sessionId: ${sessionId}, found:`, progress ? 'YES' : 'NO')
+  console.log(`[ProgressStore] Using globalThis store:`, progressStore === globalThis.exportProgressStore)
+  console.log(`[ProgressStore] Store size: ${progressStore.size}, globalThis store size: ${globalThis.exportProgressStore?.size}`)
+  if (progress) {
+    console.log(`[ProgressStore] Progress details:`, progress)
+  }
+  return progress
 }
 
 export function deleteProgress(sessionId: string): void {

@@ -40,23 +40,32 @@ export function ExportProgressModal({
       return
     }
 
+    console.log(`[ExportProgressModal] Opening modal for sessionId: ${sessionId}`)
+    setProgress(null)
+    setError(null)
+
     // Track if we've received a completed/error status
     let hasFinished = false
 
     // Connect to SSE endpoint for progress updates
-    const eventSource = new EventSource(`/api/admin/export/progress/${sessionId}`)
+    const sseUrl = `/api/admin/export/progress/${sessionId}`
+    console.log(`[ExportProgressModal] Connecting to SSE endpoint: ${sseUrl}`)
+    const eventSource = new EventSource(sseUrl)
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
+        console.log("[ExportProgressModal] Received SSE data:", data)
 
         if (data.error) {
+          console.error("[ExportProgressModal] Error received:", data.error)
           setError(data.error)
           hasFinished = true
           eventSource.close()
           return
         }
 
+        console.log("[ExportProgressModal] Setting progress:", data)
         setProgress(data)
 
         // Mark as finished when export is completed or errored
@@ -89,8 +98,8 @@ export function ExportProgressModal({
     }
   }, [open, sessionId])
 
-  // Calculate percentage
-  const percentage = progress
+  // Calculate percentage - handle division by zero
+  const percentage = progress && progress.totalRecords > 0
     ? Math.round((progress.processedRecords / progress.totalRecords) * 100)
     : 0
 
@@ -100,12 +109,15 @@ export function ExportProgressModal({
     : 0
 
   // Estimate remaining time
-  const estimatedRemainingTime = progress && progress.processedRecords > 0
+  const estimatedRemainingTime = progress && progress.processedRecords > 0 && progress.totalRecords > 0
     ? Math.floor(
         (elapsedTime / progress.processedRecords) *
           (progress.totalRecords - progress.processedRecords)
       )
     : 0
+
+  // Check if we have actual progress data (not just initializing placeholder)
+  const hasActualProgress = progress && progress.totalRecords > 0
 
   // Format time in MM:SS
   const formatTime = (seconds: number): string => {
@@ -161,8 +173,8 @@ export function ExportProgressModal({
             <Progress value={percentage} className="h-2" />
           </div>
 
-          {/* Batch Information */}
-          {progress && (
+          {/* Batch Information - Only show when we have actual progress data */}
+          {hasActualProgress && (
             <div className="space-y-2 rounded-lg bg-muted/50 p-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Batch</span>
@@ -192,8 +204,17 @@ export function ExportProgressModal({
             </div>
           )}
 
-          {/* Status Message */}
-          {progress?.message && (
+          {/* Initializing message - Show when waiting for export to start */}
+          {progress?.status === "initializing" && !hasActualProgress && (
+            <div className="rounded-lg border border-border bg-background p-3">
+              <p className="text-sm text-muted-foreground text-center">
+                {progress.message || "Waiting for export to start..."}
+              </p>
+            </div>
+          )}
+
+          {/* Status Message - Only show for processing/completed states with actual progress */}
+          {progress?.message && hasActualProgress && progress.status !== "initializing" && (
             <div className="rounded-lg border border-border bg-background p-3">
               <p className="text-sm text-muted-foreground">{progress.message}</p>
             </div>

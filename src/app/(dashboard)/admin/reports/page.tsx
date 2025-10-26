@@ -447,6 +447,7 @@ export default function ReportsPage() {
 
       // Generate a unique session ID for progress tracking
       const sessionId = `export-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      console.log(`[Reports Page] Generated sessionId: ${sessionId}`)
       setExportSessionId(sessionId)
 
       // Estimate total records based on analytics data
@@ -460,9 +461,6 @@ export default function ReportsPage() {
       }
       setExportTotalRecords(estimatedRecords)
 
-      // Show progress modal
-      setShowProgressModal(true)
-
       // Show loading toast
       toast.loading(`Applying filters and generating ${exportFormat.toUpperCase()} export...`, {
         id: "export-loading",
@@ -472,8 +470,18 @@ export default function ReportsPage() {
       const queryString = buildFilterQueryString(filters)
       const separator = queryString ? "&" : "?"
       const endpoint = `/api/admin/export/${exportFormat}${queryString ? `?${queryString}` : ""}${separator}sessionId=${sessionId}`
+      console.log(`[Reports Page] Export endpoint: ${endpoint}`)
 
-      const response = await fetch(endpoint)
+      // Start the export API call (don't await yet - this will initialize progress)
+      const fetchPromise = fetch(endpoint)
+
+      // Show progress modal immediately after starting the fetch
+      // The SSE endpoint will wait for progress to be initialized (up to 10 seconds)
+      console.log(`[Reports Page] Opening progress modal for sessionId: ${sessionId}`)
+      setShowProgressModal(true)
+
+      // Now await the response
+      const response = await fetchPromise
 
       if (!response.ok) {
         if (response.status === 403) {

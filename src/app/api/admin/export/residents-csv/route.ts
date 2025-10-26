@@ -84,8 +84,11 @@ export async function GET(request: NextRequest) {
     const totalBatches = Math.ceil(totalCount / BATCH_SIZE)
 
     if (sessionId) {
-      createProgress(sessionId, totalCount, totalBatches)
-      console.log(`Progress tracking initialized for session: ${sessionId}`)
+      console.log(`[Residents CSV Export] Creating progress for sessionId: ${sessionId}, totalCount: ${totalCount}, totalBatches: ${totalBatches}`)
+      const progress = createProgress(sessionId, totalCount, totalBatches)
+      console.log(`[Residents CSV Export] Progress created:`, progress)
+    } else {
+      console.log(`[Residents CSV Export] No sessionId provided - progress tracking disabled`)
     }
 
     // Generate filename with timestamp

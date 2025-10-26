@@ -30,33 +30,65 @@ export async function GET(
 
     // Await params in Next.js 15+
     const { sessionId } = await params
+    console.log(`[SSE Progress] Starting SSE stream for sessionId: ${sessionId}`)
 
     // Create a ReadableStream for Server-Sent Events
     const encoder = new TextEncoder()
-    
+
     const stream = new ReadableStream({
       async start(controller) {
         // Send initial connection message
         controller.enqueue(encoder.encode(`: Connected to progress stream\n\n`))
 
+        // Track how many times we've checked for progress
+        let checkCount = 0
+        const MAX_WAIT_CHECKS = 20 // Wait up to 10 seconds (20 * 500ms) for progress to be initialized
+
         // Poll for progress updates every 500ms
         const intervalId = setInterval(() => {
           const progress = getProgress(sessionId)
+          console.log(`[SSE Progress] Check ${checkCount + 1}: sessionId=${sessionId}, progress=`, progress)
 
           if (!progress) {
-            // Progress not found - might be too old or invalid session
+            checkCount++
+
+            // If we've waited long enough and still no progress, it's an error
+            if (checkCount >= MAX_WAIT_CHECKS) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    error: "Progress not found - export may have failed to start",
+                    sessionId
+                  })}\n\n`
+                )
+              )
+              clearInterval(intervalId)
+              controller.close()
+              return
+            }
+
+            // Otherwise, just wait - progress might be initializing
+            // Send a waiting status to keep connection alive
             controller.enqueue(
               encoder.encode(
-                `data: ${JSON.stringify({ 
-                  error: "Progress not found",
-                  sessionId 
+                `data: ${JSON.stringify({
+                  status: "initializing",
+                  message: "Waiting for export to start...",
+                  sessionId,
+                  totalRecords: 0,
+                  processedRecords: 0,
+                  currentBatch: 0,
+                  totalBatches: 0,
+                  startTime: Date.now(),
+                  lastUpdateTime: Date.now()
                 })}\n\n`
               )
             )
-            clearInterval(intervalId)
-            controller.close()
             return
           }
+
+          // Reset check count once we have progress
+          checkCount = 0
 
           // Send progress update
           controller.enqueue(
