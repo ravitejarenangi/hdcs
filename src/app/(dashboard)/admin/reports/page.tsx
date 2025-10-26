@@ -165,16 +165,10 @@ export default function ReportsPage() {
     }
   }, [officerStartDate, officerEndDate])
 
+  // Fetch analytics on mount and when date range changes
   useEffect(() => {
     fetchAnalytics()
   }, [fetchAnalytics])
-
-  // Refetch analytics when officer date range changes
-  useEffect(() => {
-    if (analytics) {
-      fetchAnalytics()
-    }
-  }, [officerStartDate, officerEndDate, analytics, fetchAnalytics])
 
   // Sorting functions for Mandal Statistics table
   const handleMandalSort = (column: MandalSortColumn) => {
