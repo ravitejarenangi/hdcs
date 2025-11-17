@@ -48,7 +48,15 @@ export async function GET(request: NextRequest) {
     const whereClause: any = {}
 
     // Date range filter - using updatedAt to track when mobile numbers and health IDs were updated
-    if (startDate || endDate) {
+    // Skip date filtering when BOTH mobileStatus and healthIdStatus are "without"
+    // (old/incomplete records may not have recent update timestamps)
+    const skipDateFilter = mobileStatus === "without" && healthIdStatus === "without"
+
+    if (skipDateFilter && (startDate || endDate)) {
+      console.log(`[Excel Export] Skipping date filter because both mobileStatus and healthIdStatus are "without"`)
+    }
+
+    if ((startDate || endDate) && !skipDateFilter) {
       whereClause.updatedAt = {}
       if (startDate) {
         whereClause.updatedAt.gte = new Date(startDate)
@@ -58,6 +66,7 @@ export async function GET(request: NextRequest) {
         endDateTime.setHours(23, 59, 59, 999)
         whereClause.updatedAt.lte = endDateTime
       }
+      console.log(`[Excel Export] Applied date filter:`, whereClause.updatedAt)
     }
 
     // Mandal filter
@@ -78,12 +87,17 @@ export async function GET(request: NextRequest) {
         { citizenMobile: { not: "" } }
       )
     } else if (mobileStatus === "without") {
-      whereClause.OR = [
-        { citizenMobile: null },
-        { citizenMobile: "N/A" },
-        { citizenMobile: "0" },
-        { citizenMobile: "" }
-      ]
+      // When filtering for "without", we need records where mobile is NULL or a placeholder
+      // Use OR to match any of these conditions for the mobile field
+      whereClause.AND = whereClause.AND || []
+      whereClause.AND.push({
+        OR: [
+          { citizenMobile: null },
+          { citizenMobile: "N/A" },
+          { citizenMobile: "0" },
+          { citizenMobile: "" }
+        ]
+      })
     }
 
     // Health ID status filter - exclude placeholder values
@@ -95,11 +109,16 @@ export async function GET(request: NextRequest) {
         { healthId: { not: "" } }
       )
     } else if (healthIdStatus === "without") {
-      whereClause.OR = [
-        { healthId: null },
-        { healthId: "N/A" },
-        { healthId: "" }
-      ]
+      // When filtering for "without", we need records where health ID is NULL or a placeholder
+      // Use OR to match any of these conditions for the health ID field
+      whereClause.AND = whereClause.AND || []
+      whereClause.AND.push({
+        OR: [
+          { healthId: null },
+          { healthId: "N/A" },
+          { healthId: "" }
+        ]
+      })
     }
 
     // Rural/Urban filter
