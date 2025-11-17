@@ -68,18 +68,38 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Mobile status filter
+    // Mobile status filter - exclude placeholder values
     if (mobileStatus === "with") {
-      whereClause.citizenMobile = { not: null }
+      whereClause.AND = whereClause.AND || []
+      whereClause.AND.push(
+        { citizenMobile: { not: null } },
+        { citizenMobile: { not: "N/A" } },
+        { citizenMobile: { not: "0" } },
+        { citizenMobile: { not: "" } }
+      )
     } else if (mobileStatus === "without") {
-      whereClause.citizenMobile = null
+      whereClause.OR = [
+        { citizenMobile: null },
+        { citizenMobile: "N/A" },
+        { citizenMobile: "0" },
+        { citizenMobile: "" }
+      ]
     }
 
-    // Health ID status filter
+    // Health ID status filter - exclude placeholder values
     if (healthIdStatus === "with") {
-      whereClause.healthId = { not: null }
+      whereClause.AND = whereClause.AND || []
+      whereClause.AND.push(
+        { healthId: { not: null } },
+        { healthId: { not: "N/A" } },
+        { healthId: { not: "" } }
+      )
     } else if (healthIdStatus === "without") {
-      whereClause.healthId = null
+      whereClause.OR = [
+        { healthId: null },
+        { healthId: "N/A" },
+        { healthId: "" }
+      ]
     }
 
     // Rural/Urban filter
