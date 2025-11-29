@@ -384,7 +384,7 @@ export async function GET(request: NextRequest) {
     const detailedSheetName = hasFilters ? "Filtered Data" : "Detailed Data"
     const detailedSheet = workbook.addWorksheet(detailedSheetName)
 
-    // Define columns (13 columns total - added Gender and Date of Birth)
+    // Define columns (13 columns total - added Gender and Age)
     detailedSheet.columns = [
       { header: "Mandal Name", key: "mandalName", width: 25 },
       { header: "Secretariat Name", key: "secName", width: 25 },
@@ -394,7 +394,7 @@ export async function GET(request: NextRequest) {
       { header: "Mobile Number", key: "mobile", width: 15 },
       { header: "Name", key: "name", width: 25 },
       { header: "Gender", key: "gender", width: 12 },
-      { header: "Date of Birth", key: "dob", width: 15 },
+      { header: "Age", key: "age", width: 10 },
       { header: "Door No", key: "doorNo", width: 15 },
       { header: "Address (eKYC)", key: "addressEkyc", width: 40 },
       { header: "Address (Household)", key: "addressHh", width: 40 },
@@ -415,7 +415,7 @@ export async function GET(request: NextRequest) {
         hhId: string | null
         name: string
         gender: string | null
-        dob: Date | null
+        age: number | null
         healthId: string | null
         mandalName: string | null
         secName: string | null
@@ -437,7 +437,7 @@ export async function GET(request: NextRequest) {
           hhId: true,
           name: true,
           gender: true,
-          dob: true,
+          age: true,
           healthId: true,
           mandalName: true,
           secName: true,
@@ -454,21 +454,6 @@ export async function GET(request: NextRequest) {
 
       // Add rows to sheet
       for (const resident of batch) {
-        // Format date of birth - handle NULL and invalid dates
-        let formattedDob = ""
-        if (resident.dob) {
-          try {
-            const dobDate = new Date(resident.dob)
-            // Check if date is valid and not a placeholder date (0000-00-00)
-            if (!isNaN(dobDate.getTime()) && dobDate.getFullYear() > 1900) {
-              formattedDob = dobDate.toLocaleDateString("en-GB") // DD/MM/YYYY format
-            }
-          } catch (error) {
-            // Invalid date, leave as empty string
-            formattedDob = ""
-          }
-        }
-
         detailedSheet.addRow({
           mandalName: resident.mandalName || "",
           secName: resident.secName || "",
@@ -478,7 +463,7 @@ export async function GET(request: NextRequest) {
           mobile: resident.citizenMobile || "",
           name: resident.name,
           gender: resident.gender || "",
-          dob: formattedDob,
+          age: resident.age !== null ? resident.age.toString() : "",
           doorNo: resident.doorNumber || "",
           addressEkyc: resident.addressEkyc || "",
           addressHh: resident.addressHh || "",

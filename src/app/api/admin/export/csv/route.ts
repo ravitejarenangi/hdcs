@@ -266,7 +266,7 @@ export async function GET(request: NextRequest) {
       return masked
     }
 
-    // Define headers in the exact order required (13 columns total - added Gender and Date of Birth)
+    // Define headers in the exact order required (13 columns total - added Gender and Age)
     const headers = [
       "Mandal Name",
       "Secretariat Name",
@@ -276,7 +276,7 @@ export async function GET(request: NextRequest) {
       "Mobile Number",
       "Name",
       "Gender",
-      "Date of Birth",
+      "Age",
       "Door No",
       "Address (eKYC)",
       "Address (Household)",
@@ -381,7 +381,7 @@ export async function GET(request: NextRequest) {
               hhId: string | null
               name: string
               gender: string | null
-              dob: Date | null
+              age: number | null
               healthId: string | null
               mandalName: string | null
               secName: string | null
@@ -403,7 +403,7 @@ export async function GET(request: NextRequest) {
                 hhId: true,
                 name: true,
                 gender: true,
-                dob: true,
+                age: true,
                 healthId: true,
                 mandalName: true,
                 secName: true,
@@ -421,21 +421,6 @@ export async function GET(request: NextRequest) {
 
             // Process and stream each row in the batch
             for (const resident of batch) {
-              // Format date of birth - handle NULL and invalid dates
-              let formattedDob = ""
-              if (resident.dob) {
-                try {
-                  const dobDate = new Date(resident.dob)
-                  // Check if date is valid and not a placeholder date (0000-00-00)
-                  if (!isNaN(dobDate.getTime()) && dobDate.getFullYear() > 1900) {
-                    formattedDob = dobDate.toLocaleDateString("en-GB") // DD/MM/YYYY format
-                  }
-                } catch (error) {
-                  // Invalid date, leave as empty string
-                  formattedDob = ""
-                }
-              }
-
               const row = [
                 escapeCSV(resident.mandalName || ""),
                 escapeCSV(resident.secName || ""),
@@ -445,7 +430,7 @@ export async function GET(request: NextRequest) {
                 escapeCSV(resident.citizenMobile || ""),
                 escapeCSV(resident.name),
                 escapeCSV(resident.gender || ""),
-                escapeCSV(formattedDob),
+                escapeCSV(resident.age !== null ? resident.age.toString() : ""),
                 escapeCSV(resident.doorNumber || ""),
                 escapeCSV(resident.addressEkyc || ""),
                 escapeCSV(resident.addressHh || ""),
