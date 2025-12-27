@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import ExcelJS from "exceljs"
+import { createProgress, updateProgress, completeProgress, errorProgress } from "@/lib/export-progress"
 
 // Helper function to mask UID (show only last 4 digits)
 const maskUID = (uid: string | null): string => {
@@ -37,14 +38,29 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Check for maskUid parameter
+    // Check for maskUid and sessionId parameters
     const searchParams = request.nextUrl.searchParams
     const maskUidParam = searchParams.get("maskUid")
+    const sessionIdParam = searchParams.get("sessionId")
     const maskUid = maskUidParam === "false" ? false : true
     console.log(`[Duplicate Mobiles Excel Export] maskUid: ${maskUid}`)
 
+    // Initialize progress tracking if sessionId is provided
+    if (sessionIdParam) {
+      createProgress(sessionIdParam, 100, 5) // Estimate: 100 records, 5 steps
+    }
+
     // Fetch duplicate mobile numbers (appearing more than 5 times) with resident details
     console.log(`[Duplicate Mobiles Excel Export] Fetching duplicate mobile numbers...`)
+
+    if (sessionIdParam) {
+      updateProgress(sessionIdParam, {
+        status: "processing",
+        message: "Fetching duplicate mobile numbers...",
+        currentBatch: 1,
+      })
+    }
+
     const duplicates = await prisma.$queryRaw<Array<{
       citizen_mobile: string
       count: number
@@ -65,6 +81,9 @@ export async function GET(request: NextRequest) {
     console.log(`[Duplicate Mobiles Excel Export] Found ${duplicates.length} duplicate mobile numbers`)
 
     if (duplicates.length === 0) {
+      if (sessionIdParam) {
+        errorProgress(sessionIdParam, "No duplicate mobile numbers found to export")
+      }
       return NextResponse.json(
         { error: "No duplicate mobile numbers found to export" },
         { status: 404 }
@@ -76,6 +95,15 @@ export async function GET(request: NextRequest) {
     const totalAffectedResidents = duplicates.reduce((sum, d) => sum + Number(d.count), 0)
 
     console.log(`[Duplicate Mobiles Excel Export] Fetching residents for ${mobileNumbers.length} mobile numbers...`)
+
+    if (sessionIdParam) {
+      updateProgress(sessionIdParam, {
+        message: `Fetching residents for ${mobileNumbers.length} duplicate mobile numbers...`,
+        currentBatch: 2,
+        totalRecords: totalAffectedResidents,
+        totalBatches: 5,
+      })
+    }
 
     // Fetch all residents with duplicate mobile numbers
     const residents = await prisma.resident.findMany({
@@ -94,6 +122,14 @@ export async function GET(request: NextRequest) {
     })
 
     console.log(`[Duplicate Mobiles Excel Export] Found ${residents.length} residents`)
+
+    if (sessionIdParam) {
+      updateProgress(sessionIdParam, {
+        message: `Generating Excel file with ${residents.length} residents...`,
+        currentBatch: 3,
+        processedRecords: residents.length,
+      })
+    }
 
     // Create a map of mobile number to count
     const mobileCountMap = duplicates.reduce((acc, dup) => {

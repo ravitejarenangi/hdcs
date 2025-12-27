@@ -51,8 +51,17 @@ export default function DuplicateMobileNumbersPage() {
   const [isExporting, setIsExporting] = useState(false)
   const [exportFormat, setExportFormat] = useState<"csv" | "excel" | null>(null)
   const [showExportDialog, setShowExportDialog] = useState(false)
+  const [showProgressDialog, setShowProgressDialog] = useState(false)
   const [pendingExportFormat, setPendingExportFormat] = useState<"csv" | "excel" | null>(null)
   const [maskUid, setMaskUid] = useState(false) // Default to unmasked
+  const [exportProgress, setExportProgress] = useState<{
+    status: "initializing" | "processing" | "completed" | "error"
+    message: string
+    processedRecords: number
+    totalRecords: number
+    currentBatch: number
+    totalBatches: number
+  } | null>(null)
 
   useEffect(() => {
     fetchDuplicateMobileNumbers()
@@ -99,27 +108,26 @@ export default function DuplicateMobileNumbersPage() {
   const handleExport = async () => {
     if (!pendingExportFormat) return
 
-    setIsExporting(true)
-    setExportFormat(pendingExportFormat)
     setShowExportDialog(false)
+    setShowProgressDialog(true)
+    setIsExporting(true)
+
+    // Generate a unique session ID for this export
+    const sessionId = `export-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+    console.log(`Starting export with sessionId: ${sessionId}`)
 
     try {
-      const url = `/api/admin/export/duplicate-mobiles-${pendingExportFormat}?maskUid=${maskUid.toString()}`
-      const response = await fetch(url)
+      // Start the export in the background
+      const exportUrl = `/api/admin/export/duplicate-mobiles-${pendingExportFormat}?maskUid=${maskUid.toString()}&sessionId=${sessionId}`
+
+      // Start polling for progress
+      pollProgress(sessionId, pendingExportFormat)
+
+      // Fetch the export file
+      const response = await fetch(exportUrl)
 
       if (!response.ok) {
-        // Try to parse the error response
-        let errorMessage = `Failed to generate ${pendingExportFormat.toUpperCase()} export`
-        try {
-          const errorData = await response.json()
-          if (errorData.error) {
-            errorMessage = errorData.error
-          }
-        } catch (e) {
-          // If we can't parse JSON, use the status text
-          errorMessage = response.statusText || errorMessage
-        }
-        throw new Error(errorMessage)
+        throw await getErrorMessage(response)
       }
 
       // Get the filename from Content-Disposition header
@@ -148,14 +156,80 @@ export default function DuplicateMobileNumbersPage() {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(blobUrl)
 
-      toast.success(`Successfully exported ${filename}`)
+      setExportProgress({
+        status: "completed",
+        message: "Export completed successfully!",
+        processedRecords: exportProgress?.totalRecords || 0,
+        totalRecords: exportProgress?.totalRecords || 0,
+        currentBatch: exportProgress?.totalBatches || 0,
+        totalBatches: exportProgress?.totalBatches || 0,
+      })
+
+      setTimeout(() => {
+        setShowProgressDialog(false)
+        toast.success(`Successfully exported ${filename}`)
+      }, 1500)
     } catch (err) {
       console.error("Export error:", err)
-      toast.error(err instanceof Error ? err.message : "Failed to export data")
+      setExportProgress({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to export data",
+        processedRecords: 0,
+        totalRecords: 0,
+        currentBatch: 0,
+        totalBatches: 0,
+      })
+
+      setTimeout(() => {
+        setShowProgressDialog(false)
+        toast.error(err instanceof Error ? err.message : "Failed to export data")
+      }, 2000)
     } finally {
       setIsExporting(false)
       setExportFormat(null)
       setPendingExportFormat(null)
+    }
+  }
+
+  const pollProgress = async (sessionId: string, format: "csv" | "excel") => {
+    const maxPollTime = 60000 // 1 minute
+    const pollInterval = 500 // 500ms
+    const startTime = Date.now()
+
+    const poll = async () => {
+      if (Date.now() - startTime > maxPollTime) {
+        console.log("Polling timeout")
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/admin/export/progress/${sessionId}`)
+        if (response.ok) {
+          const progress = await response.json()
+          console.log("Progress update:", progress)
+          setExportProgress(progress)
+
+          if (progress.status === "completed" || progress.status === "error") {
+            return
+          }
+        }
+      } catch (err) {
+        console.error("Error polling progress:", err)
+      }
+
+      // Continue polling
+      setTimeout(poll, pollInterval)
+    }
+
+    poll()
+  }
+
+  const getErrorMessage = async (response: Response): Promise<Error> => {
+    try {
+      const errorData = await response.json()
+      return new Error(errorData.error || `Failed to generate export`)
+    } catch {
+      return new Error(response.statusText || "Failed to generate export")
     }
   }
 
@@ -428,6 +502,165 @@ export default function DuplicateMobileNumbersPage() {
               Export {pendingExportFormat?.toUpperCase()}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Progress Dialog */}
+      <Dialog open={showProgressDialog} onOpenChange={setShowProgressDialog}>
+        <DialogContent className="sm:max-w-md overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Exporting Duplicate Mobile Numbers</DialogTitle>
+            <DialogDescription>
+              {exportProgress?.message || "Preparing your export..."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6">
+            {/* Progress Steps */}
+            <div className="space-y-4">
+              {/* Step 1: Initializing */}
+              <div className="flex items-center gap-3">
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  exportProgress && exportProgress.currentBatch >= 1
+                    ? "bg-green-500 text-white"
+                    : "bg-gray-200 text-gray-500"
+                }`}>
+                  {exportProgress && exportProgress.currentBatch > 1 ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <span className="text-xs font-bold">1</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Initializing</p>
+                  <p className="text-xs text-gray-500">
+                    {exportProgress && exportProgress.currentBatch >= 1 ? "Completed" : "Starting..."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2: Fetching Duplicates */}
+              <div className="flex items-center gap-3">
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  exportProgress && exportProgress.currentBatch >= 2
+                    ? "bg-green-500 text-white"
+                    : exportProgress && exportProgress.currentBatch === 1
+                    ? "bg-blue-500 text-white animate-pulse"
+                    : "bg-gray-200 text-gray-500"
+                }`}>
+                  {exportProgress && exportProgress.currentBatch > 2 ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <span className="text-xs font-bold">2</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Fetching Duplicate Mobiles</p>
+                  <p className="text-xs text-gray-500">
+                    {exportProgress && exportProgress.currentBatch >= 2 ? "Completed" : "Searching for duplicates..."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3: Fetching Residents */}
+              <div className="flex items-center gap-3">
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  exportProgress && exportProgress.currentBatch >= 3
+                    ? "bg-green-500 text-white"
+                    : exportProgress && exportProgress.currentBatch === 2
+                    ? "bg-blue-500 text-white animate-pulse"
+                    : "bg-gray-200 text-gray-500"
+                }`}>
+                  {exportProgress && exportProgress.currentBatch > 3 ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <span className="text-xs font-bold">3</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Fetching Residents</p>
+                  <p className="text-xs text-gray-500">
+                    {exportProgress && exportProgress.currentBatch >= 3
+                      ? `Found ${exportProgress.totalRecords} residents`
+                      : "Loading resident data..."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 4: Generating File */}
+              <div className="flex items-center gap-3">
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  exportProgress && exportProgress.status === "completed"
+                    ? "bg-green-500 text-white"
+                    : exportProgress && exportProgress.currentBatch === 3
+                    ? "bg-blue-500 text-white animate-pulse"
+                    : "bg-gray-200 text-gray-500"
+                }`}>
+                  {exportProgress && exportProgress.status === "completed" ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : exportProgress && exportProgress.currentBatch >= 4 ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <span className="text-xs font-bold">4</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Generating {pendingExportFormat?.toUpperCase()}</p>
+                  <p className="text-xs text-gray-500">
+                    {exportProgress && exportProgress.status === "completed"
+                      ? "Completed!"
+                      : exportProgress && exportProgress.currentBatch >= 4
+                      ? "Creating file..."
+                      : "Waiting..."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              {exportProgress && exportProgress.totalRecords > 0 && (
+                <div className="mt-6">
+                  <div className="flex justify-between text-xs text-gray-500 mb-2">
+                    <span>Progress</span>
+                    <span>{exportProgress.status === "completed"
+                      ? "100%"
+                      : `${Math.round((exportProgress.processedRecords / exportProgress.totalRecords) * 100)}%`}
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        exportProgress.status === "completed"
+                          ? "bg-green-500"
+                          : exportProgress.status === "error"
+                          ? "bg-red-500"
+                          : "bg-blue-500"
+                      }`}
+                      style={{
+                        width: `${exportProgress.status === "completed"
+                          ? 100
+                          : (exportProgress.processedRecords / exportProgress.totalRecords) * 100
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Error Message */}
+              {exportProgress && exportProgress.status === "error" && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-600">{exportProgress.message}</p>
+                </div>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
