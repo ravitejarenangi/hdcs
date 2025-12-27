@@ -650,34 +650,82 @@ export default function AdminDashboard() {
 
     try {
       setIsExportingCountsCsv(true)
-      toast.info("Generating Mandal Counts CSV export...")
+
+      // Determine what to export based on expanded state
+      const isFiltered = expandedMandal !== null
+      const exportMessage = isFiltered
+        ? `Generating CSV export for ${expandedMandal}...`
+        : "Generating Mandal Counts CSV export..."
+      toast.info(exportMessage)
 
       const csvRows: string[] = []
 
-      // Header row
-      const headers = [
-        "Mandal Name",
-        "Mobile Numbers Present",
-        "Mobile Numbers Needed",
-        "ABHA IDs Present",
-        "ABHA IDs Needed",
-      ]
+      // Header row - include Secretariat column when exporting expanded mandal
+      const headers = isFiltered
+        ? [
+            "Mandal Name",
+            "Secretariat Name",
+            "Mobile Numbers Present",
+            "Mobile Numbers Needed",
+            "ABHA IDs Present",
+            "ABHA IDs Needed",
+          ]
+        : [
+            "Mandal Name",
+            "Mobile Numbers Present",
+            "Mobile Numbers Needed",
+            "ABHA IDs Present",
+            "ABHA IDs Needed",
+          ]
       csvRows.push(headers.join(","))
 
+      // Filter mandals based on expanded state
+      const countsToExport = isFiltered
+        ? getSortedMandalCounts().filter(m => m.mandalName === expandedMandal)
+        : getSortedMandalCounts()
+
       // Data rows
-      const counts = getSortedMandalCounts()
-      counts.forEach((mandal) => {
-        csvRows.push([
-          `"${mandal.mandalName}"`,
-          mandal.mobilePresent,
-          mandal.mobileNeeded,
-          mandal.abhaPresent,
-          mandal.abhaNeeded,
-        ].join(","))
+      countsToExport.forEach((mandal) => {
+        const mandalWithSecretariats = analytics?.mandalHierarchy?.find(
+          m => m.mandalName === mandal.mandalName
+        )
+
+        if (isFiltered && mandalWithSecretariats) {
+          // Export mandal total row with secretariat column
+          csvRows.push([
+            `"${mandal.mandalName}"`,
+            `"${mandal.mandalName} (Total)"`,
+            mandal.mobilePresent,
+            mandal.mobileNeeded,
+            mandal.abhaPresent,
+            mandal.abhaNeeded,
+          ].join(","))
+
+          // Export secretariat rows
+          mandalWithSecretariats.secretariats.forEach((secretariat) => {
+            csvRows.push([
+              `"${mandal.mandalName}"`,
+              `"${secretariat.secName}"`,
+              secretariat.withMobile,
+              secretariat.totalResidents - secretariat.withMobile,
+              secretariat.withHealthId,
+              secretariat.totalResidents - secretariat.withHealthId,
+            ].join(","))
+          })
+        } else {
+          // Export mandal only (no secretariats)
+          csvRows.push([
+            `"${mandal.mandalName}"`,
+            mandal.mobilePresent,
+            mandal.mobileNeeded,
+            mandal.abhaPresent,
+            mandal.abhaNeeded,
+          ].join(","))
+        }
       })
 
       // Totals row
-      const totals = counts.reduce(
+      const totals = countsToExport.reduce(
         (acc, m) => ({
           mobilePresent: acc.mobilePresent + m.mobilePresent,
           mobileNeeded: acc.mobileNeeded + m.mobileNeeded,
@@ -687,13 +735,24 @@ export default function AdminDashboard() {
         { mobilePresent: 0, mobileNeeded: 0, abhaPresent: 0, abhaNeeded: 0 }
       )
 
-      csvRows.push([
-        '"TOTAL (All Mandals)"',
-        totals.mobilePresent,
-        totals.mobileNeeded,
-        totals.abhaPresent,
-        totals.abhaNeeded,
-      ].join(","))
+      if (isFiltered) {
+        csvRows.push([
+          `"TOTAL (${expandedMandal})"`,
+          '""', // Empty secretariat column
+          totals.mobilePresent,
+          totals.mobileNeeded,
+          totals.abhaPresent,
+          totals.abhaNeeded,
+        ].join(","))
+      } else {
+        csvRows.push([
+          '"TOTAL (All Mandals)"',
+          totals.mobilePresent,
+          totals.mobileNeeded,
+          totals.abhaPresent,
+          totals.abhaNeeded,
+        ].join(","))
+      }
 
       // Create CSV content with BOM for Excel compatibility
       const BOM = "\uFEFF"
@@ -706,7 +765,9 @@ export default function AdminDashboard() {
       link.href = url
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
-      const filename = `mandal_actual_counts_${timestamp}.csv`
+      const filename = isFiltered
+        ? `${expandedMandal?.toLowerCase().replace(/\s+/g, "_")}_actual_counts_${timestamp}.csv`
+        : `mandal_actual_counts_${timestamp}.csv`
       link.download = filename
 
       document.body.appendChild(link)
@@ -735,12 +796,21 @@ export default function AdminDashboard() {
 
     try {
       setIsExportingCountsExcel(true)
-      toast.info("Generating Mandal Counts Excel export...")
 
-      const counts = getSortedMandalCounts()
+      // Determine what to export based on expanded state
+      const isFiltered = expandedMandal !== null
+      const exportMessage = isFiltered
+        ? `Generating Excel export for ${expandedMandal}...`
+        : "Generating Mandal Counts Excel export..."
+      toast.info(exportMessage)
+
+      // Filter mandals based on expanded state
+      const countsToExport = isFiltered
+        ? getSortedMandalCounts().filter(m => m.mandalName === expandedMandal)
+        : getSortedMandalCounts()
 
       // Calculate totals
-      const totals = counts.reduce(
+      const totals = countsToExport.reduce(
         (acc, m) => ({
           mobilePresent: acc.mobilePresent + m.mobilePresent,
           mobileNeeded: acc.mobileNeeded + m.mobileNeeded,
@@ -754,35 +824,116 @@ export default function AdminDashboard() {
       const workbook = XLSX.utils.book_new()
 
       // Create worksheet data
-      const worksheetData = [
-        ["Mandal Name", "Mobile Numbers Present", "Mobile Numbers Needed", "ABHA IDs Present", "ABHA IDs Needed"],
-        ...counts.map((m) => [
-          m.mandalName,
-          m.mobilePresent,
-          m.mobileNeeded,
-          m.abhaPresent,
-          m.abhaNeeded,
-        ]),
-        ["TOTAL (All Mandals)", totals.mobilePresent, totals.mobileNeeded, totals.abhaPresent, totals.abhaNeeded],
-      ]
+      const worksheetData: (string | number)[][] = []
+
+      // Header row
+      if (isFiltered) {
+        worksheetData.push([
+          "Mandal Name",
+          "Secretariat Name",
+          "Mobile Numbers Present",
+          "Mobile Numbers Needed",
+          "ABHA IDs Present",
+          "ABHA IDs Needed",
+        ])
+      } else {
+        worksheetData.push([
+          "Mandal Name",
+          "Mobile Numbers Present",
+          "Mobile Numbers Needed",
+          "ABHA IDs Present",
+          "ABHA IDs Needed",
+        ])
+      }
+
+      // Data rows
+      countsToExport.forEach((mandal) => {
+        const mandalWithSecretariats = analytics?.mandalHierarchy?.find(
+          m => m.mandalName === mandal.mandalName
+        )
+
+        if (isFiltered && mandalWithSecretariats) {
+          // Add mandal total row with secretariat column
+          worksheetData.push([
+            mandal.mandalName,
+            `${mandal.mandalName} (Total)`,
+            mandal.mobilePresent,
+            mandal.mobileNeeded,
+            mandal.abhaPresent,
+            mandal.abhaNeeded,
+          ])
+
+          // Add secretariat rows
+          mandalWithSecretariats.secretariats.forEach((secretariat) => {
+            worksheetData.push([
+              mandal.mandalName,
+              secretariat.secName,
+              secretariat.withMobile,
+              secretariat.totalResidents - secretariat.withMobile,
+              secretariat.withHealthId,
+              secretariat.totalResidents - secretariat.withHealthId,
+            ])
+          })
+        } else {
+          // Add mandal only (no secretariats)
+          worksheetData.push([
+            mandal.mandalName,
+            mandal.mobilePresent,
+            mandal.mobileNeeded,
+            mandal.abhaPresent,
+            mandal.abhaNeeded,
+          ])
+        }
+      })
+
+      // Totals row
+      if (isFiltered) {
+        worksheetData.push([
+          `TOTAL (${expandedMandal})`,
+          "",
+          totals.mobilePresent,
+          totals.mobileNeeded,
+          totals.abhaPresent,
+          totals.abhaNeeded,
+        ])
+      } else {
+        worksheetData.push([
+          "TOTAL (All Mandals)",
+          totals.mobilePresent,
+          totals.mobileNeeded,
+          totals.abhaPresent,
+          totals.abhaNeeded,
+        ])
+      }
 
       const worksheet = XLSX.utils.aoa_to_sheet(worksheetData)
 
       // Set column widths
-      worksheet["!cols"] = [
-        { wch: 30 },
-        { wch: 20 },
-        { wch: 20 },
-        { wch: 20 },
-        { wch: 20 },
-      ]
+      worksheet["!cols"] = isFiltered
+        ? [
+            { wch: 30 },
+            { wch: 30 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 20 },
+          ]
+        : [
+            { wch: 30 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 20 },
+          ]
 
       // Add worksheet to workbook
       XLSX.utils.book_append_sheet(workbook, worksheet, "Mandal Counts")
 
       // Generate file
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
-      const filename = `mandal_actual_counts_${timestamp}.xlsx`
+      const filename = isFiltered
+        ? `${expandedMandal?.toLowerCase().replace(/\s+/g, "_")}_actual_counts_${timestamp}.xlsx`
+        : `mandal_actual_counts_${timestamp}.xlsx`
 
       XLSX.writeFile(workbook, filename)
 
@@ -1949,6 +2100,7 @@ export default function AdminDashboard() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-gray-50">
+                        <th className="text-left py-3 px-4 w-12"></th>
                         <th
                           className="text-left py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
                           onClick={() => handleMandalCountsSort("name")}
@@ -2017,25 +2169,93 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {getSortedMandalCounts().map((mandal, index) => (
-                        <tr key={index} className="border-b hover:bg-gray-50">
-                          <td className="py-3 px-4 font-semibold text-gray-800">
-                            {mandal.mandalName}
-                          </td>
-                          <td className="text-right py-3 px-4 bg-green-50 font-bold text-green-700">
-                            {mandal.mobilePresent.toLocaleString()}
-                          </td>
-                          <td className="text-right py-3 px-4 bg-red-50 font-bold text-red-700">
-                            {mandal.mobileNeeded.toLocaleString()}
-                          </td>
-                          <td className="text-right py-3 px-4 bg-purple-50 font-bold text-purple-700">
-                            {mandal.abhaPresent.toLocaleString()}
-                          </td>
-                          <td className="text-right py-3 px-4 bg-orange-50 font-bold text-orange-700">
-                            {mandal.abhaNeeded.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
+                      {getSortedMandalCounts().map((mandal, index) => {
+                        // Find corresponding mandal from mandalHierarchy to get secretariats
+                        const mandalWithSecretariats = analytics?.mandalHierarchy?.find(
+                          m => m.mandalName === mandal.mandalName
+                        )
+
+                        return (
+                          <React.Fragment key={index}>
+                            {/* Mandal Row */}
+                            <tr
+                              className="border-b hover:bg-gray-50 cursor-pointer"
+                              onClick={() => toggleMandal(mandal.mandalName)}
+                            >
+                              <td className="py-3 px-4">
+                                {expandedMandal === mandal.mandalName ? (
+                                  <ChevronDown className="h-4 w-4 text-gray-600" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 text-gray-600" />
+                                )}
+                              </td>
+                              <td className="py-3 px-4 font-semibold text-orange-700">
+                                {mandal.mandalName}
+                              </td>
+                              <td className="text-right py-3 px-4 bg-green-50 font-bold text-green-700">
+                                {mandal.mobilePresent.toLocaleString()}
+                              </td>
+                              <td className="text-right py-3 px-4 bg-red-50 font-bold text-red-700">
+                                {mandal.mobileNeeded.toLocaleString()}
+                              </td>
+                              <td className="text-right py-3 px-4 bg-purple-50 font-bold text-purple-700">
+                                {mandal.abhaPresent.toLocaleString()}
+                              </td>
+                              <td className="text-right py-3 px-4 bg-orange-50 font-bold text-orange-700">
+                                {mandal.abhaNeeded.toLocaleString()}
+                              </td>
+                            </tr>
+
+                            {/* Secretariat Rows */}
+                            {expandedMandal === mandal.mandalName &&
+                              mandalWithSecretariats?.secretariats.map((secretariat, secIndex) => (
+                                <tr
+                                  key={`sec-${index}-${secIndex}`}
+                                  className="border-b hover:bg-blue-50 bg-blue-50/30"
+                                >
+                                  <td className="py-2 px-4 pl-8">
+                                    <span className="text-blue-600">•</span>
+                                  </td>
+                                  <td className="py-2 px-4 pl-8 font-semibold text-blue-700 text-sm">
+                                    {secretariat.secName}
+                                  </td>
+                                  <td className="text-right py-2 px-4 bg-green-50/50 font-semibold text-green-700 text-sm">
+                                    {secretariat.withMobile.toLocaleString()}
+                                  </td>
+                                  <td className="text-right py-2 px-4 bg-red-50/50 font-semibold text-red-700 text-sm">
+                                    {(secretariat.totalResidents - secretariat.withMobile).toLocaleString()}
+                                  </td>
+                                  <td className="text-right py-2 px-4 bg-purple-50/50 font-semibold text-purple-700 text-sm">
+                                    {secretariat.withHealthId.toLocaleString()}
+                                  </td>
+                                  <td className="text-right py-2 px-4 bg-orange-50/50 font-semibold text-orange-700 text-sm">
+                                    {(secretariat.totalResidents - secretariat.withHealthId).toLocaleString()}
+                                  </td>
+                                </tr>
+                              ))}
+                          </React.Fragment>
+                        )
+                      })}
+
+                      {/* Total Row */}
+                      <tr className="border-b-2 border-gray-300 bg-gray-100 font-bold">
+                        <td className="py-3 px-4"></td>
+                        <td className="py-3 px-4 text-gray-900">
+                          TOTAL (All Mandals)
+                        </td>
+                        <td className="text-right py-3 px-4 bg-green-100 text-green-800">
+                          {getSortedMandalCounts().reduce((sum, m) => sum + m.mobilePresent, 0).toLocaleString()}
+                        </td>
+                        <td className="text-right py-3 px-4 bg-red-100 text-red-800">
+                          {getSortedMandalCounts().reduce((sum, m) => sum + m.mobileNeeded, 0).toLocaleString()}
+                        </td>
+                        <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
+                          {getSortedMandalCounts().reduce((sum, m) => sum + m.abhaPresent, 0).toLocaleString()}
+                        </td>
+                        <td className="text-right py-3 px-4 bg-orange-100 text-orange-800">
+                          {getSortedMandalCounts().reduce((sum, m) => sum + m.abhaNeeded, 0).toLocaleString()}
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
