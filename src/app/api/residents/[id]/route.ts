@@ -112,6 +112,48 @@ export async function PUT(
       )
     }
 
+    // --- LOCK CHECK START ---
+    // Only enforce lock for Field Officers (or generally if required)
+    // Assuming strict enforcement for now as requested
+
+    const systemSetting = await prisma.systemSettings.findUnique({
+      where: { key: "RESIDENT_UPDATE_CUTOFF_DATE" },
+    })
+
+    if (systemSetting?.value) {
+      const cutoffDate = new Date(systemSetting.value)
+
+      // 1. Check Date Condition
+      if (currentResident.updatedAt < cutoffDate) {
+
+        // 2. Check Completeness
+        const hasMobile = Boolean(currentResident.citizenMobile && /^[6-9]\d{9}$/.test(currentResident.citizenMobile))
+        const hasAbha = Boolean(currentResident.healthId && currentResident.healthId.length >= 14)
+
+        if (hasMobile && hasAbha) {
+          // 3. Check Duplicates
+          const mobileCount = await prisma.resident.count({
+            where: { citizenMobile: currentResident.citizenMobile },
+          })
+          const abhaCount = await prisma.resident.count({
+            where: { healthId: currentResident.healthId },
+          })
+
+          // If passes all checks -> IT IS LOCKED
+          if (mobileCount <= 5 && abhaCount === 1) {
+            return NextResponse.json(
+              {
+                error: "RECORD_LOCKED",
+                message: "This record is complete, verified, and locked. You cannot edit it."
+              },
+              { status: 403 }
+            )
+          }
+        }
+      }
+    }
+    // --- LOCK CHECK END ---
+
     // Validate citizenMobile uniqueness within secretariat (max 5 residents per mobile number)
     if (
       validatedData.citizenMobile !== undefined &&
@@ -202,8 +244,8 @@ export async function PUT(
     // Log changes to UpdateLog table
     const changes = []
     const ipAddress = request.headers.get("x-forwarded-for") ||
-                     request.headers.get("x-real-ip") ||
-                     "unknown"
+      request.headers.get("x-real-ip") ||
+      "unknown"
 
     if (
       validatedData.citizenMobile !== undefined &&
@@ -300,7 +342,48 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(resident)
+    // Check if resident is locked
+    const systemSetting = await prisma.systemSettings.findUnique({
+      where: { key: "RESIDENT_UPDATE_CUTOFF_DATE" },
+    })
+
+    let isLocked = false
+    let lockReason = null
+
+    if (systemSetting?.value) {
+      const cutoffDate = new Date(systemSetting.value)
+
+      // 1. Check Date Condition (Last updated BEFORE cutoff date)
+      if (resident.updatedAt < cutoffDate) {
+
+        // 2. Check Completeness (Must have Valid Mobile AND Valid ABHA)
+        const hasMobile = Boolean(resident.citizenMobile && /^[6-9]\d{9}$/.test(resident.citizenMobile))
+        const hasAbha = Boolean(resident.healthId && resident.healthId.length >= 14) // Basic length check for now
+
+        if (hasMobile && hasAbha) {
+
+          // 3. Check Duplicates (Mobile <= 5, ABHA Count == 1)
+
+          // Count mobile duplicates (global) - Index makes this fast
+          const mobileCount = await prisma.resident.count({
+            where: { citizenMobile: resident.citizenMobile },
+          })
+
+          // Count ABHA duplicates (global) - Index makes this fast
+          const abhaCount = await prisma.resident.count({
+            where: { healthId: resident.healthId },
+          })
+
+          // If valid duplicates (Mobile <= 5 AND ABHA is Unique) -> LOCK IT
+          if (mobileCount <= 5 && abhaCount === 1) {
+            isLocked = true
+            lockReason = "Data verified and locked by admin policy"
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({ ...resident, isLocked, lockReason })
   } catch (error) {
     console.error("Get resident error:", error)
     return NextResponse.json(
@@ -309,4 +392,5 @@ export async function GET(
     )
   }
 }
+
 

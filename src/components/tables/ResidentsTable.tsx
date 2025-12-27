@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Edit2, Save, X, User, MapPin, Users, Home, ArrowUpDown, ArrowUp, ArrowDown, Download, FileSpreadsheet } from "lucide-react"
+import { Edit2, Save, X, User, MapPin, Users, Home, ArrowUpDown, ArrowUp, ArrowDown, Download, FileSpreadsheet, Lock } from "lucide-react"
 import { toast } from "sonner"
 import { HouseholdMembersDialog } from "@/components/dialogs/HouseholdMembersDialog"
 import * as XLSX from 'xlsx'
@@ -94,6 +94,7 @@ interface Resident {
   doorNumber: string | null
   addressEkyc: string | null
   addressHh: string | null
+  isLocked?: boolean
 }
 
 interface ResidentsTableProps {
@@ -557,11 +558,10 @@ export function ResidentsTable({
         {sortedResidents.map((resident) => (
           <Card
             key={resident.residentId}
-            className={`${
-              resident.residentId === searchedResidentId
+            className={`${resident.residentId === searchedResidentId
                 ? "border-2 border-orange-500 bg-orange-50/50"
                 : "border border-gray-200"
-            } ${editingId !== resident.residentId ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
+              } ${editingId !== resident.residentId ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
             onClick={() => {
               // Only open details if not in edit mode
               if (editingId !== resident.residentId) {
@@ -578,6 +578,12 @@ export function ResidentsTable({
                     {resident.residentId === searchedResidentId && (
                       <Badge variant="default" className="ml-2 bg-orange-600">
                         Searched
+                      </Badge>
+                    )}
+                    {resident.isLocked && (
+                      <Badge variant="outline" className="ml-2 gap-1 border-green-500 text-green-600 bg-green-50 text-xs">
+                        <Lock className="h-3 w-3" />
+                        Locked
                       </Badge>
                     )}
                   </CardTitle>
@@ -678,6 +684,7 @@ export function ResidentsTable({
                   </div>
                   <Button
                     size="sm"
+                    disabled={resident.isLocked}
                     onClick={(e) => {
                       e.stopPropagation() // Prevent card click
                       startEditing(resident)
@@ -685,7 +692,7 @@ export function ResidentsTable({
                     className="w-full bg-orange-600 hover:bg-orange-700"
                   >
                     <Edit2 className="h-3 w-3 mr-1" />
-                    Edit Details
+                    {resident.isLocked ? "Locked" : "Edit Details"}
                   </Button>
                 </div>
               )}
@@ -780,6 +787,12 @@ export function ResidentsTable({
                         Searched
                       </Badge>
                     )}
+                    {resident.isLocked && (
+                      <Badge variant="outline" className="ml-2 gap-1 border-green-500 text-green-600 bg-green-50 text-xs">
+                        <Lock className="h-3 w-3" />
+                        Locked
+                      </Badge>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell className="font-mono text-xs text-center whitespace-nowrap">{maskUID(resident.uid)}</TableCell>
@@ -838,33 +851,50 @@ export function ResidentsTable({
                 <TableCell className="text-xs text-center">{resident.phcName || "N/A"}</TableCell>
                 <TableCell>
                   {editingId === resident.residentId ? (
-                    <div className="flex gap-1 justify-center">
+                    <div className="flex flex-col gap-2">
                       <Button
                         size="sm"
+                        disabled={isUpdating}
                         onClick={(e) => handleSubmit(e, resident)}
-                        disabled={isUpdating || (citizenMobile === (resident.citizenMobile || "") && healthId === formatHealthId(resident.healthId || ""))}
-                        className="bg-green-600 hover:bg-green-700"
+                        className="bg-green-600 hover:bg-green-700 w-full"
                       >
-                        <Save className="h-3 w-3" />
+                        <Save className="h-3 w-3 mr-1" />
+                        Save
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={cancelEditing}
                         disabled={isUpdating}
+                        className="w-full"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-3 w-3 mr-1" />
+                        Cancel
                       </Button>
                     </div>
                   ) : (
                     <div className="flex gap-1 justify-center">
                       <Button
                         size="sm"
-                        onClick={() => startEditing(resident)}
-                        className="bg-orange-600 hover:bg-orange-700"
-                        title="Edit Details"
+                        variant="outline"
+                        disabled={resident.isLocked}
+                        className={resident.isLocked ? "bg-gray-50 text-gray-400 border-gray-200" : "border-orange-200 text-orange-600 hover:bg-orange-50"}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          startEditing(resident)
+                        }}
                       >
-                        <Edit2 className="h-3 w-3" />
+                        {resident.isLocked ? (
+                          <>
+                            <Lock className="h-3 w-3 mr-1" />
+                            Locked
+                          </>
+                        ) : (
+                          <>
+                            <Edit2 className="h-3 w-3 mr-1" />
+                            Edit
+                          </>
+                        )}
                       </Button>
                       <Button
                         size="sm"

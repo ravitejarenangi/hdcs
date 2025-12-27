@@ -111,7 +111,10 @@ interface Resident {
 }
 
 interface ResidentUpdateFormProps {
-  resident: Resident
+  resident: Resident & {
+    isLocked?: boolean
+    lockReason?: string | null
+  }
   onUpdateSuccess: () => void
   isSearchedResident: boolean
 }
@@ -122,6 +125,9 @@ export function ResidentUpdateForm({
   isSearchedResident,
 }: ResidentUpdateFormProps) {
   const [isUpdating, setIsUpdating] = useState(false)
+  const isLocked = resident.isLocked || false
+  const lockReason = resident.lockReason || "Record is locked"
+
 
   const {
     register,
@@ -187,11 +193,10 @@ export function ResidentUpdateForm({
 
   return (
     <Card
-      className={`${
-        isSearchedResident
-          ? "border-2 border-blue-500 bg-blue-50/50"
-          : "border border-gray-200"
-      } transition-all duration-200 hover:shadow-md`}
+      className={`${isSearchedResident
+        ? "border-2 border-blue-500 bg-blue-50/50"
+        : "border border-gray-200"
+        } transition-all duration-200 hover:shadow-md`}
     >
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
@@ -202,6 +207,11 @@ export function ResidentUpdateForm({
               {isSearchedResident && (
                 <Badge variant="default" className="ml-2">
                   Searched Resident
+                </Badge>
+              )}
+              {isLocked && (
+                <Badge variant="destructive" className="ml-2 bg-red-100 text-red-800 hover:bg-red-200 border-red-200">
+                  🔒 Locked
                 </Badge>
               )}
             </CardTitle>
@@ -258,12 +268,11 @@ export function ResidentUpdateForm({
                 id={`mobile-${resident.residentId}`}
                 {...register("citizenMobile")}
                 placeholder="Enter 10-digit mobile number"
-                className={`${
-                  resident.citizenMobile
+                className={`${resident.citizenMobile
                     ? "bg-yellow-50 border-yellow-300"
                     : "bg-white"
-                }`}
-                disabled={isUpdating}
+                  } ${isLocked ? "opacity-60 cursor-not-allowed" : ""}`}
+                disabled={isUpdating || isLocked}
               />
               {resident.citizenMobile && (
                 <p className="text-xs text-gray-500">
@@ -305,12 +314,11 @@ export function ResidentUpdateForm({
                       field.onChange(formatted)
                     }}
                     placeholder="XX-XXXX-XXXX-XXXX"
-                    className={`${
-                      resident.healthId
+                    className={`${resident.healthId
                         ? "bg-yellow-50 border-yellow-300"
                         : "bg-white"
-                    }`}
-                    disabled={isUpdating}
+                      } ${isLocked ? "opacity-60 cursor-not-allowed" : ""}`}
+                    disabled={isUpdating || isLocked}
                     maxLength={17}
                   />
                 )}
@@ -329,22 +337,31 @@ export function ResidentUpdateForm({
           </div>
 
           {/* Submit Button */}
+          {isLocked && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-800 flex items-center gap-2">
+              <span className="text-lg">🔒</span>
+              {lockReason}
+            </div>
+          )}
+
           <div className="flex justify-between items-center pt-2">
-            <Button
-              type="submit"
-              disabled={isUpdating || !isDirty}
-              className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
-            >
-              {isUpdating ? (
-                <>
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                  Updating...
-                </>
-              ) : (
-                "Update Information"
-              )}
-            </Button>
-            {!isDirty && (
+            {!isLocked && (
+              <Button
+                type="submit"
+                disabled={isUpdating || !isDirty}
+                className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
+              >
+                {isUpdating ? (
+                  <>
+                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                    Updating...
+                  </>
+                ) : (
+                  "Update Information"
+                )}
+              </Button>
+            )}
+            {!isDirty && !isLocked && (
               <p className="text-xs text-gray-500">
                 Make changes to enable update
               </p>

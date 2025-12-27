@@ -87,6 +87,7 @@ model Resident {
   @@index([secName])
   @@index([phcName])
   @@index([mobileNumber])
+  @@index([citizenMobile]) // Added for duplicate checking performance
   @@index([healthId])
   @@index([name])
   @@index([gender])
@@ -160,4 +161,13 @@ enum Gender {
   MALE
   FEMALE
   OTHER
+}
+
+model SystemSettings {
+  key         String   @id
+  value       String   @db.Text
+  description String?  @db.Text
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
 }

@@ -35,8 +35,25 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "25")
 
   try {
+    const settings = await prisma.systemSettings.findUnique({
+      where: { key: "RESIDENT_UPDATE_CUTOFF_DATE" },
+    })
+    const cutoffDate = settings?.value ? new Date(settings.value) : null
+
     // Build base access filter for role-based data restriction
     const accessFilter = buildResidentAccessFilter(userSession)
+
+    // Helper to add lock status to resident
+    const enhanceResidentWithLockStatus = (resident: any) => {
+      const isLocked = !!(
+        cutoffDate &&
+        resident.updatedAt &&
+        new Date(resident.updatedAt) < cutoffDate &&
+        resident.citizenMobile &&
+        resident.healthId
+      )
+      return { ...resident, isLocked }
+    }
 
     // Mode 1: Direct UID Search (original functionality)
     if (searchMode === "uid" || uid) {
@@ -85,9 +102,12 @@ export async function GET(request: NextRequest) {
         orderBy: { name: "asc" },
       })
 
+      const enhancedHouseholdMembers = householdMembers.map(enhanceResidentWithLockStatus)
+      const enhancedResident = enhanceResidentWithLockStatus(resident)
+
       return NextResponse.json({
-        searchedResident: resident,
-        householdMembers,
+        searchedResident: enhancedResident,
+        householdMembers: enhancedHouseholdMembers,
         householdId: resident.hhId,
         totalMembers: householdMembers.length,
         searchMode: "uid",
@@ -191,7 +211,7 @@ export async function GET(request: NextRequest) {
       const totalPages = Math.ceil(totalResidents / validatedLimit)
 
       return NextResponse.json({
-        residents,
+        residents: residents.map(enhanceResidentWithLockStatus),
         totalResidents,
         pagination: {
           currentPage: validatedPage,
@@ -349,7 +369,7 @@ export async function GET(request: NextRequest) {
       const totalPages = Math.ceil(totalResidents / validatedLimit)
 
       return NextResponse.json({
-        residents,
+        residents: residents.map(enhanceResidentWithLockStatus),
         totalResidents,
         pagination: {
           currentPage: validatedPage,

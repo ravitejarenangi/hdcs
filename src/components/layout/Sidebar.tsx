@@ -70,6 +70,12 @@ const menuItems: MenuItem[] = [
     href: "/admin/export",
     roles: ["ADMIN"],
   },
+  {
+    title: "System Settings",
+    icon: <Settings className="h-5 w-5" />,
+    href: "/admin/settings",
+    roles: ["ADMIN"],
+  },
 
   // MANDAL_OFFICER (PANCHAYAT_SECRETARY) Menu Items
   {
@@ -167,7 +173,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed, onToggleCollapse }: Side
           <nav className="flex-1 overflow-y-auto p-4 space-y-2">
             {filteredMenuItems.map((item) => {
               const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
-              
+
               return (
                 <Button
                   key={item.href}
