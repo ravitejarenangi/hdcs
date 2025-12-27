@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
     const accessFilter = buildResidentAccessFilter(userSession)
 
     // Helper to add lock status to resident
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const enhanceResidentWithLockStatus = (resident: any) => {
       const isLocked = !!(
         cutoffDate &&

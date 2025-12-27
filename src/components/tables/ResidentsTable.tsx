@@ -14,7 +14,13 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Edit2, Save, X, User, MapPin, Users, Home, ArrowUpDown, ArrowUp, ArrowDown, Download, FileSpreadsheet, Lock } from "lucide-react"
+import { Edit2, Save, X, User, MapPin, Users, Home, ArrowUpDown, ArrowUp, ArrowDown, Download, FileSpreadsheet, Lock, Info } from "lucide-react"
+import { format } from "date-fns"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { toast } from "sonner"
 import { HouseholdMembersDialog } from "@/components/dialogs/HouseholdMembersDialog"
 import * as XLSX from 'xlsx'
@@ -95,6 +101,7 @@ interface Resident {
   addressEkyc: string | null
   addressHh: string | null
   isLocked?: boolean
+  updatedAt?: Date | string
 }
 
 interface ResidentsTableProps {
@@ -559,8 +566,8 @@ export function ResidentsTable({
           <Card
             key={resident.residentId}
             className={`${resident.residentId === searchedResidentId
-                ? "border-2 border-orange-500 bg-orange-50/50"
-                : "border border-gray-200"
+              ? "border-2 border-orange-500 bg-orange-50/50"
+              : "border border-gray-200"
               } ${editingId !== resident.residentId ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}
             onClick={() => {
               // Only open details if not in edit mode
@@ -581,10 +588,20 @@ export function ResidentsTable({
                       </Badge>
                     )}
                     {resident.isLocked && (
-                      <Badge variant="outline" className="ml-2 gap-1 border-green-500 text-green-600 bg-green-50 text-xs">
-                        <Lock className="h-3 w-3" />
-                        Locked
-                      </Badge>
+                      <div className="flex items-center gap-1 ml-2">
+                        <Badge variant="outline" className="gap-1 border-green-500 text-green-600 bg-green-50 text-xs">
+                          <Lock className="h-3 w-3" />
+                          Locked
+                        </Badge>
+                        <Popover>
+                          <PopoverTrigger>
+                            <Info className="h-4 w-4 text-blue-500 cursor-pointer hover:text-blue-700" />
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-2 text-xs bg-white border shadow-md">
+                            <p>Updated on: <span className="font-semibold">{resident.updatedAt ? format(new Date(resident.updatedAt), "PPP p") : "Unknown"}</span></p>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     )}
                   </CardTitle>
                   <div className="mt-2 space-y-1 text-xs text-gray-600">
@@ -788,10 +805,20 @@ export function ResidentsTable({
                       </Badge>
                     )}
                     {resident.isLocked && (
-                      <Badge variant="outline" className="ml-2 gap-1 border-green-500 text-green-600 bg-green-50 text-xs">
-                        <Lock className="h-3 w-3" />
-                        Locked
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge variant="outline" className="ml-2 gap-1 border-green-500 text-green-600 bg-green-50 text-xs">
+                          <Lock className="h-3 w-3" />
+                          Locked
+                        </Badge>
+                        <Popover>
+                          <PopoverTrigger>
+                            <Info className="h-3 w-3 text-blue-500 cursor-pointer hover:text-blue-700" />
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-2 text-xs bg-white border shadow-md">
+                            <p>Updated on: <span className="font-semibold">{resident.updatedAt ? format(new Date(resident.updatedAt), "PPP p") : "Unknown"}</span></p>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     )}
                   </div>
                 </TableCell>
