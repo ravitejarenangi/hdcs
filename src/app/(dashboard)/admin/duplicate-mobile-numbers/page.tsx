@@ -507,173 +507,31 @@ export default function DuplicateMobileNumbersPage() {
 
       {/* Export Progress Dialog */}
       <Dialog open={showProgressDialog} onOpenChange={setShowProgressDialog}>
-        <DialogContent className="sm:max-w-md overflow-hidden">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Exporting Duplicate Mobile Numbers</DialogTitle>
-            <DialogDescription>
-              {exportProgress?.message || "Preparing your export..."}
-            </DialogDescription>
           </DialogHeader>
-          <div className="py-6">
-            {/* Progress Steps */}
-            <div className="space-y-4">
-              {/* Step 1: Initializing */}
-              <div className="flex items-center gap-3">
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  exportProgress && exportProgress.currentBatch > 1
-                    ? "bg-green-500 text-white"
-                    : exportProgress && exportProgress.currentBatch === 1
-                    ? "bg-blue-500 text-white animate-pulse"
-                    : "bg-gray-200 text-gray-500"
-                }`}>
-                  {exportProgress && exportProgress.currentBatch > 1 ? (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : exportProgress && exportProgress.currentBatch === 1 ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <span className="text-xs font-bold">1</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Initializing</p>
-                  <p className="text-xs text-gray-500">
-                    {exportProgress && exportProgress.currentBatch > 1 ? "Completed" :
-                     exportProgress && exportProgress.currentBatch === 1 ? "Initializing..." :
-                     "Starting..."}
-                  </p>
-                </div>
+          <div className="py-6 flex flex-col items-center text-center">
+            {exportProgress?.status === "processing" ? (
+              <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+            ) : exportProgress?.status === "completed" ? (
+              <div className="w-12 h-12 rounded-full bg-green-500 text-white flex items-center justify-center">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
               </div>
-
-              {/* Step 2: Fetching Duplicates */}
-              <div className="flex items-center gap-3">
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  exportProgress && exportProgress.currentBatch > 2
-                    ? "bg-green-500 text-white"
-                    : exportProgress && exportProgress.currentBatch === 2
-                    ? "bg-blue-500 text-white animate-pulse"
-                    : "bg-gray-200 text-gray-500"
-                }`}>
-                  {exportProgress && exportProgress.currentBatch > 2 ? (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : exportProgress && exportProgress.currentBatch === 2 ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <span className="text-xs font-bold">2</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Fetching Duplicate Mobiles</p>
-                  <p className="text-xs text-gray-500">
-                    {exportProgress && exportProgress.currentBatch > 2 ? "Completed" :
-                     exportProgress && exportProgress.currentBatch === 2 ? "Searching for duplicates..." :
-                     "Waiting..."}
-                  </p>
-                </div>
+            ) : exportProgress?.status === "error" ? (
+              <div className="w-12 h-12 rounded-full bg-red-500 text-white flex items-center justify-center">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </div>
-
-              {/* Step 3: Fetching Residents */}
-              <div className="flex items-center gap-3">
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  exportProgress && exportProgress.status === "completed"
-                    ? "bg-green-500 text-white"
-                    : exportProgress && exportProgress.currentBatch === 3
-                    ? "bg-blue-500 text-white animate-pulse"
-                    : "bg-gray-200 text-gray-500"
-                }`}>
-                  {exportProgress && exportProgress.status === "completed" ? (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : exportProgress && exportProgress.currentBatch === 3 ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <span className="text-xs font-bold">3</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Fetching Residents</p>
-                  <p className="text-xs text-gray-500">
-                    {exportProgress && exportProgress.status === "completed"
-                      ? `Found ${exportProgress.totalRecords} residents`
-                      : exportProgress && exportProgress.currentBatch === 3
-                      ? "Loading resident data..."
-                      : "Waiting..."}
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 4: Generating File */}
-              <div className="flex items-center gap-3">
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  exportProgress && exportProgress.status === "completed"
-                    ? "bg-green-500 text-white"
-                    : exportProgress && exportProgress.currentBatch === 4
-                    ? "bg-blue-500 text-white animate-pulse"
-                    : "bg-gray-200 text-gray-500"
-                }`}>
-                  {exportProgress && exportProgress.status === "completed" ? (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : exportProgress && exportProgress.currentBatch === 4 ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <span className="text-xs font-bold">4</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Generating {pendingExportFormat?.toUpperCase()}</p>
-                  <p className="text-xs text-gray-500">
-                    {exportProgress && exportProgress.status === "completed"
-                      ? "Completed!"
-                      : exportProgress && exportProgress.currentBatch >= 4
-                      ? "Creating file..."
-                      : "Waiting..."}
-                  </p>
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              {exportProgress && exportProgress.totalRecords > 0 && (
-                <div className="mt-6">
-                  <div className="flex justify-between text-xs text-gray-500 mb-2">
-                    <span>Progress</span>
-                    <span>{exportProgress.status === "completed"
-                      ? "100%"
-                      : `${Math.round((exportProgress.processedRecords / exportProgress.totalRecords) * 100)}%`}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        exportProgress.status === "completed"
-                          ? "bg-green-500"
-                          : exportProgress.status === "error"
-                          ? "bg-red-500"
-                          : "bg-blue-500"
-                      }`}
-                      style={{
-                        width: `${exportProgress.status === "completed"
-                          ? 100
-                          : (exportProgress.processedRecords / exportProgress.totalRecords) * 100
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {exportProgress && exportProgress.status === "error" && (
-                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm text-red-600">{exportProgress.message}</p>
-                </div>
-              )}
-            </div>
+            ) : (
+              <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+            )}
+            <p className="mt-4 text-sm text-gray-600">
+              {exportProgress?.message || "Preparing your export..."}
+            </p>
           </div>
         </DialogContent>
       </Dialog>
