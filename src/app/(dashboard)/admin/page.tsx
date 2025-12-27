@@ -144,7 +144,7 @@ interface AnalyticsData {
 }
 
 type MandalSortColumn = "name" | "total" | "mobile" | "healthId"
-type MandalCountsSortColumn = "name" | "mobilePresent" | "mobileNeeded" | "abhaPresent" | "abhaNeeded"
+type MandalCountsSortColumn = "name" | "totalMobile" | "mobileUpdated" | "mobileNeeded" | "totalAbha" | "abhaUpdated" | "abhaNeeded"
 type OfficerSortColumn = "name" | "username" | "role" | "updates"
 type UpdatesSortColumn = "resident" | "field" | "updatedBy" | "date"
 type SortDirection = "asc" | "desc" | null
@@ -665,17 +665,21 @@ export default function AdminDashboard() {
         ? [
             "Mandal Name",
             "Secretariat Name",
-            "Mobile Numbers Present",
-            "Mobile Numbers Needed",
-            "ABHA IDs Present",
-            "ABHA IDs Needed",
+            "Total Mobile Numbers",
+            "Mob No Updated",
+            "Mob No to be Updated",
+            "Total ABHA IDs",
+            "Abha IDs Updated",
+            "ABHA IDs to be Updated",
           ]
         : [
             "Mandal Name",
-            "Mobile Numbers Present",
-            "Mobile Numbers Needed",
-            "ABHA IDs Present",
-            "ABHA IDs Needed",
+            "Total Mobile Numbers",
+            "Mob No Updated",
+            "Mob No to be Updated",
+            "Total ABHA IDs",
+            "Abha IDs Updated",
+            "ABHA IDs to be Updated",
           ]
       csvRows.push(headers.join(","))
 
@@ -696,8 +700,10 @@ export default function AdminDashboard() {
             csvRows.push([
               `"${mandal.mandalName}"`,
               `"${secretariat.secName}"`,
+              secretariat.totalResidents,
               secretariat.withMobile,
               secretariat.totalResidents - secretariat.withMobile,
+              secretariat.totalResidents,
               secretariat.withHealthId,
               secretariat.totalResidents - secretariat.withHealthId,
             ].join(","))
@@ -706,9 +712,11 @@ export default function AdminDashboard() {
           // Export mandal only (no secretariats)
           csvRows.push([
             `"${mandal.mandalName}"`,
-            mandal.mobilePresent,
+            mandal.totalMobile,
+            mandal.mobileUpdated,
             mandal.mobileNeeded,
-            mandal.abhaPresent,
+            mandal.totalAbha,
+            mandal.abhaUpdated,
             mandal.abhaNeeded,
           ].join(","))
         }
@@ -717,29 +725,35 @@ export default function AdminDashboard() {
       // Totals row
       const totals = countsToExport.reduce(
         (acc, m) => ({
-          mobilePresent: acc.mobilePresent + m.mobilePresent,
+          totalMobile: acc.totalMobile + m.totalMobile,
+          mobileUpdated: acc.mobileUpdated + m.mobileUpdated,
           mobileNeeded: acc.mobileNeeded + m.mobileNeeded,
-          abhaPresent: acc.abhaPresent + m.abhaPresent,
+          totalAbha: acc.totalAbha + m.totalAbha,
+          abhaUpdated: acc.abhaUpdated + m.abhaUpdated,
           abhaNeeded: acc.abhaNeeded + m.abhaNeeded,
         }),
-        { mobilePresent: 0, mobileNeeded: 0, abhaPresent: 0, abhaNeeded: 0 }
+        { totalMobile: 0, mobileUpdated: 0, mobileNeeded: 0, totalAbha: 0, abhaUpdated: 0, abhaNeeded: 0 }
       )
 
       if (isFiltered) {
         csvRows.push([
           `"TOTAL (${expandedMandal})"`,
           '""', // Empty secretariat column
-          totals.mobilePresent,
+          totals.totalMobile,
+          totals.mobileUpdated,
           totals.mobileNeeded,
-          totals.abhaPresent,
+          totals.totalAbha,
+          totals.abhaUpdated,
           totals.abhaNeeded,
         ].join(","))
       } else {
         csvRows.push([
           '"TOTAL (All Mandals)"',
-          totals.mobilePresent,
+          totals.totalMobile,
+          totals.mobileUpdated,
           totals.mobileNeeded,
-          totals.abhaPresent,
+          totals.totalAbha,
+          totals.abhaUpdated,
           totals.abhaNeeded,
         ].join(","))
       }
@@ -802,12 +816,14 @@ export default function AdminDashboard() {
       // Calculate totals
       const totals = countsToExport.reduce(
         (acc, m) => ({
-          mobilePresent: acc.mobilePresent + m.mobilePresent,
+          totalMobile: acc.totalMobile + m.totalMobile,
+          mobileUpdated: acc.mobileUpdated + m.mobileUpdated,
           mobileNeeded: acc.mobileNeeded + m.mobileNeeded,
-          abhaPresent: acc.abhaPresent + m.abhaPresent,
+          totalAbha: acc.totalAbha + m.totalAbha,
+          abhaUpdated: acc.abhaUpdated + m.abhaUpdated,
           abhaNeeded: acc.abhaNeeded + m.abhaNeeded,
         }),
-        { mobilePresent: 0, mobileNeeded: 0, abhaPresent: 0, abhaNeeded: 0 }
+        { totalMobile: 0, mobileUpdated: 0, mobileNeeded: 0, totalAbha: 0, abhaUpdated: 0, abhaNeeded: 0 }
       )
 
       // Create workbook
@@ -821,18 +837,22 @@ export default function AdminDashboard() {
         worksheetData.push([
           "Mandal Name",
           "Secretariat Name",
-          "Mobile Numbers Present",
-          "Mobile Numbers Needed",
-          "ABHA IDs Present",
-          "ABHA IDs Needed",
+          "Total Mobile Numbers",
+          "Mob No Updated",
+          "Mob No to be Updated",
+          "Total ABHA IDs",
+          "Abha IDs Updated",
+          "ABHA IDs to be Updated",
         ])
       } else {
         worksheetData.push([
           "Mandal Name",
-          "Mobile Numbers Present",
-          "Mobile Numbers Needed",
-          "ABHA IDs Present",
-          "ABHA IDs Needed",
+          "Total Mobile Numbers",
+          "Mob No Updated",
+          "Mob No to be Updated",
+          "Total ABHA IDs",
+          "Abha IDs Updated",
+          "ABHA IDs to be Updated",
         ])
       }
 
@@ -848,8 +868,10 @@ export default function AdminDashboard() {
             worksheetData.push([
               mandal.mandalName,
               secretariat.secName,
+              secretariat.totalResidents,
               secretariat.withMobile,
               secretariat.totalResidents - secretariat.withMobile,
+              secretariat.totalResidents,
               secretariat.withHealthId,
               secretariat.totalResidents - secretariat.withHealthId,
             ])
@@ -858,9 +880,11 @@ export default function AdminDashboard() {
           // Add mandal only (no secretariats)
           worksheetData.push([
             mandal.mandalName,
-            mandal.mobilePresent,
+            mandal.totalMobile,
+            mandal.mobileUpdated,
             mandal.mobileNeeded,
-            mandal.abhaPresent,
+            mandal.totalAbha,
+            mandal.abhaUpdated,
             mandal.abhaNeeded,
           ])
         }
@@ -871,17 +895,21 @@ export default function AdminDashboard() {
         worksheetData.push([
           `TOTAL (${expandedMandal})`,
           "",
-          totals.mobilePresent,
+          totals.totalMobile,
+          totals.mobileUpdated,
           totals.mobileNeeded,
-          totals.abhaPresent,
+          totals.totalAbha,
+          totals.abhaUpdated,
           totals.abhaNeeded,
         ])
       } else {
         worksheetData.push([
           "TOTAL (All Mandals)",
-          totals.mobilePresent,
+          totals.totalMobile,
+          totals.mobileUpdated,
           totals.mobileNeeded,
-          totals.abhaPresent,
+          totals.totalAbha,
+          totals.abhaUpdated,
           totals.abhaNeeded,
         ])
       }
@@ -897,9 +925,14 @@ export default function AdminDashboard() {
             { wch: 20 },
             { wch: 20 },
             { wch: 20 },
+            { wch: 20 },
+            { wch: 20 },
           ]
         : [
             { wch: 30 },
+            { wch: 20 },
+            { wch: 20 },
+            { wch: 20 },
             { wch: 20 },
             { wch: 20 },
             { wch: 20 },
@@ -1006,12 +1039,14 @@ export default function AdminDashboard() {
   const getSortedMandalCounts = () => {
     if (!analytics?.mandalCompletion) return []
 
-    // Transform mandalCompletion to counts format
+    // Transform mandalCompletion to counts format with all columns
     const counts = analytics.mandalCompletion.map(mandal => ({
       mandalName: mandal.mandalName,
-      mobilePresent: mandal.withMobile,
+      totalMobile: mandal.totalResidents,
+      mobileUpdated: mandal.withMobile,
       mobileNeeded: mandal.totalResidents - mandal.withMobile,
-      abhaPresent: mandal.withHealthId,
+      totalAbha: mandal.totalResidents,
+      abhaUpdated: mandal.withHealthId,
       abhaNeeded: mandal.totalResidents - mandal.withHealthId,
     }))
 
@@ -1029,17 +1064,25 @@ export default function AdminDashboard() {
           aValue = a.mandalName
           bValue = b.mandalName
           break
-        case "mobilePresent":
-          aValue = a.mobilePresent
-          bValue = b.mobilePresent
+        case "totalMobile":
+          aValue = a.totalMobile
+          bValue = b.totalMobile
+          break
+        case "mobileUpdated":
+          aValue = a.mobileUpdated
+          bValue = b.mobileUpdated
           break
         case "mobileNeeded":
           aValue = a.mobileNeeded
           bValue = b.mobileNeeded
           break
-        case "abhaPresent":
-          aValue = a.abhaPresent
-          bValue = b.abhaPresent
+        case "totalAbha":
+          aValue = a.totalAbha
+          bValue = b.totalAbha
+          break
+        case "abhaUpdated":
+          aValue = a.abhaUpdated
+          bValue = b.abhaUpdated
           break
         case "abhaNeeded":
           aValue = a.abhaNeeded
@@ -2095,13 +2138,26 @@ export default function AdminDashboard() {
                           </div>
                         </th>
                         <th
-                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-green-50"
-                          onClick={() => handleMandalCountsSort("mobilePresent")}
+                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-blue-50"
+                          onClick={() => handleMandalCountsSort("totalMobile")}
                         >
                           <div className="flex items-center justify-end gap-1">
-                            <span className="text-green-700 font-semibold">Mobile Present</span>
+                            <span className="text-blue-700 font-semibold text-xs">Total Mobile Numbers</span>
                             <SortIcon
-                              column="mobilePresent"
+                              column="totalMobile"
+                              currentColumn={mandalCountsSortColumn}
+                              direction={mandalCountsSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-green-50"
+                          onClick={() => handleMandalCountsSort("mobileUpdated")}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="text-green-700 font-semibold text-xs">Mob No Updated</span>
+                            <SortIcon
+                              column="mobileUpdated"
                               currentColumn={mandalCountsSortColumn}
                               direction={mandalCountsSortDirection}
                             />
@@ -2112,7 +2168,7 @@ export default function AdminDashboard() {
                           onClick={() => handleMandalCountsSort("mobileNeeded")}
                         >
                           <div className="flex items-center justify-end gap-1">
-                            <span className="text-red-700 font-semibold">Mobile Needed</span>
+                            <span className="text-red-700 font-semibold text-xs">Mob No to be Updated</span>
                             <SortIcon
                               column="mobileNeeded"
                               currentColumn={mandalCountsSortColumn}
@@ -2122,12 +2178,25 @@ export default function AdminDashboard() {
                         </th>
                         <th
                           className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-purple-50"
-                          onClick={() => handleMandalCountsSort("abhaPresent")}
+                          onClick={() => handleMandalCountsSort("totalAbha")}
                         >
                           <div className="flex items-center justify-end gap-1">
-                            <span className="text-purple-700 font-semibold">ABHA Present</span>
+                            <span className="text-purple-700 font-semibold text-xs">Total ABHA IDs</span>
                             <SortIcon
-                              column="abhaPresent"
+                              column="totalAbha"
+                              currentColumn={mandalCountsSortColumn}
+                              direction={mandalCountsSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-green-50"
+                          onClick={() => handleMandalCountsSort("abhaUpdated")}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="text-green-700 font-semibold text-xs">Abha IDs Updated</span>
+                            <SortIcon
+                              column="abhaUpdated"
                               currentColumn={mandalCountsSortColumn}
                               direction={mandalCountsSortDirection}
                             />
@@ -2138,7 +2207,7 @@ export default function AdminDashboard() {
                           onClick={() => handleMandalCountsSort("abhaNeeded")}
                         >
                           <div className="flex items-center justify-end gap-1">
-                            <span className="text-orange-700 font-semibold">ABHA Needed</span>
+                            <span className="text-orange-700 font-semibold text-xs">ABHA IDs to be Updated</span>
                             <SortIcon
                               column="abhaNeeded"
                               currentColumn={mandalCountsSortColumn}
@@ -2172,14 +2241,20 @@ export default function AdminDashboard() {
                               <td className="py-3 px-4 font-semibold text-orange-700">
                                 {mandal.mandalName}
                               </td>
+                              <td className="text-right py-3 px-4 bg-blue-50 font-bold text-blue-700">
+                                {mandal.totalMobile.toLocaleString()}
+                              </td>
                               <td className="text-right py-3 px-4 bg-green-50 font-bold text-green-700">
-                                {mandal.mobilePresent.toLocaleString()}
+                                {mandal.mobileUpdated.toLocaleString()}
                               </td>
                               <td className="text-right py-3 px-4 bg-red-50 font-bold text-red-700">
                                 {mandal.mobileNeeded.toLocaleString()}
                               </td>
                               <td className="text-right py-3 px-4 bg-purple-50 font-bold text-purple-700">
-                                {mandal.abhaPresent.toLocaleString()}
+                                {mandal.totalAbha.toLocaleString()}
+                              </td>
+                              <td className="text-right py-3 px-4 bg-green-50 font-bold text-green-700">
+                                {mandal.abhaUpdated.toLocaleString()}
                               </td>
                               <td className="text-right py-3 px-4 bg-orange-50 font-bold text-orange-700">
                                 {mandal.abhaNeeded.toLocaleString()}
@@ -2199,6 +2274,9 @@ export default function AdminDashboard() {
                                   <td className="py-2 px-4 pl-8 font-semibold text-blue-700 text-sm">
                                     {secretariat.secName}
                                   </td>
+                                  <td className="text-right py-2 px-4 bg-blue-50/50 font-semibold text-blue-700 text-sm">
+                                    {secretariat.totalResidents.toLocaleString()}
+                                  </td>
                                   <td className="text-right py-2 px-4 bg-green-50/50 font-semibold text-green-700 text-sm">
                                     {secretariat.withMobile.toLocaleString()}
                                   </td>
@@ -2206,6 +2284,9 @@ export default function AdminDashboard() {
                                     {(secretariat.totalResidents - secretariat.withMobile).toLocaleString()}
                                   </td>
                                   <td className="text-right py-2 px-4 bg-purple-50/50 font-semibold text-purple-700 text-sm">
+                                    {secretariat.totalResidents.toLocaleString()}
+                                  </td>
+                                  <td className="text-right py-2 px-4 bg-green-50/50 font-semibold text-green-700 text-sm">
                                     {secretariat.withHealthId.toLocaleString()}
                                   </td>
                                   <td className="text-right py-2 px-4 bg-orange-50/50 font-semibold text-orange-700 text-sm">
@@ -2223,14 +2304,20 @@ export default function AdminDashboard() {
                         <td className="py-3 px-4 text-gray-900">
                           TOTAL (All Mandals)
                         </td>
+                        <td className="text-right py-3 px-4 bg-blue-100 text-blue-800">
+                          {getSortedMandalCounts().reduce((sum, m) => sum + m.totalMobile, 0).toLocaleString()}
+                        </td>
                         <td className="text-right py-3 px-4 bg-green-100 text-green-800">
-                          {getSortedMandalCounts().reduce((sum, m) => sum + m.mobilePresent, 0).toLocaleString()}
+                          {getSortedMandalCounts().reduce((sum, m) => sum + m.mobileUpdated, 0).toLocaleString()}
                         </td>
                         <td className="text-right py-3 px-4 bg-red-100 text-red-800">
                           {getSortedMandalCounts().reduce((sum, m) => sum + m.mobileNeeded, 0).toLocaleString()}
                         </td>
                         <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
-                          {getSortedMandalCounts().reduce((sum, m) => sum + m.abhaPresent, 0).toLocaleString()}
+                          {getSortedMandalCounts().reduce((sum, m) => sum + m.totalAbha, 0).toLocaleString()}
+                        </td>
+                        <td className="text-right py-3 px-4 bg-green-100 text-green-800">
+                          {getSortedMandalCounts().reduce((sum, m) => sum + m.abhaUpdated, 0).toLocaleString()}
                         </td>
                         <td className="text-right py-3 px-4 bg-orange-100 text-orange-800">
                           {getSortedMandalCounts().reduce((sum, m) => sum + m.abhaNeeded, 0).toLocaleString()}
