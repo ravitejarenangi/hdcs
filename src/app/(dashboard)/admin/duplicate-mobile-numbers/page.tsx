@@ -520,14 +520,18 @@ export default function DuplicateMobileNumbersPage() {
               {/* Step 1: Initializing */}
               <div className="flex items-center gap-3">
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  exportProgress && exportProgress.currentBatch >= 1
+                  exportProgress && exportProgress.currentBatch > 1
                     ? "bg-green-500 text-white"
+                    : exportProgress && exportProgress.currentBatch === 1
+                    ? "bg-blue-500 text-white animate-pulse"
                     : "bg-gray-200 text-gray-500"
                 }`}>
                   {exportProgress && exportProgress.currentBatch > 1 ? (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
+                  ) : exportProgress && exportProgress.currentBatch === 1 ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <span className="text-xs font-bold">1</span>
                   )}
@@ -535,7 +539,9 @@ export default function DuplicateMobileNumbersPage() {
                 <div className="flex-1">
                   <p className="text-sm font-medium">Initializing</p>
                   <p className="text-xs text-gray-500">
-                    {exportProgress && exportProgress.currentBatch >= 1 ? "Completed" : "Starting..."}
+                    {exportProgress && exportProgress.currentBatch > 1 ? "Completed" :
+                     exportProgress && exportProgress.currentBatch === 1 ? "Initializing..." :
+                     "Starting..."}
                   </p>
                 </div>
               </div>
@@ -543,9 +549,9 @@ export default function DuplicateMobileNumbersPage() {
               {/* Step 2: Fetching Duplicates */}
               <div className="flex items-center gap-3">
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  exportProgress && exportProgress.currentBatch >= 2
+                  exportProgress && exportProgress.currentBatch > 2
                     ? "bg-green-500 text-white"
-                    : exportProgress && exportProgress.currentBatch === 1
+                    : exportProgress && exportProgress.currentBatch === 2
                     ? "bg-blue-500 text-white animate-pulse"
                     : "bg-gray-200 text-gray-500"
                 }`}>
@@ -553,6 +559,8 @@ export default function DuplicateMobileNumbersPage() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
+                  ) : exportProgress && exportProgress.currentBatch === 2 ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <span className="text-xs font-bold">2</span>
                   )}
@@ -560,39 +568,14 @@ export default function DuplicateMobileNumbersPage() {
                 <div className="flex-1">
                   <p className="text-sm font-medium">Fetching Duplicate Mobiles</p>
                   <p className="text-xs text-gray-500">
-                    {exportProgress && exportProgress.currentBatch >= 2 ? "Completed" : "Searching for duplicates..."}
+                    {exportProgress && exportProgress.currentBatch > 2 ? "Completed" :
+                     exportProgress && exportProgress.currentBatch === 2 ? "Searching for duplicates..." :
+                     "Waiting..."}
                   </p>
                 </div>
               </div>
 
               {/* Step 3: Fetching Residents */}
-              <div className="flex items-center gap-3">
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  exportProgress && exportProgress.currentBatch >= 3
-                    ? "bg-green-500 text-white"
-                    : exportProgress && exportProgress.currentBatch === 2
-                    ? "bg-blue-500 text-white animate-pulse"
-                    : "bg-gray-200 text-gray-500"
-                }`}>
-                  {exportProgress && exportProgress.currentBatch > 3 ? (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <span className="text-xs font-bold">3</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Fetching Residents</p>
-                  <p className="text-xs text-gray-500">
-                    {exportProgress && exportProgress.currentBatch >= 3
-                      ? `Found ${exportProgress.totalRecords} residents`
-                      : "Loading resident data..."}
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 4: Generating File */}
               <div className="flex items-center gap-3">
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
                   exportProgress && exportProgress.status === "completed"
@@ -605,7 +588,38 @@ export default function DuplicateMobileNumbersPage() {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                  ) : exportProgress && exportProgress.currentBatch >= 4 ? (
+                  ) : exportProgress && exportProgress.currentBatch === 3 ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <span className="text-xs font-bold">3</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Fetching Residents</p>
+                  <p className="text-xs text-gray-500">
+                    {exportProgress && exportProgress.status === "completed"
+                      ? `Found ${exportProgress.totalRecords} residents`
+                      : exportProgress && exportProgress.currentBatch === 3
+                      ? "Loading resident data..."
+                      : "Waiting..."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 4: Generating File */}
+              <div className="flex items-center gap-3">
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  exportProgress && exportProgress.status === "completed"
+                    ? "bg-green-500 text-white"
+                    : exportProgress && exportProgress.currentBatch === 4
+                    ? "bg-blue-500 text-white animate-pulse"
+                    : "bg-gray-200 text-gray-500"
+                }`}>
+                  {exportProgress && exportProgress.status === "completed" ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : exportProgress && exportProgress.currentBatch === 4 ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <span className="text-xs font-bold">4</span>

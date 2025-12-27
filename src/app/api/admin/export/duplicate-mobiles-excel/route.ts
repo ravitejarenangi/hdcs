@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     // Initialize progress tracking if sessionId is provided
     if (sessionIdParam) {
-      createProgress(sessionIdParam, 100, 5) // Estimate: 100 records, 5 steps
+      createProgress(sessionIdParam, 100, 4) // Estimate: 100 records, 4 steps
     }
 
     // Fetch duplicate mobile numbers (appearing more than 5 times) with resident details
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
         message: `Fetching residents for ${mobileNumbers.length} duplicate mobile numbers...`,
         currentBatch: 2,
         totalRecords: totalAffectedResidents,
-        totalBatches: 5,
+        totalBatches: 4,
       })
     }
 
@@ -207,10 +207,21 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Duplicate Mobiles Excel Export] Completed adding rows - Total records: ${residents.length}`)
 
+    if (sessionIdParam) {
+      updateProgress(sessionIdParam, {
+        message: "Generating Excel file...",
+        currentBatch: 4,
+      })
+    }
+
     // Generate Excel buffer
     console.log(`[Duplicate Mobiles Excel Export] Writing Excel buffer...`)
     const buffer = await workbook.xlsx.writeBuffer()
     console.log(`[Duplicate Mobiles Excel Export] Buffer size: ${buffer.byteLength} bytes`)
+
+    if (sessionIdParam) {
+      completeProgress(sessionIdParam, "Excel file generated successfully!")
+    }
 
     // Return the Excel file
     console.log(`[Duplicate Mobiles Excel Export] Sending file response...`)
