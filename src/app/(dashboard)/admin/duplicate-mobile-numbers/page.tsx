@@ -6,8 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, Search, Phone, Users, MapPin, AlertTriangle, Download, Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { ChevronLeft, Search, Phone, MapPin, AlertTriangle, Download, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 
@@ -35,7 +43,6 @@ interface ApiResponse {
 }
 
 export default function DuplicateMobileNumbersPage() {
-  const router = useRouter()
   const [data, setData] = useState<ApiResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
@@ -43,6 +50,9 @@ export default function DuplicateMobileNumbersPage() {
   const [expandedMobiles, setExpandedMobiles] = useState<Set<string>>(new Set())
   const [isExporting, setIsExporting] = useState(false)
   const [exportFormat, setExportFormat] = useState<"csv" | "excel" | null>(null)
+  const [showExportDialog, setShowExportDialog] = useState(false)
+  const [pendingExportFormat, setPendingExportFormat] = useState<"csv" | "excel" | null>(null)
+  const [maskUid, setMaskUid] = useState(false) // Default to unmasked
 
   useEffect(() => {
     fetchDuplicateMobileNumbers()
@@ -81,20 +91,29 @@ export default function DuplicateMobileNumbersPage() {
     })
   }
 
-  const handleExport = async (format: "csv" | "excel") => {
+  const handleExportClick = (format: "csv" | "excel") => {
+    setPendingExportFormat(format)
+    setShowExportDialog(true)
+  }
+
+  const handleExport = async () => {
+    if (!pendingExportFormat) return
+
     setIsExporting(true)
-    setExportFormat(format)
+    setExportFormat(pendingExportFormat)
+    setShowExportDialog(false)
 
     try {
-      const response = await fetch(`/api/admin/export/duplicate-mobiles-${format}`)
+      const url = `/api/admin/export/duplicate-mobiles-${pendingExportFormat}?maskUid=${maskUid.toString()}`
+      const response = await fetch(url)
 
       if (!response.ok) {
-        throw new Error(`Failed to generate ${format.toUpperCase()} export`)
+        throw new Error(`Failed to generate ${pendingExportFormat.toUpperCase()} export`)
       }
 
       // Get the filename from Content-Disposition header
       const contentDisposition = response.headers.get("Content-Disposition")
-      let filename = `duplicate_mobile_numbers.${format === "excel" ? "xlsx" : "csv"}`
+      let filename = `duplicate_mobile_numbers.${pendingExportFormat === "excel" ? "xlsx" : "csv"}`
 
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="(.+)"/)
@@ -107,16 +126,16 @@ export default function DuplicateMobileNumbersPage() {
       const blob = await response.blob()
 
       // Create download link and trigger download
-      const url = window.URL.createObjectURL(blob)
+      const blobUrl = window.URL.createObjectURL(blob)
       const link = document.createElement("a")
-      link.href = url
+      link.href = blobUrl
       link.download = filename
       document.body.appendChild(link)
       link.click()
 
       // Cleanup
       document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      window.URL.revokeObjectURL(blobUrl)
 
       toast.success(`Successfully exported ${filename}`)
     } catch (err) {
@@ -125,6 +144,7 @@ export default function DuplicateMobileNumbersPage() {
     } finally {
       setIsExporting(false)
       setExportFormat(null)
+      setPendingExportFormat(null)
     }
   }
 
@@ -185,7 +205,7 @@ export default function DuplicateMobileNumbersPage() {
           </div>
           <div className="flex gap-2">
             <Button
-              onClick={() => handleExport("excel")}
+              onClick={() => handleExportClick("excel")}
               variant="outline"
               className="border-green-600 text-green-600 hover:bg-green-50"
               disabled={isExporting}
@@ -198,7 +218,7 @@ export default function DuplicateMobileNumbersPage() {
               Export Excel
             </Button>
             <Button
-              onClick={() => handleExport("csv")}
+              onClick={() => handleExportClick("csv")}
               variant="outline"
               className="border-orange-600 text-orange-600 hover:bg-orange-50"
               disabled={isExporting}
@@ -360,6 +380,45 @@ export default function DuplicateMobileNumbersPage() {
           )}
         </div>
       </div>
+
+      {/* Export Options Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export Options</DialogTitle>
+            <DialogDescription>
+              Choose your preferences for exporting duplicate mobile numbers as {pendingExportFormat?.toUpperCase()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="maskUid"
+                  checked={maskUid}
+                  onCheckedChange={(checked) => setMaskUid(checked as boolean)}
+                />
+                <label htmlFor="maskUid" className="text-sm font-medium cursor-pointer">
+                  Mask Aadhaar numbers (show only last 4 digits)
+                </label>
+              </div>
+              <p className="text-xs text-gray-500">
+                {maskUid
+                  ? "Aadhaar numbers will be masked (e.g., ********1234)"
+                  : "Full Aadhaar numbers will be exported"}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleExport} className="bg-gradient-to-r from-orange-500 to-green-600">
+              Export {pendingExportFormat?.toUpperCase()}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   )
 }
