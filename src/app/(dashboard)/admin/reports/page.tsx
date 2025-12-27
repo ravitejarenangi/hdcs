@@ -422,6 +422,8 @@ export default function ReportsPage() {
     if (filters.ruralUrban.length > 0 && filters.ruralUrban.length < 2) {
       params.append("ruralUrban", filters.ruralUrban.join(","))
     }
+    // Always add maskUid parameter
+    params.append("maskUid", filters.maskUid.toString())
 
     return params.toString()
   }

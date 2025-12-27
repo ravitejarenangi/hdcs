@@ -21,6 +21,7 @@ export interface ExportFilters {
   ruralUrban: string[]
   completionRateMin: number
   completionRateMax: number
+  maskUid: boolean
 }
 
 export interface OfficerOption {
@@ -60,6 +61,7 @@ export function ExportFilterDialog({
     ruralUrban: ["rural", "urban"],
     completionRateMin: 0,
     completionRateMax: 100,
+    maskUid: false, // Default to unmasked (show full Aadhaar)
   })
 
   // Initialize mandals and officers to "all" when dialog opens
@@ -92,6 +94,7 @@ export function ExportFilterDialog({
       ruralUrban: ["rural", "urban"],
       completionRateMin: 0,
       completionRateMax: 100,
+      maskUid: false, // Default to unmasked (show full Aadhaar)
     })
   }
 
@@ -494,6 +497,24 @@ export function ExportFilterDialog({
                 </label>
               </div>
             </div>
+          </div>
+
+          {/* Aadhaar UID Masking Filter */}
+          <div className="space-y-3">
+            <Label className="text-base font-semibold">Aadhaar Number (UID)</Label>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="maskUid"
+                checked={filters.maskUid}
+                onCheckedChange={(checked) => setFilters((prev) => ({ ...prev, maskUid: checked as boolean }))}
+              />
+              <label htmlFor="maskUid" className="text-sm font-medium cursor-pointer">
+                Mask Aadhaar numbers (show only last 4 digits)
+              </label>
+            </div>
+            <p className="text-xs text-gray-500">
+              When unchecked, full Aadhaar numbers will be exported. When checked, only last 4 digits will be visible.
+            </p>
           </div>
         </div>
 

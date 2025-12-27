@@ -67,6 +67,9 @@ interface AnalyticsData {
     residentsWithHhIdPlaceholder?: number
     residentsWithMobilePlaceholder?: number
     residentsWithHealthIdPlaceholder?: number
+    // Duplicate metrics
+    duplicateMobileNumbers?: number
+    duplicateHealthIds?: number
   }
   mandalStatistics: Array<{
     mandalName: string
@@ -1034,7 +1037,9 @@ export default function AdminDashboard() {
             {(analytics.overview.residentsWithNamePlaceholder || 0) > 0 ||
             (analytics.overview.residentsWithHhIdPlaceholder || 0) > 0 ||
             (analytics.overview.residentsWithMobilePlaceholder || 0) > 0 ||
-            (analytics.overview.residentsWithHealthIdPlaceholder || 0) > 0 ? (
+            (analytics.overview.residentsWithHealthIdPlaceholder || 0) > 0 ||
+            (analytics.overview.duplicateMobileNumbers || 0) > 0 ||
+            (analytics.overview.duplicateHealthIds || 0) > 0 ? (
               <Card className="border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-white">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-amber-800">
@@ -1042,11 +1047,11 @@ export default function AdminDashboard() {
                     Data Quality Alert - Records Requiring Attention
                   </CardTitle>
                   <CardDescription>
-                    The following records have placeholder or missing values that need to be updated
+                    The following records have placeholder, missing, or duplicate values that need to be updated
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {/* Name Placeholders */}
                     {(analytics.overview.residentsWithNamePlaceholder || 0) > 0 && (
                       <div className="p-4 bg-white rounded-lg border border-amber-200">
@@ -1107,6 +1112,38 @@ export default function AdminDashboard() {
                         </p>
                         <p className="text-xs text-gray-600 mt-1">
                           Records with NULL, N/A, or empty ABHA ID
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Duplicate Mobile Numbers */}
+                    {(analytics.overview.duplicateMobileNumbers || 0) > 0 && (
+                      <div className="p-4 bg-white rounded-lg border border-amber-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Phone className="h-4 w-4 text-amber-600" />
+                          <span className="text-sm font-medium text-gray-700">Duplicate Mobile Numbers</span>
+                        </div>
+                        <p className="text-2xl font-bold text-amber-600">
+                          {(analytics.overview.duplicateMobileNumbers || 0).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Numbers appearing more than 5 times
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Duplicate ABHA IDs */}
+                    {(analytics.overview.duplicateHealthIds || 0) > 0 && (
+                      <div className="p-4 bg-white rounded-lg border border-amber-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <CreditCard className="h-4 w-4 text-amber-600" />
+                          <span className="text-sm font-medium text-gray-700">Duplicate ABHA IDs</span>
+                        </div>
+                        <p className="text-2xl font-bold text-amber-600">
+                          {(analytics.overview.duplicateHealthIds || 0).toLocaleString()}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          ABHA IDs appearing more than 1 time
                         </p>
                       </div>
                     )}

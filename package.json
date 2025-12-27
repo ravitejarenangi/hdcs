@@ -17,6 +17,8 @@
     "bulk-import": "tsx scripts/bulk-import-mysql.ts",
     "test:completion": "tsx scripts/test-completion-rates.ts",
     "cleanup:mobile": "tsx scripts/cleanup-mobile-numbers.ts",
+    "cleanup:duplicate-health-ids": "tsx scripts/cleanup-duplicate-health-ids.ts",
+    "preview:duplicate-health-ids": "tsx scripts/preview-duplicate-health-ids.ts",
     "preview:delete-users": "tsx scripts/preview-mandal-users-deletion.ts",
     "delete:mandal-users": "tsx scripts/delete-mandal-users.ts",
     "preview:delete-residents": "tsx scripts/preview-mandal-residents-deletion.ts",

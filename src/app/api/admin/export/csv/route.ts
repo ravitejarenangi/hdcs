@@ -45,7 +45,11 @@ export async function GET(request: NextRequest) {
     const mobileStatus = searchParams.get("mobileStatus")
     const healthIdStatus = searchParams.get("healthIdStatus")
     const ruralUrbanParam = searchParams.get("ruralUrban")
+    const maskUidParam = searchParams.get("maskUid")
     const sessionId = searchParams.get("sessionId") // For progress tracking
+
+    // Parse maskUid parameter (default to true for backward compatibility - masked by default)
+    const maskUid = maskUidParam === "false" ? false : true
 
     console.log(`[CSV Export] Filter parameters:`, {
       startDate,
@@ -55,6 +59,7 @@ export async function GET(request: NextRequest) {
       mobileStatus,
       healthIdStatus,
       ruralUrban: ruralUrbanParam,
+      maskUid,
       sessionId
     })
 
@@ -260,6 +265,10 @@ export async function GET(request: NextRequest) {
 
     // Helper function to mask UID (show only last 4 digits)
     const maskUID = (uid: string | null): string => {
+      if (!maskUid) {
+        // Don't mask - return full UID
+        return uid || ""
+      }
       if (!uid || uid.length < 4) return ""
       const lastFour = uid.slice(-4)
       const masked = "*".repeat(uid.length - 4) + lastFour

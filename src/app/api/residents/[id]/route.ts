@@ -140,6 +140,41 @@ export async function PUT(
       }
     }
 
+    // Validate healthId uniqueness (ABHA IDs must be globally unique)
+    if (
+      validatedData.healthId !== undefined &&
+      validatedData.healthId !== null &&
+      validatedData.healthId !== "" &&
+      validatedData.healthId !== currentResident.healthId // Only validate if health ID is changing
+    ) {
+      // Normalize the health ID for comparison
+      const normalizedHealthId = normalizeHealthId(validatedData.healthId)
+
+      // Check if any other resident already has this health ID (globally, not just same secretariat)
+      const existingResident = await prisma.resident.findFirst({
+        where: {
+          healthId: normalizedHealthId,
+          residentId: { not: residentId }, // Exclude current resident
+        },
+        select: {
+          residentId: true,
+          name: true,
+          secName: true,
+          mandalName: true,
+        },
+      })
+
+      if (existingResident) {
+        return NextResponse.json(
+          {
+            error: "HEALTH_ID_DUPLICATE",
+            message: `This ABHA ID is already assigned to another resident: ${existingResident.name} (${existingResident.mandalName}/${existingResident.secName}). ABHA IDs must be unique.`,
+          },
+          { status: 400 }
+        )
+      }
+    }
+
     // Prepare update data (only include fields that are provided)
     const updateData: {
       updatedAt: Date

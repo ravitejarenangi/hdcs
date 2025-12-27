@@ -69,6 +69,8 @@ export async function GET(request: Request) {
       residentsWithHhIdPlaceholder,
       residentsWithMobilePlaceholder,
       residentsWithHealthIdPlaceholder,
+      duplicateMobileNumbers,
+      duplicateHealthIds,
     ] = await Promise.all([
       // 1. Total residents count
       prisma.resident.count(),
@@ -125,6 +127,37 @@ export async function GET(request: Request) {
           ],
         },
       }),
+
+      // Count duplicate mobile numbers (excluding null/invalid values)
+      // Mobile numbers appearing MORE THAN 5 times (6+ occurrences) are considered duplicates
+      prisma.$queryRaw<{ count: bigint }>`
+        SELECT COUNT(*) as count
+        FROM (
+          SELECT citizen_mobile
+          FROM residents
+          WHERE citizen_mobile IS NOT NULL
+            AND citizen_mobile != 'N/A'
+            AND citizen_mobile != '0'
+            AND citizen_mobile != ''
+          GROUP BY citizen_mobile
+          HAVING COUNT(*) > 5
+        ) AS duplicates
+      `,
+
+      // Count duplicate ABHA IDs (excluding null/invalid values)
+      // ABHA IDs appearing MORE THAN 1 time (2+ occurrences) are considered duplicates
+      prisma.$queryRaw<{ count: bigint }>`
+        SELECT COUNT(*) as count
+        FROM (
+          SELECT health_id
+          FROM residents
+          WHERE health_id IS NOT NULL
+            AND health_id != 'N/A'
+            AND health_id != ''
+          GROUP BY health_id
+          HAVING COUNT(*) > 1
+        ) AS duplicates
+      `,
     ])
 
     logTiming('Basic counts', requestStart)
@@ -814,6 +847,9 @@ export async function GET(request: Request) {
         residentsWithHhIdPlaceholder,
         residentsWithMobilePlaceholder,
         residentsWithHealthIdPlaceholder,
+        // Duplicate metrics
+        duplicateMobileNumbers: Number(duplicateMobileNumbers[0]?.count || 0),
+        duplicateHealthIds: Number(duplicateHealthIds[0]?.count || 0),
         // Field officer activity metrics
         currentlyActiveOfficersCount, // Officers active in last 15 minutes
         totalActiveOfficersCount: allFieldOfficers.length, // Total enabled officers
