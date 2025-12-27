@@ -848,8 +848,8 @@ export async function GET(request: Request) {
         residentsWithMobilePlaceholder,
         residentsWithHealthIdPlaceholder,
         // Duplicate metrics
-        duplicateMobileNumbers: Number(duplicateMobileNumbers[0]?.count || 0),
-        duplicateHealthIds: Number(duplicateHealthIds[0]?.count || 0),
+        duplicateMobileNumbers: Number((Array.isArray(duplicateMobileNumbers) ? duplicateMobileNumbers[0]?.count : (duplicateMobileNumbers as { count: bigint })?.count) || 0),
+        duplicateHealthIds: Number((Array.isArray(duplicateHealthIds) ? duplicateHealthIds[0]?.count : (duplicateHealthIds as { count: bigint })?.count) || 0),
         // Field officer activity metrics
         currentlyActiveOfficersCount, // Officers active in last 15 minutes
         totalActiveOfficersCount: allFieldOfficers.length, // Total enabled officers
