@@ -4,7 +4,11 @@ import "./globals.css"
 import { Providers } from "@/components/Providers"
 import { Toaster } from "@/components/ui/sonner"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+})
 
 // Viewport configuration
 export const viewport: Viewport = {
