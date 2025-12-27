@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import Link from "next/link"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -1118,18 +1119,20 @@ export default function AdminDashboard() {
 
                     {/* Duplicate Mobile Numbers */}
                     {(analytics.overview.duplicateMobileNumbers || 0) > 0 && (
-                      <div className="p-4 bg-white rounded-lg border border-amber-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Phone className="h-4 w-4 text-amber-600" />
-                          <span className="text-sm font-medium text-gray-700">Duplicate Mobile Numbers</span>
+                      <Link href="/admin/duplicate-mobile-numbers">
+                        <div className="p-4 bg-white rounded-lg border border-amber-200 cursor-pointer hover:bg-amber-50 transition-colors">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Phone className="h-4 w-4 text-amber-600" />
+                            <span className="text-sm font-medium text-gray-700">Duplicate Mobile Numbers</span>
+                          </div>
+                          <p className="text-2xl font-bold text-amber-600">
+                            {(analytics.overview.duplicateMobileNumbers || 0).toLocaleString()}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Numbers appearing more than 5 times
+                          </p>
                         </div>
-                        <p className="text-2xl font-bold text-amber-600">
-                          {(analytics.overview.duplicateMobileNumbers || 0).toLocaleString()}
-                        </p>
-                        <p className="text-xs text-gray-600 mt-1">
-                          Numbers appearing more than 5 times
-                        </p>
-                      </div>
+                      </Link>
                     )}
 
                     {/* Duplicate ABHA IDs */}

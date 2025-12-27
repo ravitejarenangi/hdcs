@@ -1,0 +1,286 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { DashboardLayout } from "@/components/layout/DashboardLayout"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { ChevronLeft, Search, Phone, Users, MapPin, AlertTriangle } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
+import Link from "next/link"
+
+interface DuplicateMobileData {
+  mobileNumber: string
+  count: number
+  sampleNames: string[]
+  mandals: string[]
+  secretariats: string[]
+  residents: Array<{
+    residentId: string
+    name: string
+    citizenMobile: string | null
+    healthId: string | null
+    mandalName: string | null
+    secName: string | null
+    updatedAt: Date
+  }>
+}
+
+interface ApiResponse {
+  total: number
+  totalAffectedResidents: number
+  duplicates: DuplicateMobileData[]
+}
+
+export default function DuplicateMobileNumbersPage() {
+  const router = useRouter()
+  const [data, setData] = useState<ApiResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [expandedMobiles, setExpandedMobiles] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    fetchDuplicateMobileNumbers()
+  }, [])
+
+  const fetchDuplicateMobileNumbers = async () => {
+    setIsLoading(true)
+    setError("")
+
+    try {
+      const response = await fetch("/api/admin/duplicate-mobile-numbers")
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch duplicate mobile numbers")
+      }
+
+      const result: ApiResponse = await response.json()
+      setData(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred")
+      toast.error("Failed to load duplicate mobile numbers")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const toggleExpand = (mobileNumber: string) => {
+    setExpandedMobiles((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(mobileNumber)) {
+        newSet.delete(mobileNumber)
+      } else {
+        newSet.add(mobileNumber)
+      }
+      return newSet
+    })
+  }
+
+  const filteredDuplicates = data?.duplicates.filter((dup) =>
+    dup.mobileNumber.includes(searchQuery) ||
+    dup.mandals.some((m) => m.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    dup.residents.some((r) => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
+  ) || []
+
+  if (isLoading) {
+    return (
+      <DashboardLayout requiredRole="ADMIN">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading duplicate mobile numbers...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <DashboardLayout requiredRole="ADMIN">
+        <Card className="border-2 border-red-200">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <AlertTriangle className="h-16 w-16 text-red-600 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">Failed to Load Data</h3>
+            <p className="text-gray-600 mb-4">{error || "Unable to fetch duplicate mobile numbers"}</p>
+            <Button onClick={fetchDuplicateMobileNumbers} className="bg-gradient-to-r from-orange-500 to-green-600">
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </DashboardLayout>
+    )
+  }
+
+  return (
+    <DashboardLayout requiredRole="ADMIN">
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <Link href="/admin">
+            <Button variant="outline" size="sm">
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Back to Dashboard
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800">Duplicate Mobile Numbers</h1>
+            <p className="text-gray-600 mt-1">
+              Mobile numbers appearing more than 5 times in the database
+            </p>
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="border-2 border-orange-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Duplicate Mobile Numbers
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-orange-600">{data.total}</div>
+              <p className="text-xs text-gray-500 mt-2">Unique mobile numbers</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2 border-red-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Affected Residents
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-red-600">
+                {data.totalAffectedResidents.toLocaleString()}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">Total records with duplicate mobiles</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2 border-blue-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Avg Occurrences
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-blue-600">
+                {data.total > 0 ? (data.totalAffectedResidents / data.total).toFixed(1) : 0}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">Average times per mobile number</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            type="text"
+            placeholder="Search by mobile number, mandal, or resident name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        {/* Duplicate Mobile Numbers List */}
+        <div className="space-y-4">
+          {filteredDuplicates.length === 0 ? (
+            <Card>
+              <CardContent className="flex items-center justify-center py-12">
+                <p className="text-gray-500">No duplicate mobile numbers found matching your search.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            filteredDuplicates.map((dup) => {
+              const isExpanded = expandedMobiles.has(dup.mobileNumber)
+              return (
+                <Card key={dup.mobileNumber} className="border-2 border-amber-200">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="flex items-center gap-3">
+                          <Phone className="h-5 w-5 text-orange-600" />
+                          <span className="text-lg">{dup.mobileNumber}</span>
+                          <Badge variant="destructive" className="text-sm">
+                            {dup.count} times
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription className="mt-2">
+                          Found in {dup.mandals.length} mandal{dup.mandals.length > 1 ? "s" : ""} •{" "}
+                          {dup.secretariats.length} secretariat{dup.secretariats.length > 1 ? "s" : ""}
+                        </CardDescription>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleExpand(dup.mobileNumber)}
+                      >
+                        {isExpanded ? "Hide" : "Show"} Residents
+                      </Button>
+                    </div>
+                  </CardHeader>
+
+                  {isExpanded && (
+                    <CardContent>
+                      {/* Mandal tags */}
+                      <div className="mb-4">
+                        <div className="text-sm font-medium text-gray-700 mb-2">Mandals:</div>
+                        <div className="flex flex-wrap gap-2">
+                          {dup.mandals.map((mandal) => (
+                            <Badge key={mandal} variant="secondary">
+                              <MapPin className="h-3 w-3 mr-1" />
+                              {mandal}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Residents table */}
+                      <div className="border rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="text-left p-3 font-semibold">Resident ID</th>
+                              <th className="text-left p-3 font-semibold">Name</th>
+                              <th className="text-left p-3 font-semibold">Mobile</th>
+                              <th className="text-left p-3 font-semibold">ABHA ID</th>
+                              <th className="text-left p-3 font-semibold">Mandal</th>
+                              <th className="text-left p-3 font-semibold">Secretariat</th>
+                              <th className="text-left p-3 font-semibold">Last Updated</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dup.residents.map((resident) => (
+                              <tr key={resident.residentId} className="border-t hover:bg-gray-50">
+                                <td className="p-3 font-mono text-xs">{resident.residentId}</td>
+                                <td className="p-3 font-medium">{resident.name}</td>
+                                <td className="p-3">{resident.citizenMobile || "-"}</td>
+                                <td className="p-3 font-mono text-xs">{resident.healthId || "-"}</td>
+                                <td className="p-3">{resident.mandalName || "-"}</td>
+                                <td className="p-3">{resident.secName || "-"}</td>
+                                <td className="p-3 text-xs">
+                                  {new Date(resident.updatedAt).toLocaleDateString()}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </DashboardLayout>
+  )
+}
