@@ -144,6 +144,7 @@ interface AnalyticsData {
 }
 
 type MandalSortColumn = "name" | "total" | "mobile" | "healthId"
+type MandalCountsSortColumn = "name" | "mobilePresent" | "mobileNeeded" | "abhaPresent" | "abhaNeeded"
 type OfficerSortColumn = "name" | "username" | "role" | "updates"
 type UpdatesSortColumn = "resident" | "field" | "updatedBy" | "date"
 type SortDirection = "asc" | "desc" | null
@@ -162,6 +163,10 @@ export default function AdminDashboard() {
   const [mandalSortColumn, setMandalSortColumn] = useState<MandalSortColumn | null>(null)
   const [mandalSortDirection, setMandalSortDirection] = useState<SortDirection>(null)
 
+  // Sorting state for Mandal Counts table
+  const [mandalCountsSortColumn, setMandalCountsSortColumn] = useState<MandalCountsSortColumn | null>(null)
+  const [mandalCountsSortDirection, setMandalCountsSortDirection] = useState<SortDirection>(null)
+
   // Sorting state for Field Officer table
   const [officerSortColumn, setOfficerSortColumn] = useState<OfficerSortColumn | null>(null)
   const [officerSortDirection, setOfficerSortDirection] = useState<SortDirection>(null)
@@ -173,6 +178,8 @@ export default function AdminDashboard() {
   // Export state
   const [isExportingCsv, setIsExportingCsv] = useState(false)
   const [isExportingExcel, setIsExportingExcel] = useState(false)
+  const [isExportingCountsCsv, setIsExportingCountsCsv] = useState(false)
+  const [isExportingCountsExcel, setIsExportingCountsExcel] = useState(false)
 
   useEffect(() => {
     fetchAnalytics()
@@ -229,6 +236,20 @@ export default function AdminDashboard() {
     } else {
       setMandalSortColumn(column)
       setMandalSortDirection("asc")
+    }
+  }
+
+  const handleMandalCountsSort = (column: MandalCountsSortColumn) => {
+    if (mandalCountsSortColumn === column) {
+      if (mandalCountsSortDirection === "asc") {
+        setMandalCountsSortDirection("desc")
+      } else if (mandalCountsSortDirection === "desc") {
+        setMandalCountsSortDirection(null)
+        setMandalCountsSortColumn(null)
+      }
+    } else {
+      setMandalCountsSortColumn(column)
+      setMandalCountsSortDirection("asc")
     }
   }
 
@@ -621,6 +642,163 @@ export default function AdminDashboard() {
     }
   }
 
+  const exportMandalCountsToCSV = () => {
+    if (!analytics?.mandalCompletion) {
+      toast.error("No data available to export")
+      return
+    }
+
+    try {
+      setIsExportingCountsCsv(true)
+      toast.info("Generating Mandal Counts CSV export...")
+
+      const csvRows: string[] = []
+
+      // Header row
+      const headers = [
+        "Mandal Name",
+        "Mobile Numbers Present",
+        "Mobile Numbers Needed",
+        "ABHA IDs Present",
+        "ABHA IDs Needed",
+      ]
+      csvRows.push(headers.join(","))
+
+      // Data rows
+      const counts = getSortedMandalCounts()
+      counts.forEach((mandal) => {
+        csvRows.push([
+          `"${mandal.mandalName}"`,
+          mandal.mobilePresent,
+          mandal.mobileNeeded,
+          mandal.abhaPresent,
+          mandal.abhaNeeded,
+        ].join(","))
+      })
+
+      // Totals row
+      const totals = counts.reduce(
+        (acc, m) => ({
+          mobilePresent: acc.mobilePresent + m.mobilePresent,
+          mobileNeeded: acc.mobileNeeded + m.mobileNeeded,
+          abhaPresent: acc.abhaPresent + m.abhaPresent,
+          abhaNeeded: acc.abhaNeeded + m.abhaNeeded,
+        }),
+        { mobilePresent: 0, mobileNeeded: 0, abhaPresent: 0, abhaNeeded: 0 }
+      )
+
+      csvRows.push([
+        '"TOTAL (All Mandals)"',
+        totals.mobilePresent,
+        totals.mobileNeeded,
+        totals.abhaPresent,
+        totals.abhaNeeded,
+      ].join(","))
+
+      // Create CSV content with BOM for Excel compatibility
+      const BOM = "\uFEFF"
+      const csvContent = BOM + csvRows.join("\n")
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+      const filename = `mandal_actual_counts_${timestamp}.csv`
+      link.download = filename
+
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      toast.success("CSV exported successfully", {
+        description: `File: ${filename}`,
+      })
+    } catch (error) {
+      console.error("CSV export error:", error)
+      toast.error("Failed to export CSV", {
+        description: "Please try again",
+      })
+    } finally {
+      setIsExportingCountsCsv(false)
+    }
+  }
+
+  const exportMandalCountsToExcel = () => {
+    if (!analytics?.mandalCompletion) {
+      toast.error("No data available to export")
+      return
+    }
+
+    try {
+      setIsExportingCountsExcel(true)
+      toast.info("Generating Mandal Counts Excel export...")
+
+      const counts = getSortedMandalCounts()
+
+      // Calculate totals
+      const totals = counts.reduce(
+        (acc, m) => ({
+          mobilePresent: acc.mobilePresent + m.mobilePresent,
+          mobileNeeded: acc.mobileNeeded + m.mobileNeeded,
+          abhaPresent: acc.abhaPresent + m.abhaPresent,
+          abhaNeeded: acc.abhaNeeded + m.abhaNeeded,
+        }),
+        { mobilePresent: 0, mobileNeeded: 0, abhaPresent: 0, abhaNeeded: 0 }
+      )
+
+      // Create workbook
+      const workbook = XLSX.utils.book_new()
+
+      // Create worksheet data
+      const worksheetData = [
+        ["Mandal Name", "Mobile Numbers Present", "Mobile Numbers Needed", "ABHA IDs Present", "ABHA IDs Needed"],
+        ...counts.map((m) => [
+          m.mandalName,
+          m.mobilePresent,
+          m.mobileNeeded,
+          m.abhaPresent,
+          m.abhaNeeded,
+        ]),
+        ["TOTAL (All Mandals)", totals.mobilePresent, totals.mobileNeeded, totals.abhaPresent, totals.abhaNeeded],
+      ]
+
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData)
+
+      // Set column widths
+      worksheet["!cols"] = [
+        { wch: 30 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 20 },
+      ]
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Mandal Counts")
+
+      // Generate file
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
+      const filename = `mandal_actual_counts_${timestamp}.xlsx`
+
+      XLSX.writeFile(workbook, filename)
+
+      toast.success("Excel exported successfully", {
+        description: `File: ${filename}`,
+      })
+    } catch (error) {
+      console.error("Excel export error:", error)
+      toast.error("Failed to export Excel", {
+        description: "Please try again",
+      })
+    } finally {
+      setIsExportingCountsExcel(false)
+    }
+  }
+
   // Sort icon component
   const SortIcon = ({
     column,
@@ -688,6 +866,65 @@ export default function AdminDashboard() {
       }
 
       return mandalSortDirection === "asc"
+        ? (aValue as number) - (bValue as number)
+        : (bValue as number) - (aValue as number)
+    })
+  }
+
+  // Get sorted mandal counts data
+  const getSortedMandalCounts = () => {
+    if (!analytics?.mandalCompletion) return []
+
+    // Transform mandalCompletion to counts format
+    const counts = analytics.mandalCompletion.map(mandal => ({
+      mandalName: mandal.mandalName,
+      mobilePresent: mandal.withMobile,
+      mobileNeeded: mandal.totalResidents - mandal.withMobile,
+      abhaPresent: mandal.withHealthId,
+      abhaNeeded: mandal.totalResidents - mandal.withHealthId,
+    }))
+
+    // Apply sorting if configured
+    if (!mandalCountsSortColumn || !mandalCountsSortDirection) {
+      return counts
+    }
+
+    return [...counts].sort((a, b) => {
+      let aValue: number | string
+      let bValue: number | string
+
+      switch (mandalCountsSortColumn) {
+        case "name":
+          aValue = a.mandalName
+          bValue = b.mandalName
+          break
+        case "mobilePresent":
+          aValue = a.mobilePresent
+          bValue = b.mobilePresent
+          break
+        case "mobileNeeded":
+          aValue = a.mobileNeeded
+          bValue = b.mobileNeeded
+          break
+        case "abhaPresent":
+          aValue = a.abhaPresent
+          bValue = b.abhaPresent
+          break
+        case "abhaNeeded":
+          aValue = a.abhaNeeded
+          bValue = b.abhaNeeded
+          break
+        default:
+          return 0
+      }
+
+      if (typeof aValue === "string" && typeof bValue === "string") {
+        return mandalCountsSortDirection === "asc"
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue)
+      }
+
+      return mandalCountsSortDirection === "asc"
         ? (aValue as number) - (bValue as number)
         : (bValue as number) - (aValue as number)
     })
@@ -1656,6 +1893,149 @@ export default function AdminDashboard() {
                           </tr>
                         ) : null
                       })()}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Mandal-wise Actual Counts */}
+            <Card className="border-2 border-orange-200">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-orange-600" />
+                      Mandal-wise Actual Counts
+                    </CardTitle>
+                    <CardDescription>
+                      Actual mobile numbers and ABHA IDs present vs needed
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={exportMandalCountsToCSV}
+                      disabled={isExportingCountsCsv || !analytics?.mandalCompletion}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      {isExportingCountsCsv ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileDown className="h-4 w-4" />
+                      )}
+                      Export CSV
+                    </Button>
+                    <Button
+                      onClick={exportMandalCountsToExcel}
+                      disabled={isExportingCountsExcel || !analytics?.mandalCompletion}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      {isExportingCountsExcel ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileSpreadsheet className="h-4 w-4" />
+                      )}
+                      Export Excel
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th
+                          className="text-left py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => handleMandalCountsSort("name")}
+                        >
+                          <div className="flex items-center gap-1">
+                            Mandal
+                            <SortIcon
+                              column="name"
+                              currentColumn={mandalCountsSortColumn}
+                              direction={mandalCountsSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-green-50"
+                          onClick={() => handleMandalCountsSort("mobilePresent")}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="text-green-700 font-semibold">Mobile Present</span>
+                            <SortIcon
+                              column="mobilePresent"
+                              currentColumn={mandalCountsSortColumn}
+                              direction={mandalCountsSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-red-50"
+                          onClick={() => handleMandalCountsSort("mobileNeeded")}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="text-red-700 font-semibold">Mobile Needed</span>
+                            <SortIcon
+                              column="mobileNeeded"
+                              currentColumn={mandalCountsSortColumn}
+                              direction={mandalCountsSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-purple-50"
+                          onClick={() => handleMandalCountsSort("abhaPresent")}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="text-purple-700 font-semibold">ABHA Present</span>
+                            <SortIcon
+                              column="abhaPresent"
+                              currentColumn={mandalCountsSortColumn}
+                              direction={mandalCountsSortDirection}
+                            />
+                          </div>
+                        </th>
+                        <th
+                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-orange-50"
+                          onClick={() => handleMandalCountsSort("abhaNeeded")}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="text-orange-700 font-semibold">ABHA Needed</span>
+                            <SortIcon
+                              column="abhaNeeded"
+                              currentColumn={mandalCountsSortColumn}
+                              direction={mandalCountsSortDirection}
+                            />
+                          </div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {getSortedMandalCounts().map((mandal, index) => (
+                        <tr key={index} className="border-b hover:bg-gray-50">
+                          <td className="py-3 px-4 font-semibold text-gray-800">
+                            {mandal.mandalName}
+                          </td>
+                          <td className="text-right py-3 px-4 bg-green-50 font-bold text-green-700">
+                            {mandal.mobilePresent.toLocaleString()}
+                          </td>
+                          <td className="text-right py-3 px-4 bg-red-50 font-bold text-red-700">
+                            {mandal.mobileNeeded.toLocaleString()}
+                          </td>
+                          <td className="text-right py-3 px-4 bg-purple-50 font-bold text-purple-700">
+                            {mandal.abhaPresent.toLocaleString()}
+                          </td>
+                          <td className="text-right py-3 px-4 bg-orange-50 font-bold text-orange-700">
+                            {mandal.abhaNeeded.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
