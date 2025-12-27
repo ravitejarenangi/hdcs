@@ -2138,10 +2138,10 @@ export default function AdminDashboard() {
                           </div>
                         </th>
                         <th
-                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-blue-50"
+                          className="text-center py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-blue-50"
                           onClick={() => handleMandalCountsSort("totalMobile")}
                         >
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-center gap-1">
                             <span className="text-blue-700 font-semibold text-xs">Total Mobile Numbers</span>
                             <SortIcon
                               column="totalMobile"
@@ -2151,10 +2151,10 @@ export default function AdminDashboard() {
                           </div>
                         </th>
                         <th
-                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-green-50"
+                          className="text-center py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-green-50"
                           onClick={() => handleMandalCountsSort("mobileUpdated")}
                         >
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-center gap-1">
                             <span className="text-green-700 font-semibold text-xs">Mob No Updated</span>
                             <SortIcon
                               column="mobileUpdated"
@@ -2164,10 +2164,10 @@ export default function AdminDashboard() {
                           </div>
                         </th>
                         <th
-                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-red-50"
+                          className="text-center py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-red-50"
                           onClick={() => handleMandalCountsSort("mobileNeeded")}
                         >
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-center gap-1">
                             <span className="text-red-700 font-semibold text-xs">Mob No to be Updated</span>
                             <SortIcon
                               column="mobileNeeded"
@@ -2177,10 +2177,10 @@ export default function AdminDashboard() {
                           </div>
                         </th>
                         <th
-                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-purple-50"
+                          className="text-center py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-purple-50"
                           onClick={() => handleMandalCountsSort("totalAbha")}
                         >
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-center gap-1">
                             <span className="text-purple-700 font-semibold text-xs">Total ABHA IDs</span>
                             <SortIcon
                               column="totalAbha"
@@ -2190,10 +2190,10 @@ export default function AdminDashboard() {
                           </div>
                         </th>
                         <th
-                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-green-50"
+                          className="text-center py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-green-50"
                           onClick={() => handleMandalCountsSort("abhaUpdated")}
                         >
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-center gap-1">
                             <span className="text-green-700 font-semibold text-xs">Abha IDs Updated</span>
                             <SortIcon
                               column="abhaUpdated"
@@ -2203,10 +2203,10 @@ export default function AdminDashboard() {
                           </div>
                         </th>
                         <th
-                          className="text-right py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-orange-50"
+                          className="text-center py-3 px-4 cursor-pointer hover:bg-gray-100 transition-colors bg-orange-50"
                           onClick={() => handleMandalCountsSort("abhaNeeded")}
                         >
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-center gap-1">
                             <span className="text-orange-700 font-semibold text-xs">ABHA IDs to be Updated</span>
                             <SortIcon
                               column="abhaNeeded"
@@ -2241,22 +2241,22 @@ export default function AdminDashboard() {
                               <td className="py-3 px-4 font-semibold text-orange-700">
                                 {mandal.mandalName}
                               </td>
-                              <td className="text-right py-3 px-4 bg-blue-50 font-bold text-blue-700">
+                              <td className="text-center py-3 px-4 bg-blue-50 font-bold text-blue-700">
                                 {mandal.totalMobile.toLocaleString()}
                               </td>
-                              <td className="text-right py-3 px-4 bg-green-50 font-bold text-green-700">
+                              <td className="text-center py-3 px-4 bg-green-50 font-bold text-green-700">
                                 {mandal.mobileUpdated.toLocaleString()}
                               </td>
-                              <td className="text-right py-3 px-4 bg-red-50 font-bold text-red-700">
+                              <td className="text-center py-3 px-4 bg-red-50 font-bold text-red-700">
                                 {mandal.mobileNeeded.toLocaleString()}
                               </td>
-                              <td className="text-right py-3 px-4 bg-purple-50 font-bold text-purple-700">
+                              <td className="text-center py-3 px-4 bg-purple-50 font-bold text-purple-700">
                                 {mandal.totalAbha.toLocaleString()}
                               </td>
-                              <td className="text-right py-3 px-4 bg-green-50 font-bold text-green-700">
+                              <td className="text-center py-3 px-4 bg-green-50 font-bold text-green-700">
                                 {mandal.abhaUpdated.toLocaleString()}
                               </td>
-                              <td className="text-right py-3 px-4 bg-orange-50 font-bold text-orange-700">
+                              <td className="text-center py-3 px-4 bg-orange-50 font-bold text-orange-700">
                                 {mandal.abhaNeeded.toLocaleString()}
                               </td>
                             </tr>
@@ -2274,22 +2274,22 @@ export default function AdminDashboard() {
                                   <td className="py-2 px-4 pl-8 font-semibold text-blue-700 text-sm">
                                     {secretariat.secName}
                                   </td>
-                                  <td className="text-right py-2 px-4 bg-blue-50/50 font-semibold text-blue-700 text-sm">
+                                  <td className="text-center py-2 px-4 bg-blue-50/50 font-semibold text-blue-700 text-sm">
                                     {secretariat.totalResidents.toLocaleString()}
                                   </td>
-                                  <td className="text-right py-2 px-4 bg-green-50/50 font-semibold text-green-700 text-sm">
+                                  <td className="text-center py-2 px-4 bg-green-50/50 font-semibold text-green-700 text-sm">
                                     {secretariat.withMobile.toLocaleString()}
                                   </td>
-                                  <td className="text-right py-2 px-4 bg-red-50/50 font-semibold text-red-700 text-sm">
+                                  <td className="text-center py-2 px-4 bg-red-50/50 font-semibold text-red-700 text-sm">
                                     {(secretariat.totalResidents - secretariat.withMobile).toLocaleString()}
                                   </td>
-                                  <td className="text-right py-2 px-4 bg-purple-50/50 font-semibold text-purple-700 text-sm">
+                                  <td className="text-center py-2 px-4 bg-purple-50/50 font-semibold text-purple-700 text-sm">
                                     {secretariat.totalResidents.toLocaleString()}
                                   </td>
-                                  <td className="text-right py-2 px-4 bg-green-50/50 font-semibold text-green-700 text-sm">
+                                  <td className="text-center py-2 px-4 bg-green-50/50 font-semibold text-green-700 text-sm">
                                     {secretariat.withHealthId.toLocaleString()}
                                   </td>
-                                  <td className="text-right py-2 px-4 bg-orange-50/50 font-semibold text-orange-700 text-sm">
+                                  <td className="text-center py-2 px-4 bg-orange-50/50 font-semibold text-orange-700 text-sm">
                                     {(secretariat.totalResidents - secretariat.withHealthId).toLocaleString()}
                                   </td>
                                 </tr>
@@ -2304,22 +2304,22 @@ export default function AdminDashboard() {
                         <td className="py-3 px-4 text-gray-900">
                           TOTAL (All Mandals)
                         </td>
-                        <td className="text-right py-3 px-4 bg-blue-100 text-blue-800">
+                        <td className="text-center py-3 px-4 bg-blue-100 text-blue-800">
                           {getSortedMandalCounts().reduce((sum, m) => sum + m.totalMobile, 0).toLocaleString()}
                         </td>
-                        <td className="text-right py-3 px-4 bg-green-100 text-green-800">
+                        <td className="text-center py-3 px-4 bg-green-100 text-green-800">
                           {getSortedMandalCounts().reduce((sum, m) => sum + m.mobileUpdated, 0).toLocaleString()}
                         </td>
-                        <td className="text-right py-3 px-4 bg-red-100 text-red-800">
+                        <td className="text-center py-3 px-4 bg-red-100 text-red-800">
                           {getSortedMandalCounts().reduce((sum, m) => sum + m.mobileNeeded, 0).toLocaleString()}
                         </td>
-                        <td className="text-right py-3 px-4 bg-purple-100 text-purple-800">
+                        <td className="text-center py-3 px-4 bg-purple-100 text-purple-800">
                           {getSortedMandalCounts().reduce((sum, m) => sum + m.totalAbha, 0).toLocaleString()}
                         </td>
-                        <td className="text-right py-3 px-4 bg-green-100 text-green-800">
+                        <td className="text-center py-3 px-4 bg-green-100 text-green-800">
                           {getSortedMandalCounts().reduce((sum, m) => sum + m.abhaUpdated, 0).toLocaleString()}
                         </td>
-                        <td className="text-right py-3 px-4 bg-orange-100 text-orange-800">
+                        <td className="text-center py-3 px-4 bg-orange-100 text-orange-800">
                           {getSortedMandalCounts().reduce((sum, m) => sum + m.abhaNeeded, 0).toLocaleString()}
                         </td>
                       </tr>
