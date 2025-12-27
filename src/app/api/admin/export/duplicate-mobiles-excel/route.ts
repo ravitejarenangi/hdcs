@@ -13,15 +13,24 @@ const maskUID = (uid: string | null): string => {
 
 export async function GET(request: NextRequest) {
   try {
+    console.log(`[Duplicate Mobiles Excel Export] Starting export...`)
+
     // Check authentication
     const session = await auth()
 
     if (!session) {
+      console.error(`[Duplicate Mobiles Excel Export] Unauthorized - No session`)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (!session.user) {
+      console.error(`[Duplicate Mobiles Excel Export] Unauthorized - No user in session`)
+      return NextResponse.json({ error: "Unauthorized - No user found" }, { status: 401 })
     }
 
     // Check if user is admin
     if (session.user.role !== "ADMIN") {
+      console.error(`[Duplicate Mobiles Excel Export] Forbidden - User role: ${session.user.role}`)
       return NextResponse.json(
         { error: "Forbidden - Admin access required" },
         { status: 403 }
@@ -32,8 +41,10 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const maskUidParam = searchParams.get("maskUid")
     const maskUid = maskUidParam === "false" ? false : true
+    console.log(`[Duplicate Mobiles Excel Export] maskUid: ${maskUid}`)
 
     // Fetch duplicate mobile numbers (appearing more than 5 times) with resident details
+    console.log(`[Duplicate Mobiles Excel Export] Fetching duplicate mobile numbers...`)
     const duplicates = await prisma.$queryRaw<Array<{
       citizen_mobile: string
       count: number
@@ -51,9 +62,20 @@ export async function GET(request: NextRequest) {
       ORDER BY COUNT(*) DESC, citizen_mobile
     `
 
+    console.log(`[Duplicate Mobiles Excel Export] Found ${duplicates.length} duplicate mobile numbers`)
+
+    if (duplicates.length === 0) {
+      return NextResponse.json(
+        { error: "No duplicate mobile numbers found to export" },
+        { status: 404 }
+      )
+    }
+
     const mobileNumbers = duplicates.map((d) => d.citizen_mobile)
     const totalDuplicates = duplicates.length
     const totalAffectedResidents = duplicates.reduce((sum, d) => sum + Number(d.count), 0)
+
+    console.log(`[Duplicate Mobiles Excel Export] Fetching residents for ${mobileNumbers.length} mobile numbers...`)
 
     // Fetch all residents with duplicate mobile numbers
     const residents = await prisma.resident.findMany({
@@ -71,6 +93,8 @@ export async function GET(request: NextRequest) {
       orderBy: { citizenMobile: "asc" },
     })
 
+    console.log(`[Duplicate Mobiles Excel Export] Found ${residents.length} residents`)
+
     // Create a map of mobile number to count
     const mobileCountMap = duplicates.reduce((acc, dup) => {
       acc[dup.citizen_mobile] = Number(dup.count)
@@ -84,6 +108,8 @@ export async function GET(request: NextRequest) {
       .replace(/\..+/, "")
       .replace("T", "_")
     const filename = `duplicate_mobile_numbers_${timestamp}.xlsx`
+
+    console.log(`[Duplicate Mobiles Excel Export] Generating Excel file: ${filename}`)
 
     // Create workbook
     const workbook = new ExcelJS.Workbook()
@@ -143,12 +169,15 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    console.log(`[Duplicate Mobiles Excel Export] Completed - Total records: ${residents.length}`)
+    console.log(`[Duplicate Mobiles Excel Export] Completed adding rows - Total records: ${residents.length}`)
 
     // Generate Excel buffer
+    console.log(`[Duplicate Mobiles Excel Export] Writing Excel buffer...`)
     const buffer = await workbook.xlsx.writeBuffer()
+    console.log(`[Duplicate Mobiles Excel Export] Buffer size: ${buffer.byteLength} bytes`)
 
     // Return the Excel file
+    console.log(`[Duplicate Mobiles Excel Export] Sending file response...`)
     return new NextResponse(buffer, {
       status: 200,
       headers: {
@@ -158,9 +187,11 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Duplicate mobiles Excel export error:", error)
+    console.error("[Duplicate Mobiles Excel Export] Error:", error)
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("[Duplicate Mobiles Excel Export] Error message:", errorMessage)
     return NextResponse.json(
-      { error: "Failed to generate Excel export" },
+      { error: `Failed to generate Excel export: ${errorMessage}` },
       { status: 500 }
     )
   }

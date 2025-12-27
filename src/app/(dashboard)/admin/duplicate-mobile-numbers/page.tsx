@@ -108,7 +108,18 @@ export default function DuplicateMobileNumbersPage() {
       const response = await fetch(url)
 
       if (!response.ok) {
-        throw new Error(`Failed to generate ${pendingExportFormat.toUpperCase()} export`)
+        // Try to parse the error response
+        let errorMessage = `Failed to generate ${pendingExportFormat.toUpperCase()} export`
+        try {
+          const errorData = await response.json()
+          if (errorData.error) {
+            errorMessage = errorData.error
+          }
+        } catch (e) {
+          // If we can't parse JSON, use the status text
+          errorMessage = response.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
       }
 
       // Get the filename from Content-Disposition header

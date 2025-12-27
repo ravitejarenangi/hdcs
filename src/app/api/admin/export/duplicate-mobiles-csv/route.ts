@@ -28,15 +28,24 @@ const maskUID = (uid: string | null): string => {
 
 export async function GET(request: NextRequest) {
   try {
+    console.log(`[Duplicate Mobiles CSV Export] Starting export...`)
+
     // Check authentication
     const session = await auth()
 
     if (!session) {
+      console.error(`[Duplicate Mobiles CSV Export] Unauthorized - No session`)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (!session.user) {
+      console.error(`[Duplicate Mobiles CSV Export] Unauthorized - No user in session`)
+      return NextResponse.json({ error: "Unauthorized - No user found" }, { status: 401 })
     }
 
     // Check if user is admin
     if (session.user.role !== "ADMIN") {
+      console.error(`[Duplicate Mobiles CSV Export] Forbidden - User role: ${session.user.role}`)
       return NextResponse.json(
         { error: "Forbidden - Admin access required" },
         { status: 403 }
@@ -47,6 +56,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const maskUidParam = searchParams.get("maskUid")
     const maskUid = maskUidParam === "false" ? false : true
+    console.log(`[Duplicate Mobiles CSV Export] maskUid: ${maskUid}`)
 
     // Fetch duplicate mobile numbers (appearing more than 5 times) with resident details
     const duplicates = await prisma.$queryRaw<Array<{
@@ -160,9 +170,11 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Duplicate mobiles CSV export error:", error)
+    console.error("[Duplicate Mobiles CSV Export] Error:", error)
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    console.error("[Duplicate Mobiles CSV Export] Error message:", errorMessage)
     return NextResponse.json(
-      { error: "Failed to generate CSV export" },
+      { error: `Failed to generate CSV export: ${errorMessage}` },
       { status: 500 }
     )
   }
