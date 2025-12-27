@@ -691,17 +691,7 @@ export default function AdminDashboard() {
         )
 
         if (isFiltered && mandalWithSecretariats) {
-          // Export mandal total row with secretariat column
-          csvRows.push([
-            `"${mandal.mandalName}"`,
-            `"${mandal.mandalName} (Total)"`,
-            mandal.mobilePresent,
-            mandal.mobileNeeded,
-            mandal.abhaPresent,
-            mandal.abhaNeeded,
-          ].join(","))
-
-          // Export secretariat rows
+          // Export only secretariat rows (skip mandal total row)
           mandalWithSecretariats.secretariats.forEach((secretariat) => {
             csvRows.push([
               `"${mandal.mandalName}"`,
@@ -853,17 +843,7 @@ export default function AdminDashboard() {
         )
 
         if (isFiltered && mandalWithSecretariats) {
-          // Add mandal total row with secretariat column
-          worksheetData.push([
-            mandal.mandalName,
-            `${mandal.mandalName} (Total)`,
-            mandal.mobilePresent,
-            mandal.mobileNeeded,
-            mandal.abhaPresent,
-            mandal.abhaNeeded,
-          ])
-
-          // Add secretariat rows
+          // Add only secretariat rows (skip mandal total row)
           mandalWithSecretariats.secretariats.forEach((secretariat) => {
             worksheetData.push([
               mandal.mandalName,
