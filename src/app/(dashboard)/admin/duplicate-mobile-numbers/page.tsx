@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ChevronLeft, Search, Phone, Users, MapPin, AlertTriangle } from "lucide-react"
+import { ChevronLeft, Search, Phone, Users, MapPin, AlertTriangle, Download, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -41,6 +41,8 @@ export default function DuplicateMobileNumbersPage() {
   const [error, setError] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedMobiles, setExpandedMobiles] = useState<Set<string>>(new Set())
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportFormat, setExportFormat] = useState<"csv" | "excel" | null>(null)
 
   useEffect(() => {
     fetchDuplicateMobileNumbers()
@@ -77,6 +79,53 @@ export default function DuplicateMobileNumbersPage() {
       }
       return newSet
     })
+  }
+
+  const handleExport = async (format: "csv" | "excel") => {
+    setIsExporting(true)
+    setExportFormat(format)
+
+    try {
+      const response = await fetch(`/api/admin/export/duplicate-mobiles-${format}`)
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate ${format.toUpperCase()} export`)
+      }
+
+      // Get the filename from Content-Disposition header
+      const contentDisposition = response.headers.get("Content-Disposition")
+      let filename = `duplicate_mobile_numbers.${format === "excel" ? "xlsx" : "csv"}`
+
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/)
+        if (filenameMatch) {
+          filename = filenameMatch[1]
+        }
+      }
+
+      // Get the blob data
+      const blob = await response.blob()
+
+      // Create download link and trigger download
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+
+      // Cleanup
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      toast.success(`Successfully exported ${filename}`)
+    } catch (err) {
+      console.error("Export error:", err)
+      toast.error(err instanceof Error ? err.message : "Failed to export data")
+    } finally {
+      setIsExporting(false)
+      setExportFormat(null)
+    }
   }
 
   const filteredDuplicates = data?.duplicates.filter((dup) =>
@@ -119,18 +168,48 @@ export default function DuplicateMobileNumbersPage() {
     <DashboardLayout requiredRole="ADMIN">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <Link href="/admin">
-            <Button variant="outline" size="sm">
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Back to Dashboard
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <Link href="/admin">
+              <Button variant="outline" size="sm">
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Back to Dashboard
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800">Duplicate Mobile Numbers</h1>
+              <p className="text-gray-600 mt-1">
+                Mobile numbers appearing more than 5 times in the database
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => handleExport("excel")}
+              variant="outline"
+              className="border-green-600 text-green-600 hover:bg-green-50"
+              disabled={isExporting}
+            >
+              {isExporting && exportFormat === "excel" ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Export Excel
             </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">Duplicate Mobile Numbers</h1>
-            <p className="text-gray-600 mt-1">
-              Mobile numbers appearing more than 5 times in the database
-            </p>
+            <Button
+              onClick={() => handleExport("csv")}
+              variant="outline"
+              className="border-orange-600 text-orange-600 hover:bg-orange-50"
+              disabled={isExporting}
+            >
+              {isExporting && exportFormat === "csv" ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Export CSV
+            </Button>
           </div>
         </div>
 
