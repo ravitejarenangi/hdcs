@@ -161,11 +161,11 @@ export async function PUT(
       validatedData.citizenMobile !== "" &&
       validatedData.citizenMobile !== currentResident.citizenMobile // Only validate if mobile number is changing
     ) {
-      // Count how many residents in the same secretariat already have this mobile number
+      // Count how many residents in the ENTIRE database already have this mobile number
       const duplicateCount = await prisma.resident.count({
         where: {
           citizenMobile: validatedData.citizenMobile,
-          secName: currentResident.secName, // Same secretariat
+          // secName: currentResident.secName, // REMOVED: Now checking globally
           residentId: { not: residentId }, // Exclude current resident
         },
       })
@@ -175,7 +175,7 @@ export async function PUT(
         return NextResponse.json(
           {
             error: "MOBILE_DUPLICATE_LIMIT_EXCEEDED",
-            message: `This mobile number is already used by ${duplicateCount} residents in this secretariat. The same mobile number cannot be assigned to more than 5 residents.`,
+            message: `This mobile number is already used by ${duplicateCount} residents in the database. The same mobile number cannot be assigned to more than 5 residents globally.`,
           },
           { status: 400 }
         )

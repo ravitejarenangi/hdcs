@@ -130,7 +130,7 @@ export async function GET(request: Request) {
 
       // Count duplicate mobile numbers (excluding null/invalid values)
       // Mobile numbers appearing MORE THAN 5 times (6+ occurrences) are considered duplicates
-      prisma.$queryRaw<{ count: bigint }>`
+      prisma.$queryRaw<Array<{ count: bigint }>>`
         SELECT COUNT(*) as count
         FROM (
           SELECT citizen_mobile
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
 
       // Count duplicate ABHA IDs (excluding null/invalid values)
       // ABHA IDs appearing MORE THAN 1 time (2+ occurrences) are considered duplicates
-      prisma.$queryRaw<{ count: bigint }>`
+      prisma.$queryRaw<Array<{ count: bigint }>>`
         SELECT COUNT(*) as count
         FROM (
           SELECT health_id
@@ -311,418 +311,209 @@ export async function GET(request: Request) {
 
     logTiming('Recent updates', requestStart)
 
-    // 5. Mandal-wise statistics (using consolidated schema - no JOINs)
-    // Note: Using type assertion as mandalName exists in DB but not in Prisma schema
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mandalStats = await (prisma.resident.groupBy as any)({
-      by: ["mandalName"],
-      _count: {
-        id: true,
-      },
-      where: {
-        mandalName: {
-          not: null,
-        },
-      },
-      orderBy: {
-        _count: {
-          id: "desc",
-        },
-      },
-    })
+    // Execute heavy queries in parallel
+    const [
+      fieldOfficerData,
+      activeOfficersInLast15Min,
+      updatesOverTime,
+      mandalStats,
+      completionStats,
+      secretariatUpdateStats
+    ] = await Promise.all([
+      // A. Field Officer Data (Step 6)
+      Promise.all([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (prisma.user.findMany as any)({
+          where: { role: "FIELD_OFFICER", isActive: true },
+          select: { id: true, username: true, fullName: true, role: true, assignedSecretariats: true, mandalName: true },
+        }),
+        prisma.updateLog.groupBy({
+          by: ["userId"],
+          _count: { id: true },
+          where: {
+            user: { role: "FIELD_OFFICER", isActive: true },
+            ...(startDate || endDate ? { updateTimestamp: { ...(startDate ? { gte: startDate } : {}), ...(endDate ? { lte: endDate } : {}) } } : {}),
+          },
+        }),
+        prisma.updateLog.groupBy({
+          by: ["userId"],
+          _count: { id: true },
+          where: {
+            user: { role: "FIELD_OFFICER", isActive: true },
+            fieldUpdated: { in: ["citizen_mobile", "mobile_number", "citizenMobile", "mobileNumber"] },
+            ...(startDate || endDate ? { updateTimestamp: { ...(startDate ? { gte: startDate } : {}), ...(endDate ? { lte: endDate } : {}) } } : {}),
+          },
+        }),
+        prisma.updateLog.groupBy({
+          by: ["userId"],
+          _count: { id: true },
+          where: {
+            user: { role: "FIELD_OFFICER", isActive: true },
+            fieldUpdated: { in: ["health_id", "healthId"] },
+            ...(startDate || endDate ? { updateTimestamp: { ...(startDate ? { gte: startDate } : {}), ...(endDate ? { lte: endDate } : {}) } } : {}),
+          },
+        }),
+      ]),
 
-    // Format mandal stats for easier consumption
-    const mandalStatistics = mandalStats.map((stat: Record<string, unknown>) => ({
-      mandalName: (stat.mandalName as string) || "Unknown",
-      residentCount: ((stat._count as Record<string, number>)?.id) || 0,
-    }))
+      // B. Activity Metrics (Step 6a, 7)
+      prisma.updateLog.groupBy({
+        by: ["userId"],
+        where: {
+          updateTimestamp: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+          user: { role: "FIELD_OFFICER", isActive: true },
+        },
+      }),
+      prisma.updateLog.findMany({
+        where: { updateTimestamp: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+        select: { updateTimestamp: true },
+      }),
 
-    // 6. Field officer performance metrics - Execute in parallel
-    const [allFieldOfficers, updateCounts, mobileUpdateCounts, healthIdUpdateCounts] = await Promise.all([
-      // Get ALL active field officers (not just those with updates)
-      // Note: Using type assertion as assignedSecretariats/mandalName exist in DB but not in Prisma schema
+      // C. Mandal Stats (Step 5)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (prisma.user.findMany as any)({
-        where: {
-          role: "FIELD_OFFICER",
-          isActive: true,
-        },
-        select: {
-          id: true,
-          username: true,
-          fullName: true,
-          role: true,
-          assignedSecretariats: true,
-          mandalName: true,
-        },
+      (prisma.resident.groupBy as any)({
+        by: ["mandalName"],
+        _count: { id: true },
+        where: { mandalName: { not: null } },
+        orderBy: { _count: { id: "desc" } },
       }),
 
-      // Get total update counts for all field officers
-      prisma.updateLog.groupBy({
-        by: ["userId"],
-        _count: {
-          id: true,
-        },
-        where: {
-          user: {
-            role: "FIELD_OFFICER",
-            isActive: true,
-          },
-          ...(startDate || endDate ? {
-            updateTimestamp: {
-              ...(startDate ? { gte: startDate } : {}),
-              ...(endDate ? { lte: endDate } : {}),
-            },
-          } : {}),
-        },
-      }),
+      // D. Completion Statistics (Steps 8 & 9)
+      Promise.all([
+        // Mandal Completon
+        prisma.$queryRaw<Array<{ mandalName: string; totalResidents: bigint; withMobile: bigint; withHealthId: bigint }>>`
+          SELECT
+            mandal_name as mandalName,
+            COUNT(*) as totalResidents,
+            SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' THEN 1 ELSE 0 END) as withMobile,
+            SUM(CASE WHEN health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as withHealthId
+          FROM residents
+          WHERE mandal_name IS NOT NULL
+          GROUP BY mandal_name
+          ORDER BY totalResidents DESC
+        `,
+        // Hierarchical (Secretariat) Completion
+        prisma.$queryRaw<Array<{ mandalName: string; secName: string | null; totalResidents: bigint; withMobile: bigint; withHealthId: bigint }>>`
+          SELECT
+            mandal_name as mandalName,
+            sec_name as secName,
+            COUNT(*) as totalResidents,
+            SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' THEN 1 ELSE 0 END) as withMobile,
+            SUM(CASE WHEN health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as withHealthId
+          FROM residents
+          WHERE mandal_name IS NOT NULL AND sec_name IS NOT NULL
+          GROUP BY mandal_name, sec_name
+          ORDER BY mandal_name, sec_name
+        `,
+      ]),
 
-      // Get mobile number update counts
-      prisma.updateLog.groupBy({
-        by: ["userId"],
-        _count: {
-          id: true,
-        },
-        where: {
-          user: {
-            role: "FIELD_OFFICER",
-            isActive: true,
-          },
-          fieldUpdated: {
-            in: ["citizen_mobile", "mobile_number", "citizenMobile", "mobileNumber"],
-          },
-          ...(startDate || endDate ? {
-            updateTimestamp: {
-              ...(startDate ? { gte: startDate } : {}),
-              ...(endDate ? { lte: endDate } : {}),
-            },
-          } : {}),
-        },
-      }),
-
-      // Get health ID update counts
-      prisma.updateLog.groupBy({
-        by: ["userId"],
-        _count: {
-          id: true,
-        },
-        where: {
-          user: {
-            role: "FIELD_OFFICER",
-            isActive: true,
-          },
-          fieldUpdated: {
-            in: ["health_id", "healthId"],
-          },
-          ...(startDate || endDate ? {
-            updateTimestamp: {
-              ...(startDate ? { gte: startDate } : {}),
-              ...(endDate ? { lte: endDate } : {}),
-            },
-          } : {}),
-        },
-      }),
+      // E. Secretariat Update Statistics (Step 11) - Modified to include logic for Mandal derivation
+      // Note: We removed the explicit "mandalUpdateStats" (Step 10) query to save time.
+      // We will derive mandal stats from this result.
+      prisma.$queryRaw<
+        Array<{
+          mandalName: string
+          secName: string | null
+          mobileUpdatesAllTime: bigint
+          mobileUpdatesToday: bigint
+          healthIdUpdatesAllTime: bigint
+          healthIdUpdatesToday: bigint
+          healthIdsAddedViaUpdates: bigint
+        }>
+      >`
+        SELECT
+          r.mandal_name as mandalName,
+          r.sec_name as secName,
+          COUNT(CASE WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber') THEN 1 END) as mobileUpdatesAllTime,
+          COUNT(CASE WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber') AND ul.update_timestamp >= ${startOfToday} THEN 1 END) as mobileUpdatesToday,
+          COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') THEN 1 END) as healthIdUpdatesAllTime,
+          COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') AND ul.update_timestamp >= ${startOfToday} THEN 1 END) as healthIdUpdatesToday,
+          COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') AND (ul.old_value IS NULL OR ul.old_value IN ('', 'null', 'N/A')) AND ul.new_value IS NOT NULL AND ul.new_value NOT IN ('', 'null', 'N/A') THEN 1 END) as healthIdsAddedViaUpdates
+        FROM update_logs ul
+        INNER JOIN residents r ON ul.resident_id = r.resident_id
+        WHERE r.mandal_name IS NOT NULL
+        GROUP BY r.mandal_name, r.sec_name
+      `
     ])
 
-    logTiming('Field officer data', requestStart)
+    logTiming('Parallel Heavy Queries', requestStart)
 
-    // Create maps of userId to update counts
-    const updateCountMap = new Map(
-      updateCounts.map((count) => [count.userId, count._count?.id || 0])
-    )
-    const mobileUpdateCountMap = new Map(
-      mobileUpdateCounts.map((count) => [count.userId, count._count?.id || 0])
-    )
-    const healthIdUpdateCountMap = new Map(
-      healthIdUpdateCounts.map((count) => [count.userId, count._count?.id || 0])
-    )
+    // Unpack Promise Results
 
-    // Combine field officer data with update counts (including 0 updates)
+    // 1. Process Field Officer Data
+    const [allFieldOfficers, updateCounts, mobileUpdateCounts, healthIdUpdateCounts] = fieldOfficerData
+
+    const updateCountMap = new Map(updateCounts.map((c) => [c.userId, c._count?.id || 0]))
+    const mobileUpdateCountMap = new Map(mobileUpdateCounts.map((c) => [c.userId, c._count?.id || 0]))
+    const healthIdUpdateCountMap = new Map(healthIdUpdateCounts.map((c) => [c.userId, c._count?.id || 0]))
+
     const fieldOfficerStats = allFieldOfficers
-      .map((officer: Record<string, unknown>) => {
-        // Extract mandals from assignedSecretariats for field officers
+      .map((officer: { id: string; username: string; fullName: string; role: string; assignedSecretariats: string | null; mandalName: string | null }) => {
         let mandals: string[] = []
         if (officer.role === "FIELD_OFFICER" && officer.assignedSecretariats) {
           try {
             const secretariats = JSON.parse(officer.assignedSecretariats as string)
             if (Array.isArray(secretariats)) {
-              // Handle both old and new formats
-              const mandalNames = secretariats.map((s: string | { mandalName?: string }) => {
-                if (typeof s === 'string') {
-                  // Old format: "MANDAL -> SECRETARIAT"
-                  const parts = s.split(' -> ')
-                  return parts[0]?.trim()
-                } else if (typeof s === 'object' && s.mandalName) {
-                  // New format: {mandalName: "CHITTOOR", secName: "KONGAREDDYPALLI"}
-                  return s.mandalName
-                }
-                return null
-              }).filter(Boolean)
-
-              // Get unique mandal names
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const mandalNames = secretariats.map((s: any) => typeof s === 'string' ? s.split(' -> ')[0]?.trim() : s.mandalName).filter(Boolean)
               mandals = [...new Set(mandalNames)] as string[]
             }
-          } catch (e) {
-            console.error(`Failed to parse assignedSecretariats for officer ${officer.username}:`, e)
-          }
-        } else if (officer.mandalName) {
-          // For Panchayat Secretary
-          mandals = [officer.mandalName as string]
-        }
+          } catch (e) { console.error(`Failed to parse assignedSecretariats`, e) }
+        } else if (officer.mandalName) { mandals = [officer.mandalName as string] }
 
         return {
-          userId: officer.id as string,
-          username: officer.username as string,
-          name: officer.fullName as string,
-          role: officer.role as string,
-          mandals, // Array of mandal names this officer is assigned to
-          updatesCount: updateCountMap.get(officer.id as string) || 0,
-          mobileUpdatesCount: mobileUpdateCountMap.get(officer.id as string) || 0,
-          healthIdUpdatesCount: healthIdUpdateCountMap.get(officer.id as string) || 0,
+          userId: officer.id,
+          username: officer.username,
+          name: officer.fullName,
+          role: officer.role,
+          mandals,
+          updatesCount: updateCountMap.get(officer.id) || 0,
+          mobileUpdatesCount: mobileUpdateCountMap.get(officer.id) || 0,
+          healthIdUpdatesCount: healthIdUpdateCountMap.get(officer.id) || 0,
         }
       })
-      .sort((a: { updatesCount: number }, b: { updatesCount: number }) => b.updatesCount - a.updatesCount) // Sort by update count descending
+      .sort((a: { updatesCount: number }, b: { updatesCount: number }) => b.updatesCount - a.updatesCount)
 
-    // 6a. Count officers who are currently active (made updates in last 15 minutes)
-    // 7. Updates over time (last 7 days for chart)
-    // Execute in parallel
-    const fifteenMinutesAgo = new Date()
-    fifteenMinutesAgo.setMinutes(fifteenMinutesAgo.getMinutes() - 15)
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-
-    const [activeOfficersInLast15Min, updatesOverTime] = await Promise.all([
-      prisma.updateLog.groupBy({
-        by: ["userId"],
-        where: {
-          updateTimestamp: { gte: fifteenMinutesAgo },
-          user: {
-            role: "FIELD_OFFICER",
-            isActive: true,
-          },
-        },
-      }),
-
-      prisma.updateLog.findMany({
-        where: {
-          updateTimestamp: { gte: sevenDaysAgo },
-        },
-        select: {
-          updateTimestamp: true,
-        },
-      }),
-    ])
-
+    // 2. Process Activity Metrics
     const currentlyActiveOfficersCount = activeOfficersInLast15Min.length
 
-    logTiming('Activity metrics', requestStart)
-
-    // Group by date (not datetime)
     const updatesByDate: { [key: string]: number } = {}
     updatesOverTime.forEach((update) => {
       const date = update.updateTimestamp.toISOString().split("T")[0]
       updatesByDate[date] = (updatesByDate[date] || 0) + 1
     })
+    const updatesTimeline = Object.entries(updatesByDate).map(([date, count]) => ({ date, count }))
 
-    const updatesTimeline = Object.entries(updatesByDate).map(
-      ([date, count]) => ({
-        date,
-        count,
-      })
-    )
+    // 3. Process Mandal Stats
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mandalStatistics = mandalStats.map((stat: any) => ({
+      mandalName: stat.mandalName || "Unknown",
+      residentCount: stat._count?.id || 0,
+    }))
 
-    // 8 & 9. Completion statistics - Execute both raw queries in parallel
-    const [mandalCompletionStats, hierarchicalStats] = await Promise.all([
-      // 8. Mandal-level completion statistics
-      prisma.$queryRaw<
-        Array<{
-          mandalName: string
-          totalResidents: bigint
-          withMobile: bigint
-          withHealthId: bigint
-        }>
-      >`
-        SELECT
-          mandal_name as mandalName,
-          COUNT(*) as totalResidents,
-          SUM(CASE
-            WHEN citizen_mobile IS NOT NULL
-              AND citizen_mobile != 'N/A'
-              AND citizen_mobile != '0'
-              AND citizen_mobile != ''
-            THEN 1
-            ELSE 0
-          END) as withMobile,
-          SUM(CASE
-            WHEN health_id IS NOT NULL
-              AND health_id != 'N/A'
-              AND health_id != ''
-            THEN 1
-            ELSE 0
-          END) as withHealthId
-        FROM residents
-        WHERE mandal_name IS NOT NULL
-        GROUP BY mandal_name
-        ORDER BY totalResidents DESC
-      `,
+    // 4. Process Completion Stats
+    // Ensure we have a robust list of mandals by merging data sources
+    const [rawMandalCompletionStats, hierarchicalStats] = completionStats
 
-      // 9. Hierarchical completion statistics (Mandal → Secretariat)
-      prisma.$queryRaw<
-        Array<{
-          mandalName: string
-          secName: string | null
-          totalResidents: bigint
-          withMobile: bigint
-          withHealthId: bigint
-        }>
-      >`
-        SELECT
-          mandal_name as mandalName,
-          sec_name as secName,
-          COUNT(*) as totalResidents,
-          SUM(CASE
-            WHEN citizen_mobile IS NOT NULL
-              AND citizen_mobile != 'N/A'
-              AND citizen_mobile != '0'
-              AND citizen_mobile != ''
-            THEN 1
-            ELSE 0
-          END) as withMobile,
-          SUM(CASE
-            WHEN health_id IS NOT NULL
-              AND health_id != 'N/A'
-              AND health_id != ''
-            THEN 1
-            ELSE 0
-          END) as withHealthId
-        FROM residents
-        WHERE mandal_name IS NOT NULL AND sec_name IS NOT NULL
-        GROUP BY mandal_name, sec_name
-        ORDER BY mandal_name, sec_name
-      `,
-    ])
+    // Map raw stats to a map for easy lookup
+    const rawStatsMap = new Map(rawMandalCompletionStats.map((s) => [s.mandalName, s]))
 
-    logTiming('Completion statistics', requestStart)
+    // Use mandalStats (from simple groupBy) as the base list to ensure we don't miss any mandals
+    // and merge with the detailed completion stats
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mandalCompletionStats = mandalStats.map((baseStat: any) => {
+      const mandalName = baseStat.mandalName
+      const detailedStat = rawStatsMap.get(mandalName)
+      return {
+        mandalName,
+        totalResidents: baseStat._count.id, // Source of truth for total
+        withMobile: detailedStat?.withMobile || 0,
+        withHealthId: detailedStat?.withHealthId || 0,
+      }
+    })
 
-    // 10. Mandal-wise update statistics
-    const mandalUpdateStats = await prisma.$queryRaw<
-      Array<{
-        mandalName: string
-        mobileUpdatesAllTime: bigint
-        mobileUpdatesToday: bigint
-        healthIdUpdatesAllTime: bigint
-        healthIdUpdatesToday: bigint
-        healthIdsAddedViaUpdates: bigint
-      }>
-    >`
-      SELECT
-        r.mandal_name as mandalName,
-        -- Mobile updates (all time)
-        COUNT(CASE
-          WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
-          THEN 1
-        END) as mobileUpdatesAllTime,
-        -- Mobile updates (today)
-        COUNT(CASE
-          WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
-            AND ul.update_timestamp >= ${startOfToday}
-          THEN 1
-        END) as mobileUpdatesToday,
-        -- Health ID updates (all time)
-        COUNT(CASE
-          WHEN ul.field_updated IN ('health_id', 'healthId')
-          THEN 1
-        END) as healthIdUpdatesAllTime,
-        -- Health ID updates (today)
-        COUNT(CASE
-          WHEN ul.field_updated IN ('health_id', 'healthId')
-            AND ul.update_timestamp >= ${startOfToday}
-          THEN 1
-        END) as healthIdUpdatesToday,
-        -- Health IDs added via updates (where oldValue was null/empty)
-        COUNT(CASE
-          WHEN ul.field_updated IN ('health_id', 'healthId')
-            AND (ul.old_value IS NULL OR ul.old_value IN ('', 'null', 'N/A'))
-            AND ul.new_value IS NOT NULL
-            AND ul.new_value NOT IN ('', 'null', 'N/A')
-          THEN 1
-        END) as healthIdsAddedViaUpdates
-      FROM update_logs ul
-      INNER JOIN residents r ON ul.resident_id = r.resident_id
-      WHERE r.mandal_name IS NOT NULL
-      GROUP BY r.mandal_name
-    `
+    // 5. Process Update Stats (Secretariat & Derived Mandal)
 
-    logTiming('Mandal update statistics', requestStart)
-
-    // 11. Secretariat-wise update statistics
-    const secretariatUpdateStats = await prisma.$queryRaw<
-      Array<{
-        mandalName: string
-        secName: string
-        mobileUpdatesAllTime: bigint
-        mobileUpdatesToday: bigint
-        healthIdUpdatesAllTime: bigint
-        healthIdUpdatesToday: bigint
-        healthIdsAddedViaUpdates: bigint
-      }>
-    >`
-      SELECT
-        r.mandal_name as mandalName,
-        r.sec_name as secName,
-        -- Mobile updates (all time)
-        COUNT(CASE
-          WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
-          THEN 1
-        END) as mobileUpdatesAllTime,
-        -- Mobile updates (today)
-        COUNT(CASE
-          WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
-            AND ul.update_timestamp >= ${startOfToday}
-          THEN 1
-        END) as mobileUpdatesToday,
-        -- Health ID updates (all time)
-        COUNT(CASE
-          WHEN ul.field_updated IN ('health_id', 'healthId')
-          THEN 1
-        END) as healthIdUpdatesAllTime,
-        -- Health ID updates (today)
-        COUNT(CASE
-          WHEN ul.field_updated IN ('health_id', 'healthId')
-            AND ul.update_timestamp >= ${startOfToday}
-          THEN 1
-        END) as healthIdUpdatesToday,
-        -- Health IDs added via updates (where oldValue was null/empty)
-        COUNT(CASE
-          WHEN ul.field_updated IN ('health_id', 'healthId')
-            AND (ul.old_value IS NULL OR ul.old_value IN ('', 'null', 'N/A'))
-            AND ul.new_value IS NOT NULL
-            AND ul.new_value NOT IN ('', 'null', 'N/A')
-          THEN 1
-        END) as healthIdsAddedViaUpdates
-      FROM update_logs ul
-      INNER JOIN residents r ON ul.resident_id = r.resident_id
-      WHERE r.mandal_name IS NOT NULL AND r.sec_name IS NOT NULL
-      GROUP BY r.mandal_name, r.sec_name
-    `
-
-    logTiming('Secretariat update statistics', requestStart)
-
-    // Create a map for quick lookup of update stats by mandal
-    const mandalUpdateStatsMap = new Map(
-      mandalUpdateStats.map((stat) => [
-        stat.mandalName,
-        {
-          mobileUpdatesAllTime: Number(stat.mobileUpdatesAllTime),
-          mobileUpdatesToday: Number(stat.mobileUpdatesToday),
-          healthIdUpdatesAllTime: Number(stat.healthIdUpdatesAllTime),
-          healthIdUpdatesToday: Number(stat.healthIdUpdatesToday),
-          healthIdsAddedViaUpdates: Number(stat.healthIdsAddedViaUpdates),
-        },
-      ])
-    )
-
-    // Create a map for secretariat update stats
+    // Create secretariat update map
     const secretariatUpdateStatsMap = new Map(
       secretariatUpdateStats.map((stat) => [
         `${stat.mandalName}|${stat.secName}`,
@@ -736,7 +527,26 @@ export async function GET(request: Request) {
       ])
     )
 
-    const mandalCompletion = mandalCompletionStats.map((stat) => {
+    // Derive Mandal Update Stats from Secretariat Update Stats (Aggregation)
+    const mandalUpdateStatsMap = new Map<string, { mobileUpdatesAllTime: number; mobileUpdatesToday: number; healthIdUpdatesAllTime: number; healthIdUpdatesToday: number; healthIdsAddedViaUpdates: number }>()
+
+    secretariatUpdateStats.forEach(stat => {
+      const current = mandalUpdateStatsMap.get(stat.mandalName) || {
+        mobileUpdatesAllTime: 0, mobileUpdatesToday: 0, healthIdUpdatesAllTime: 0, healthIdUpdatesToday: 0, healthIdsAddedViaUpdates: 0
+      }
+
+      mandalUpdateStatsMap.set(stat.mandalName, {
+        mobileUpdatesAllTime: current.mobileUpdatesAllTime + Number(stat.mobileUpdatesAllTime),
+        mobileUpdatesToday: current.mobileUpdatesToday + Number(stat.mobileUpdatesToday),
+        healthIdUpdatesAllTime: current.healthIdUpdatesAllTime + Number(stat.healthIdUpdatesAllTime),
+        healthIdUpdatesToday: current.healthIdUpdatesToday + Number(stat.healthIdUpdatesToday),
+        healthIdsAddedViaUpdates: current.healthIdsAddedViaUpdates + Number(stat.healthIdsAddedViaUpdates)
+      })
+    })
+
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mandalCompletion = mandalCompletionStats.map((stat: any) => {
       const updateStats = mandalUpdateStatsMap.get(stat.mandalName) || {
         mobileUpdatesAllTime: 0,
         mobileUpdatesToday: 0,
@@ -756,14 +566,14 @@ export async function GET(request: Request) {
         mobileCompletionRate:
           Number(stat.totalResidents) > 0
             ? Math.round(
-                (Number(stat.withMobile) / Number(stat.totalResidents)) * 100
-              )
+              (Number(stat.withMobile) / Number(stat.totalResidents)) * 100
+            )
             : 0,
         healthIdCompletionRate:
           Number(stat.totalResidents) > 0
             ? Math.round(
-                (Number(stat.withHealthId) / Number(stat.totalResidents)) * 100
-              )
+              (Number(stat.withHealthId) / Number(stat.totalResidents)) * 100
+            )
             : 0,
         // Update statistics
         mobileUpdatesAllTime: updateStats.mobileUpdatesAllTime,
@@ -776,7 +586,8 @@ export async function GET(request: Request) {
     })
 
     // Build hierarchical structure (2 levels: Mandal → Secretariat)
-    const mandalHierarchy = mandalCompletion.map((mandal) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mandalHierarchy = mandalCompletion.map((mandal: any) => {
       // Get all secretariats for this mandal
       const secretariats = hierarchicalStats
         .filter((stat) => stat.mandalName === mandal.mandalName && stat.secName)
@@ -801,11 +612,15 @@ export async function GET(request: Request) {
             withHealthId: Number(stat.withHealthId),
             mobileCompletionRate:
               Number(stat.totalResidents) > 0
-                ? Math.round((Number(stat.withMobile) / Number(stat.totalResidents)) * 100)
+                ? Math.round(
+                  (Number(stat.withMobile) / Number(stat.totalResidents)) * 100
+                )
                 : 0,
             healthIdCompletionRate:
               Number(stat.totalResidents) > 0
-                ? Math.round((Number(stat.withHealthId) / Number(stat.totalResidents)) * 100)
+                ? Math.round(
+                  (Number(stat.withHealthId) / Number(stat.totalResidents)) * 100
+                )
                 : 0,
             // Update statistics
             mobileUpdatesAllTime: secUpdateStats.mobileUpdatesAllTime,
@@ -816,6 +631,7 @@ export async function GET(request: Request) {
             healthIdsAddedViaUpdates: secUpdateStats.healthIdsAddedViaUpdates,
           }
         })
+        .sort((a, b) => b.totalResidents - a.totalResidents)
 
       return {
         ...mandal,
@@ -823,7 +639,8 @@ export async function GET(request: Request) {
       }
     })
 
-    // Build final response
+    logTiming('Final data processing', requestStart)
+
     const responseData = {
       overview: {
         totalResidents,
@@ -841,23 +658,24 @@ export async function GET(request: Request) {
         healthIdUpdatesAllTime,
         healthIdsAddedViaUpdates,
         // Calculate original health IDs (before updates)
-        healthIdsOriginal: residentsWithHealthId - healthIdsAddedViaUpdates,
+        healthIdsOriginal: Number(residentsWithHealthId) - Number(healthIdsAddedViaUpdates),
         // Placeholder metrics
         residentsWithNamePlaceholder,
         residentsWithHhIdPlaceholder,
         residentsWithMobilePlaceholder,
         residentsWithHealthIdPlaceholder,
         // Duplicate metrics
-        duplicateMobileNumbers: Number((Array.isArray(duplicateMobileNumbers) ? duplicateMobileNumbers[0]?.count : (duplicateMobileNumbers as { count: bigint })?.count) || 0),
-        duplicateHealthIds: Number((Array.isArray(duplicateHealthIds) ? duplicateHealthIds[0]?.count : (duplicateHealthIds as { count: bigint })?.count) || 0),
+        duplicateMobileNumbers: Number(duplicateMobileNumbers[0]?.count || 0),
+        duplicateHealthIds: Number(duplicateHealthIds[0]?.count || 0),
         // Field officer activity metrics
-        currentlyActiveOfficersCount, // Officers active in last 15 minutes
-        totalActiveOfficersCount: allFieldOfficers.length, // Total enabled officers
+        currentlyActiveOfficersCount,
+        totalActiveOfficersCount: allFieldOfficers.length,
       },
       mandalStatistics,
-      mandalCompletion,
-      mandalHierarchy, // New hierarchical data
+      mandalCompletion: mandalHierarchy,
+      mandalHierarchy, // Required for Mandal-wise Completion Rates table
       fieldOfficerPerformance: fieldOfficerStats,
+      activeOfficersInLast15Min: currentlyActiveOfficersCount,
       recentUpdates: recentUpdates.map((update) => ({
         id: update.id,
         residentName: update.resident.name,
@@ -870,14 +688,15 @@ export async function GET(request: Request) {
         updatedAt: update.updateTimestamp,
       })),
       updatesTimeline,
-      generatedAt: new Date().toISOString(),
+      lastUpdated: new Date(),
     }
 
-    // Cache the response for 5 minutes (300 seconds)
-    cache.set(cacheKey, responseData, 300)
+    // Cache the successful response (if no date filters)
+    if (!startDate && !endDate) {
+      cache.set(cacheKey, responseData)
+    }
 
-    const totalTime = logTiming('Total analytics generation', requestStart)
-    console.log(`[Analytics] Total time: ${totalTime}ms`)
+    logTiming('Total time', requestStart)
 
     return NextResponse.json({
       ...responseData,
