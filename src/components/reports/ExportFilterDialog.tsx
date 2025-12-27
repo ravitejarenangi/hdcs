@@ -498,6 +498,24 @@ export function ExportFilterDialog({
               </div>
             </div>
           </div>
+
+          {/* Aadhaar UID Masking Filter */}
+          <div className="space-y-3">
+            <Label className="text-base font-semibold">Aadhaar Number (UID)</Label>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="maskUid"
+                checked={filters.maskUid}
+                onCheckedChange={(checked) => setFilters((prev) => ({ ...prev, maskUid: checked as boolean }))}
+              />
+              <label htmlFor="maskUid" className="text-sm font-medium cursor-pointer">
+                Mask Aadhaar numbers (show only last 4 digits)
+              </label>
+            </div>
+            <p className="text-xs text-gray-500">
+              When unchecked, full Aadhaar numbers will be exported. When checked, only last 4 digits will be visible.
+            </p>
+          </div>
         </div>
 
         <DialogFooter className="gap-2">
