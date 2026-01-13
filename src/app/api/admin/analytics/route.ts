@@ -65,6 +65,7 @@ export async function GET(request: Request) {
       totalResidents,
       residentsWithMobile,
       residentsWithHealthId,
+      residentsWithBothMobileAndHealthId,
       residentsWithNamePlaceholder,
       residentsWithHhIdPlaceholder,
       residentsWithMobilePlaceholder,
@@ -97,6 +98,19 @@ export async function GET(request: Request) {
           ],
         },
       }),
+
+      // 4. Residents with BOTH mobile number AND health ID (excluding placeholders)
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*) as count
+        FROM residents
+        WHERE citizen_mobile IS NOT NULL
+          AND citizen_mobile != 'N/A'
+          AND citizen_mobile != '0'
+          AND citizen_mobile != ''
+          AND health_id IS NOT NULL
+          AND health_id != 'N/A'
+          AND health_id != ''
+      `,
 
       // 3a. Count records with placeholder values
       prisma.resident.count({
@@ -247,30 +261,30 @@ export async function GET(request: Request) {
         },
       }),
 
-      // Mobile number updates - ALL TIME
-      prisma.updateLog.count({
-        where: {
-          OR: [
-            { fieldUpdated: "citizen_mobile" },
-            { fieldUpdated: "mobile_number" },
-            { fieldUpdated: "citizenMobile" },
-            { fieldUpdated: "mobileNumber" },
-          ],
-        },
-      }),
+      // Mobile number updates - ALL TIME (unique residents with valid mobile now)
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(DISTINCT ul.resident_id) as count
+        FROM update_logs ul
+        INNER JOIN residents r ON ul.resident_id = r.resident_id
+        WHERE ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+          AND r.citizen_mobile IS NOT NULL
+          AND r.citizen_mobile != 'N/A'
+          AND r.citizen_mobile != '0'
+          AND r.citizen_mobile != ''
+      `,
 
-      // Mobile number updates - TODAY
-      prisma.updateLog.count({
-        where: {
-          updateTimestamp: { gte: startOfToday },
-          OR: [
-            { fieldUpdated: "citizen_mobile" },
-            { fieldUpdated: "mobile_number" },
-            { fieldUpdated: "citizenMobile" },
-            { fieldUpdated: "mobileNumber" },
-          ],
-        },
-      }),
+      // Mobile number updates - TODAY (unique residents with valid mobile now)
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(DISTINCT ul.resident_id) as count
+        FROM update_logs ul
+        INNER JOIN residents r ON ul.resident_id = r.resident_id
+        WHERE ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+          AND ul.update_timestamp >= ${startOfToday}
+          AND r.citizen_mobile IS NOT NULL
+          AND r.citizen_mobile != 'N/A'
+          AND r.citizen_mobile != '0'
+          AND r.citizen_mobile != ''
+      `,
 
       // Health ID updates - ALL TIME
       prisma.updateLog.count({
@@ -646,15 +660,16 @@ export async function GET(request: Request) {
         totalResidents,
         residentsWithMobile,
         residentsWithHealthId,
+        residentsWithBothMobileAndHealthId: Number(residentsWithBothMobileAndHealthId[0]?.count || 0),
         mobileCompletionRate,
         healthIdCompletionRate,
         recentUpdatesCount,
         // Separate update counts by field type
         mobileUpdatesCount,
         healthIdUpdatesCount,
-        // Enhanced mobile and health ID statistics
-        mobileUpdatesAllTime,
-        mobileUpdatesToday,
+        // Enhanced mobile and health ID statistics (unique residents updated)
+        mobileUpdatesAllTime: Number(mobileUpdatesAllTime[0]?.count || 0),
+        mobileUpdatesToday: Number(mobileUpdatesToday[0]?.count || 0),
         healthIdUpdatesAllTime,
         healthIdsAddedViaUpdates,
         // Calculate original health IDs (before updates)

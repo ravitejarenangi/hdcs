@@ -51,6 +51,7 @@ interface AnalyticsData {
     totalResidents: number
     residentsWithMobile: number
     residentsWithHealthId: number
+    residentsWithBothMobileAndHealthId?: number
     mobileCompletionRate: number
     healthIdCompletionRate: number
     recentUpdatesCount: number
@@ -1293,13 +1294,31 @@ export default function AdminDashboard() {
                     Total Residents
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-4xl font-bold text-blue-600">
-                    {analytics.overview.totalResidents.toLocaleString()}
-                  </p>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Registered in system
-                  </p>
+                <CardContent className="space-y-3">
+                  <div>
+                    <p className="text-4xl font-bold text-blue-600">
+                      {analytics.overview.totalResidents.toLocaleString()}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Registered in system
+                    </p>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-blue-200"></div>
+
+                  {/* Records with Both Mobile & ABHA */}
+                  <div className="bg-blue-100 p-2 rounded">
+                    <p className="text-xs text-gray-600">With Mobile & ABHA ID</p>
+                    <p className="text-lg font-bold text-blue-700">
+                      {(analytics.overview.residentsWithBothMobileAndHealthId || 0).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {analytics.overview.totalResidents > 0
+                        ? Math.round(((analytics.overview.residentsWithBothMobileAndHealthId || 0) / analytics.overview.totalResidents) * 100)
+                        : 0}% of total
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -1329,7 +1348,7 @@ export default function AdminDashboard() {
                   {/* Update Statistics */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-green-100 p-2 rounded">
-                      <p className="text-xs text-gray-600">Total Updated</p>
+                      <p className="text-xs text-gray-600">Mob No Via Updates</p>
                       <p className="text-lg font-bold text-green-700">
                         {(analytics.overview.mobileUpdatesAllTime || 0).toLocaleString()}
                       </p>
@@ -1338,7 +1357,7 @@ export default function AdminDashboard() {
                       <Badge className="absolute -top-1 -right-1 bg-green-600 text-white text-[10px] px-1.5 py-0">
                         Today
                       </Badge>
-                      <p className="text-xs text-gray-600">Updated Today</p>
+                      <p className="text-xs text-gray-600">Mob No Updated Today</p>
                       <p className="text-lg font-bold text-green-700">
                         {(analytics.overview.mobileUpdatesToday || 0).toLocaleString()}
                       </p>
