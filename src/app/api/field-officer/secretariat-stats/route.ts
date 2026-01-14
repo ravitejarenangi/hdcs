@@ -19,6 +19,12 @@ export async function GET() {
       )
     }
 
+    // Fetch cutoff date for filtering (exclude locked data)
+    const cutoffSetting = await prisma.systemSettings.findUnique({
+      where: { key: "RESIDENT_UPDATE_CUTOFF_DATE" },
+    })
+    const cutoffDate = cutoffSetting?.value ? new Date(cutoffSetting.value) : null
+
     // Get field officer's assigned secretariat from User model
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -67,23 +73,45 @@ export async function GET() {
       select: {
         citizenMobile: true,
         healthId: true,
+        updatedAt: true,
       },
     })
 
-    // Calculate statistics
-    const total = residents.length
-    const mobilePending = residents.filter(
+    // Helper function to check if a resident is "locked" (complete and before cutoff)
+    // A resident is locked if:
+    // 1. Updated before cutoff date
+    // 2. Has valid mobile number (10 digits starting with 6-9)
+    // 3. Has valid health ID (at least 14 characters, not N/A)
+    const isResidentLocked = (resident: { citizenMobile: string | null; healthId: string | null; updatedAt: Date }) => {
+      if (!cutoffDate) return false
+      if (resident.updatedAt >= cutoffDate) return false
+
+      const hasMobile = resident.citizenMobile && /^[6-9]\d{9}$/.test(resident.citizenMobile)
+      const hasAbha = resident.healthId && resident.healthId.length >= 14 && resident.healthId !== "N/A"
+
+      return hasMobile && hasAbha
+    }
+
+    // Filter out locked residents for pending/progress stats
+    const unlockedResidents = residents.filter(r => !isResidentLocked(r))
+
+    // Calculate statistics for unlocked residents only (what field officer can actually work on)
+    const total = unlockedResidents.length
+    const mobilePending = unlockedResidents.filter(
       (r) => !r.citizenMobile || r.citizenMobile === ""
     ).length
-    const mobileUpdated = residents.filter(
+    const mobileUpdated = unlockedResidents.filter(
       (r) => r.citizenMobile && r.citizenMobile !== ""
     ).length
-    const healthIdPending = residents.filter(
+    const healthIdPending = unlockedResidents.filter(
       (r) => !r.healthId || r.healthId === "" || r.healthId === "N/A"
     ).length
-    const healthIdUpdated = residents.filter(
+    const healthIdUpdated = unlockedResidents.filter(
       (r) => r.healthId && r.healthId !== "" && r.healthId !== "N/A"
     ).length
+
+    // Also include count of locked residents for reference
+    const lockedCount = residents.length - unlockedResidents.length
 
     return NextResponse.json({
       secretariat: {
@@ -96,7 +124,11 @@ export async function GET() {
         mobileUpdated,
         healthIdPending,
         healthIdUpdated,
+        lockedCount, // Number of locked records (complete and before cutoff)
+        totalIncludingLocked: residents.length, // Total including locked
       },
+      // Include cutoff date for reference
+      dataCutoffDate: cutoffDate ? cutoffDate.toISOString() : null,
     })
   } catch (error) {
     console.error("Secretariat stats error:", error)

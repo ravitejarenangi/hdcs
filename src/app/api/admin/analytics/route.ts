@@ -60,119 +60,174 @@ export async function GET(request: Request) {
   try {
     console.log('[Analytics] Generating fresh analytics data...')
 
+    // Fetch cutoff date for filtering (exclude locked data from all metrics)
+    const cutoffSetting = await prisma.systemSettings.findUnique({
+      where: { key: "RESIDENT_UPDATE_CUTOFF_DATE" },
+    })
+    const cutoffDate = cutoffSetting?.value ? new Date(cutoffSetting.value) : null
+
     // Execute all independent queries in parallel for better performance
+    // All queries now exclude locked residents when cutoff date is set
     const [
-      totalResidents,
-      residentsWithMobile,
-      residentsWithHealthId,
-      residentsWithBothMobileAndHealthId,
-      residentsWithNamePlaceholder,
-      residentsWithHhIdPlaceholder,
-      residentsWithMobilePlaceholder,
-      residentsWithHealthIdPlaceholder,
+      basicCounts,
       duplicateMobileNumbers,
       duplicateHealthIds,
+      lockedResidentsCount,
     ] = await Promise.all([
-      // 1. Total residents count
-      prisma.resident.count(),
+      // Basic counts - all excluding locked residents
+      cutoffDate
+        ? prisma.$queryRaw<Array<{
+            totalResidents: bigint
+            residentsWithMobile: bigint
+            residentsWithHealthId: bigint
+            residentsWithBothMobileAndHealthId: bigint
+            residentsWithNamePlaceholder: bigint
+            residentsWithHhIdPlaceholder: bigint
+            residentsWithMobilePlaceholder: bigint
+            residentsWithHealthIdPlaceholder: bigint
+          }>>`
+            SELECT
+              COUNT(*) as totalResidents,
+              SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' THEN 1 ELSE 0 END) as residentsWithMobile,
+              SUM(CASE WHEN health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as residentsWithHealthId,
+              SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' AND health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as residentsWithBothMobileAndHealthId,
+              SUM(CASE WHEN name LIKE 'UNKNOWN_NAME_%' THEN 1 ELSE 0 END) as residentsWithNamePlaceholder,
+              SUM(CASE WHEN hh_id LIKE 'HH_UNKNOWN_%' THEN 1 ELSE 0 END) as residentsWithHhIdPlaceholder,
+              SUM(CASE WHEN citizen_mobile IS NULL OR citizen_mobile = 'N/A' OR citizen_mobile = '0' OR citizen_mobile = '' THEN 1 ELSE 0 END) as residentsWithMobilePlaceholder,
+              SUM(CASE WHEN health_id IS NULL OR health_id = 'N/A' OR health_id = '' THEN 1 ELSE 0 END) as residentsWithHealthIdPlaceholder
+            FROM residents
+            WHERE 1=1
+              AND NOT (
+                updated_at < ${cutoffDate}
+                AND citizen_mobile IS NOT NULL
+                AND citizen_mobile REGEXP '^[6-9][0-9]{9}$'
+                AND health_id IS NOT NULL
+                AND health_id != 'N/A'
+                AND health_id != ''
+                AND CHAR_LENGTH(health_id) >= 14
+              )
+          `
+        : prisma.$queryRaw<Array<{
+            totalResidents: bigint
+            residentsWithMobile: bigint
+            residentsWithHealthId: bigint
+            residentsWithBothMobileAndHealthId: bigint
+            residentsWithNamePlaceholder: bigint
+            residentsWithHhIdPlaceholder: bigint
+            residentsWithMobilePlaceholder: bigint
+            residentsWithHealthIdPlaceholder: bigint
+          }>>`
+            SELECT
+              COUNT(*) as totalResidents,
+              SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' THEN 1 ELSE 0 END) as residentsWithMobile,
+              SUM(CASE WHEN health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as residentsWithHealthId,
+              SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' AND health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as residentsWithBothMobileAndHealthId,
+              SUM(CASE WHEN name LIKE 'UNKNOWN_NAME_%' THEN 1 ELSE 0 END) as residentsWithNamePlaceholder,
+              SUM(CASE WHEN hh_id LIKE 'HH_UNKNOWN_%' THEN 1 ELSE 0 END) as residentsWithHhIdPlaceholder,
+              SUM(CASE WHEN citizen_mobile IS NULL OR citizen_mobile = 'N/A' OR citizen_mobile = '0' OR citizen_mobile = '' THEN 1 ELSE 0 END) as residentsWithMobilePlaceholder,
+              SUM(CASE WHEN health_id IS NULL OR health_id = 'N/A' OR health_id = '' THEN 1 ELSE 0 END) as residentsWithHealthIdPlaceholder
+            FROM residents
+          `,
 
-      // 2. Mobile number completion rate (excluding placeholders)
-      prisma.resident.count({
-        where: {
-          AND: [
-            { citizenMobile: { not: null } },
-            { citizenMobile: { not: "N/A" } },
-            { citizenMobile: { not: "0" } },
-            { citizenMobile: { not: "" } },
-          ],
-        },
-      }),
+      // Count duplicate mobile numbers (excluding locked residents)
+      cutoffDate
+        ? prisma.$queryRaw<Array<{ count: bigint }>>`
+            SELECT COUNT(*) as count
+            FROM (
+              SELECT citizen_mobile
+              FROM residents
+              WHERE citizen_mobile IS NOT NULL
+                AND citizen_mobile != 'N/A'
+                AND citizen_mobile != '0'
+                AND citizen_mobile != ''
+                AND NOT (
+                  updated_at < ${cutoffDate}
+                  AND citizen_mobile REGEXP '^[6-9][0-9]{9}$'
+                  AND health_id IS NOT NULL
+                  AND health_id != 'N/A'
+                  AND health_id != ''
+                  AND CHAR_LENGTH(health_id) >= 14
+                )
+              GROUP BY citizen_mobile
+              HAVING COUNT(*) > 5
+            ) AS duplicates
+          `
+        : prisma.$queryRaw<Array<{ count: bigint }>>`
+            SELECT COUNT(*) as count
+            FROM (
+              SELECT citizen_mobile
+              FROM residents
+              WHERE citizen_mobile IS NOT NULL
+                AND citizen_mobile != 'N/A'
+                AND citizen_mobile != '0'
+                AND citizen_mobile != ''
+              GROUP BY citizen_mobile
+              HAVING COUNT(*) > 5
+            ) AS duplicates
+          `,
 
-      // 3. Health ID completion rate (excluding placeholders)
-      prisma.resident.count({
-        where: {
-          AND: [
-            { healthId: { not: null } },
-            { healthId: { not: "N/A" } },
-            { healthId: { not: "" } },
-          ],
-        },
-      }),
+      // Count duplicate ABHA IDs (excluding locked residents)
+      cutoffDate
+        ? prisma.$queryRaw<Array<{ count: bigint }>>`
+            SELECT COUNT(*) as count
+            FROM (
+              SELECT health_id
+              FROM residents
+              WHERE health_id IS NOT NULL
+                AND health_id != 'N/A'
+                AND health_id != ''
+                AND NOT (
+                  updated_at < ${cutoffDate}
+                  AND citizen_mobile IS NOT NULL
+                  AND citizen_mobile REGEXP '^[6-9][0-9]{9}$'
+                  AND health_id != 'N/A'
+                  AND health_id != ''
+                  AND CHAR_LENGTH(health_id) >= 14
+                )
+              GROUP BY health_id
+              HAVING COUNT(*) > 1
+            ) AS duplicates
+          `
+        : prisma.$queryRaw<Array<{ count: bigint }>>`
+            SELECT COUNT(*) as count
+            FROM (
+              SELECT health_id
+              FROM residents
+              WHERE health_id IS NOT NULL
+                AND health_id != 'N/A'
+                AND health_id != ''
+              GROUP BY health_id
+              HAVING COUNT(*) > 1
+            ) AS duplicates
+          `,
 
-      // 4. Residents with BOTH mobile number AND health ID (excluding placeholders)
-      prisma.$queryRaw<Array<{ count: bigint }>>`
-        SELECT COUNT(*) as count
-        FROM residents
-        WHERE citizen_mobile IS NOT NULL
-          AND citizen_mobile != 'N/A'
-          AND citizen_mobile != '0'
-          AND citizen_mobile != ''
-          AND health_id IS NOT NULL
-          AND health_id != 'N/A'
-          AND health_id != ''
-      `,
-
-      // 3a. Count records with placeholder values
-      prisma.resident.count({
-        where: { name: { startsWith: "UNKNOWN_NAME_" } },
-      }),
-
-      prisma.resident.count({
-        where: { hhId: { startsWith: "HH_UNKNOWN_" } },
-      }),
-
-      prisma.resident.count({
-        where: {
-          OR: [
-            { citizenMobile: null },
-            { citizenMobile: "N/A" },
-            { citizenMobile: "0" },
-            { citizenMobile: "" },
-          ],
-        },
-      }),
-
-      prisma.resident.count({
-        where: {
-          OR: [
-            { healthId: null },
-            { healthId: "N/A" },
-            { healthId: "" },
-          ],
-        },
-      }),
-
-      // Count duplicate mobile numbers (excluding null/invalid values)
-      // Mobile numbers appearing MORE THAN 5 times (6+ occurrences) are considered duplicates
-      prisma.$queryRaw<Array<{ count: bigint }>>`
-        SELECT COUNT(*) as count
-        FROM (
-          SELECT citizen_mobile
-          FROM residents
-          WHERE citizen_mobile IS NOT NULL
-            AND citizen_mobile != 'N/A'
-            AND citizen_mobile != '0'
-            AND citizen_mobile != ''
-          GROUP BY citizen_mobile
-          HAVING COUNT(*) > 5
-        ) AS duplicates
-      `,
-
-      // Count duplicate ABHA IDs (excluding null/invalid values)
-      // ABHA IDs appearing MORE THAN 1 time (2+ occurrences) are considered duplicates
-      prisma.$queryRaw<Array<{ count: bigint }>>`
-        SELECT COUNT(*) as count
-        FROM (
-          SELECT health_id
-          FROM residents
-          WHERE health_id IS NOT NULL
-            AND health_id != 'N/A'
-            AND health_id != ''
-          GROUP BY health_id
-          HAVING COUNT(*) > 1
-        ) AS duplicates
-      `,
+      // Count locked residents (for reference)
+      cutoffDate
+        ? prisma.$queryRaw<Array<{ count: bigint }>>`
+            SELECT COUNT(*) as count
+            FROM residents
+            WHERE updated_at < ${cutoffDate}
+              AND citizen_mobile IS NOT NULL
+              AND citizen_mobile REGEXP '^[6-9][0-9]{9}$'
+              AND health_id IS NOT NULL
+              AND health_id != 'N/A'
+              AND health_id != ''
+              AND CHAR_LENGTH(health_id) >= 14
+          `
+        : Promise.resolve([{ count: BigInt(0) }]),
     ])
+
+    // Extract basic counts
+    const counts = basicCounts[0]
+    const totalResidents = Number(counts?.totalResidents || 0)
+    const residentsWithMobile = Number(counts?.residentsWithMobile || 0)
+    const residentsWithHealthId = Number(counts?.residentsWithHealthId || 0)
+    const residentsWithBothMobileAndHealthId = Number(counts?.residentsWithBothMobileAndHealthId || 0)
+    const residentsWithNamePlaceholder = Number(counts?.residentsWithNamePlaceholder || 0)
+    const residentsWithHhIdPlaceholder = Number(counts?.residentsWithHhIdPlaceholder || 0)
+    const residentsWithMobilePlaceholder = Number(counts?.residentsWithMobilePlaceholder || 0)
+    const residentsWithHealthIdPlaceholder = Number(counts?.residentsWithHealthIdPlaceholder || 0)
+    const totalLockedResidents = Number(lockedResidentsCount[0]?.count || 0)
 
     logTiming('Basic counts', requestStart)
 
@@ -235,11 +290,13 @@ export async function GET(request: Request) {
         },
       }),
 
-      // Mobile number updates count (last 30 days)
+      // Mobile number updates count (last 30 days, after cutoff if set)
       // Check for both "citizen_mobile" and "mobile_number" for backward compatibility
       prisma.updateLog.count({
         where: {
-          updateTimestamp: { gte: thirtyDaysAgo },
+          updateTimestamp: {
+            gte: cutoffDate && cutoffDate > thirtyDaysAgo ? cutoffDate : thirtyDaysAgo
+          },
           OR: [
             { fieldUpdated: "citizen_mobile" },
             { fieldUpdated: "mobile_number" },
@@ -249,11 +306,13 @@ export async function GET(request: Request) {
         },
       }),
 
-      // Health ID updates count (last 30 days)
+      // Health ID updates count (last 30 days, after cutoff if set)
       // Check for both "health_id" and "healthId" for backward compatibility
       prisma.updateLog.count({
         where: {
-          updateTimestamp: { gte: thirtyDaysAgo },
+          updateTimestamp: {
+            gte: cutoffDate && cutoffDate > thirtyDaysAgo ? cutoffDate : thirtyDaysAgo
+          },
           OR: [
             { fieldUpdated: "health_id" },
             { fieldUpdated: "healthId" },
@@ -261,34 +320,60 @@ export async function GET(request: Request) {
         },
       }),
 
-      // Mobile number updates - ALL TIME (unique residents with valid mobile now)
-      prisma.$queryRaw<Array<{ count: bigint }>>`
-        SELECT COUNT(DISTINCT ul.resident_id) as count
-        FROM update_logs ul
-        INNER JOIN residents r ON ul.resident_id = r.resident_id
-        WHERE ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
-          AND r.citizen_mobile IS NOT NULL
-          AND r.citizen_mobile != 'N/A'
-          AND r.citizen_mobile != '0'
-          AND r.citizen_mobile != ''
-      `,
+      // Mobile number updates - ALL TIME (unique residents with valid mobile now, after cutoff if set)
+      cutoffDate
+        ? prisma.$queryRaw<Array<{ count: bigint }>>`
+            SELECT COUNT(DISTINCT ul.resident_id) as count
+            FROM update_logs ul
+            INNER JOIN residents r ON ul.resident_id = r.resident_id
+            WHERE ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+              AND ul.update_timestamp >= ${cutoffDate}
+              AND r.citizen_mobile IS NOT NULL
+              AND r.citizen_mobile != 'N/A'
+              AND r.citizen_mobile != '0'
+              AND r.citizen_mobile != ''
+          `
+        : prisma.$queryRaw<Array<{ count: bigint }>>`
+            SELECT COUNT(DISTINCT ul.resident_id) as count
+            FROM update_logs ul
+            INNER JOIN residents r ON ul.resident_id = r.resident_id
+            WHERE ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+              AND r.citizen_mobile IS NOT NULL
+              AND r.citizen_mobile != 'N/A'
+              AND r.citizen_mobile != '0'
+              AND r.citizen_mobile != ''
+          `,
 
-      // Mobile number updates - TODAY (unique residents with valid mobile now)
-      prisma.$queryRaw<Array<{ count: bigint }>>`
-        SELECT COUNT(DISTINCT ul.resident_id) as count
-        FROM update_logs ul
-        INNER JOIN residents r ON ul.resident_id = r.resident_id
-        WHERE ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
-          AND ul.update_timestamp >= ${startOfToday}
-          AND r.citizen_mobile IS NOT NULL
-          AND r.citizen_mobile != 'N/A'
-          AND r.citizen_mobile != '0'
-          AND r.citizen_mobile != ''
-      `,
+      // Mobile number updates - TODAY (unique residents with valid mobile now, after cutoff if set)
+      cutoffDate
+        ? prisma.$queryRaw<Array<{ count: bigint }>>`
+            SELECT COUNT(DISTINCT ul.resident_id) as count
+            FROM update_logs ul
+            INNER JOIN residents r ON ul.resident_id = r.resident_id
+            WHERE ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+              AND ul.update_timestamp >= ${startOfToday}
+              AND ul.update_timestamp >= ${cutoffDate}
+              AND r.citizen_mobile IS NOT NULL
+              AND r.citizen_mobile != 'N/A'
+              AND r.citizen_mobile != '0'
+              AND r.citizen_mobile != ''
+          `
+        : prisma.$queryRaw<Array<{ count: bigint }>>`
+            SELECT COUNT(DISTINCT ul.resident_id) as count
+            FROM update_logs ul
+            INNER JOIN residents r ON ul.resident_id = r.resident_id
+            WHERE ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber')
+              AND ul.update_timestamp >= ${startOfToday}
+              AND r.citizen_mobile IS NOT NULL
+              AND r.citizen_mobile != 'N/A'
+              AND r.citizen_mobile != '0'
+              AND r.citizen_mobile != ''
+          `,
 
-      // Health ID updates - ALL TIME
+      // Health ID updates - ALL TIME (after cutoff if set)
       prisma.updateLog.count({
         where: {
+          ...(cutoffDate ? { updateTimestamp: { gte: cutoffDate } } : {}),
           OR: [
             { fieldUpdated: "health_id" },
             { fieldUpdated: "healthId" },
@@ -296,9 +381,10 @@ export async function GET(request: Request) {
         },
       }),
 
-      // Health IDs added via updates (where oldValue was null/empty and newValue has a health ID)
+      // Health IDs added via updates (where oldValue was null/empty and newValue has a health ID, after cutoff if set)
       prisma.updateLog.count({
         where: {
+          ...(cutoffDate ? { updateTimestamp: { gte: cutoffDate } } : {}),
           OR: [
             { fieldUpdated: "health_id" },
             { fieldUpdated: "healthId" },
@@ -335,39 +421,57 @@ export async function GET(request: Request) {
       secretariatUpdateStats
     ] = await Promise.all([
       // A. Field Officer Data (Step 6)
-      Promise.all([
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (prisma.user.findMany as any)({
-          where: { role: "FIELD_OFFICER", isActive: true },
-          select: { id: true, username: true, fullName: true, role: true, assignedSecretariats: true, mandalName: true },
-        }),
-        prisma.updateLog.groupBy({
-          by: ["userId"],
-          _count: { id: true },
-          where: {
-            user: { role: "FIELD_OFFICER", isActive: true },
-            ...(startDate || endDate ? { updateTimestamp: { ...(startDate ? { gte: startDate } : {}), ...(endDate ? { lte: endDate } : {}) } } : {}),
-          },
-        }),
-        prisma.updateLog.groupBy({
-          by: ["userId"],
-          _count: { id: true },
-          where: {
-            user: { role: "FIELD_OFFICER", isActive: true },
-            fieldUpdated: { in: ["citizen_mobile", "mobile_number", "citizenMobile", "mobileNumber"] },
-            ...(startDate || endDate ? { updateTimestamp: { ...(startDate ? { gte: startDate } : {}), ...(endDate ? { lte: endDate } : {}) } } : {}),
-          },
-        }),
-        prisma.updateLog.groupBy({
-          by: ["userId"],
-          _count: { id: true },
-          where: {
-            user: { role: "FIELD_OFFICER", isActive: true },
-            fieldUpdated: { in: ["health_id", "healthId"] },
-            ...(startDate || endDate ? { updateTimestamp: { ...(startDate ? { gte: startDate } : {}), ...(endDate ? { lte: endDate } : {}) } } : {}),
-          },
-        }),
-      ]),
+      // Filter by cutoff date if set to exclude locked data from field officer metrics
+      (async () => {
+        // Build update timestamp filter - use the later of cutoffDate and startDate
+        const effectiveStartDate = (() => {
+          if (cutoffDate && startDate) {
+            return cutoffDate > startDate ? cutoffDate : startDate
+          }
+          return cutoffDate || startDate || undefined
+        })()
+
+        const timestampFilter = {
+          ...(effectiveStartDate ? { gte: effectiveStartDate } : {}),
+          ...(endDate ? { lte: endDate } : {}),
+        }
+
+        const hasTimestampFilter = Object.keys(timestampFilter).length > 0
+
+        return Promise.all([
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (prisma.user.findMany as any)({
+            where: { role: "FIELD_OFFICER", isActive: true },
+            select: { id: true, username: true, fullName: true, role: true, assignedSecretariats: true, mandalName: true },
+          }),
+          prisma.updateLog.groupBy({
+            by: ["userId"],
+            _count: { id: true },
+            where: {
+              user: { role: "FIELD_OFFICER", isActive: true },
+              ...(hasTimestampFilter ? { updateTimestamp: timestampFilter } : {}),
+            },
+          }),
+          prisma.updateLog.groupBy({
+            by: ["userId"],
+            _count: { id: true },
+            where: {
+              user: { role: "FIELD_OFFICER", isActive: true },
+              fieldUpdated: { in: ["citizen_mobile", "mobile_number", "citizenMobile", "mobileNumber"] },
+              ...(hasTimestampFilter ? { updateTimestamp: timestampFilter } : {}),
+            },
+          }),
+          prisma.updateLog.groupBy({
+            by: ["userId"],
+            _count: { id: true },
+            where: {
+              user: { role: "FIELD_OFFICER", isActive: true },
+              fieldUpdated: { in: ["health_id", "healthId"] },
+              ...(hasTimestampFilter ? { updateTimestamp: timestampFilter } : {}),
+            },
+          }),
+        ])
+      })(),
 
       // B. Activity Metrics (Step 6a, 7)
       prisma.updateLog.groupBy({
@@ -382,71 +486,157 @@ export async function GET(request: Request) {
         select: { updateTimestamp: true },
       }),
 
-      // C. Mandal Stats (Step 5)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (prisma.resident.groupBy as any)({
-        by: ["mandalName"],
-        _count: { id: true },
-        where: { mandalName: { not: null } },
-        orderBy: { _count: { id: "desc" } },
-      }),
+      // C. Mandal Stats (Step 5) - Excluding locked residents
+      cutoffDate
+        ? prisma.$queryRaw<Array<{ mandalName: string; residentCount: bigint }>>`
+            SELECT mandal_name as mandalName, COUNT(*) as residentCount
+            FROM residents
+            WHERE mandal_name IS NOT NULL
+              AND NOT (
+                updated_at < ${cutoffDate}
+                AND citizen_mobile IS NOT NULL
+                AND citizen_mobile REGEXP '^[6-9][0-9]{9}$'
+                AND health_id IS NOT NULL
+                AND health_id != 'N/A'
+                AND health_id != ''
+                AND CHAR_LENGTH(health_id) >= 14
+              )
+            GROUP BY mandal_name
+            ORDER BY COUNT(*) DESC
+          `
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        : (prisma.resident.groupBy as any)({
+            by: ["mandalName"],
+            _count: { id: true },
+            where: { mandalName: { not: null } },
+            orderBy: { _count: { id: "desc" } },
+          }),
 
-      // D. Completion Statistics (Steps 8 & 9)
+      // D. Completion Statistics (Steps 8 & 9) - Excluding locked residents
       Promise.all([
-        // Mandal Completon
-        prisma.$queryRaw<Array<{ mandalName: string; totalResidents: bigint; withMobile: bigint; withHealthId: bigint }>>`
-          SELECT
-            mandal_name as mandalName,
-            COUNT(*) as totalResidents,
-            SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' THEN 1 ELSE 0 END) as withMobile,
-            SUM(CASE WHEN health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as withHealthId
-          FROM residents
-          WHERE mandal_name IS NOT NULL
-          GROUP BY mandal_name
-          ORDER BY totalResidents DESC
-        `,
+        // Mandal Completion
+        cutoffDate
+          ? prisma.$queryRaw<Array<{ mandalName: string; totalResidents: bigint; withMobile: bigint; withHealthId: bigint }>>`
+              SELECT
+                mandal_name as mandalName,
+                COUNT(*) as totalResidents,
+                SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' THEN 1 ELSE 0 END) as withMobile,
+                SUM(CASE WHEN health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as withHealthId
+              FROM residents
+              WHERE mandal_name IS NOT NULL
+                AND NOT (
+                  updated_at < ${cutoffDate}
+                  AND citizen_mobile IS NOT NULL
+                  AND citizen_mobile REGEXP '^[6-9][0-9]{9}$'
+                  AND health_id IS NOT NULL
+                  AND health_id != 'N/A'
+                  AND health_id != ''
+                  AND CHAR_LENGTH(health_id) >= 14
+                )
+              GROUP BY mandal_name
+              ORDER BY totalResidents DESC
+            `
+          : prisma.$queryRaw<Array<{ mandalName: string; totalResidents: bigint; withMobile: bigint; withHealthId: bigint }>>`
+              SELECT
+                mandal_name as mandalName,
+                COUNT(*) as totalResidents,
+                SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' THEN 1 ELSE 0 END) as withMobile,
+                SUM(CASE WHEN health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as withHealthId
+              FROM residents
+              WHERE mandal_name IS NOT NULL
+              GROUP BY mandal_name
+              ORDER BY totalResidents DESC
+            `,
         // Hierarchical (Secretariat) Completion
-        prisma.$queryRaw<Array<{ mandalName: string; secName: string | null; totalResidents: bigint; withMobile: bigint; withHealthId: bigint }>>`
-          SELECT
-            mandal_name as mandalName,
-            sec_name as secName,
-            COUNT(*) as totalResidents,
-            SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' THEN 1 ELSE 0 END) as withMobile,
-            SUM(CASE WHEN health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as withHealthId
-          FROM residents
-          WHERE mandal_name IS NOT NULL AND sec_name IS NOT NULL
-          GROUP BY mandal_name, sec_name
-          ORDER BY mandal_name, sec_name
-        `,
+        cutoffDate
+          ? prisma.$queryRaw<Array<{ mandalName: string; secName: string | null; totalResidents: bigint; withMobile: bigint; withHealthId: bigint }>>`
+              SELECT
+                mandal_name as mandalName,
+                sec_name as secName,
+                COUNT(*) as totalResidents,
+                SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' THEN 1 ELSE 0 END) as withMobile,
+                SUM(CASE WHEN health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as withHealthId
+              FROM residents
+              WHERE mandal_name IS NOT NULL AND sec_name IS NOT NULL
+                AND NOT (
+                  updated_at < ${cutoffDate}
+                  AND citizen_mobile IS NOT NULL
+                  AND citizen_mobile REGEXP '^[6-9][0-9]{9}$'
+                  AND health_id IS NOT NULL
+                  AND health_id != 'N/A'
+                  AND health_id != ''
+                  AND CHAR_LENGTH(health_id) >= 14
+                )
+              GROUP BY mandal_name, sec_name
+              ORDER BY mandal_name, sec_name
+            `
+          : prisma.$queryRaw<Array<{ mandalName: string; secName: string | null; totalResidents: bigint; withMobile: bigint; withHealthId: bigint }>>`
+              SELECT
+                mandal_name as mandalName,
+                sec_name as secName,
+                COUNT(*) as totalResidents,
+                SUM(CASE WHEN citizen_mobile IS NOT NULL AND citizen_mobile != 'N/A' AND citizen_mobile != '0' AND citizen_mobile != '' THEN 1 ELSE 0 END) as withMobile,
+                SUM(CASE WHEN health_id IS NOT NULL AND health_id != 'N/A' AND health_id != '' THEN 1 ELSE 0 END) as withHealthId
+              FROM residents
+              WHERE mandal_name IS NOT NULL AND sec_name IS NOT NULL
+              GROUP BY mandal_name, sec_name
+              ORDER BY mandal_name, sec_name
+            `,
       ]),
 
       // E. Secretariat Update Statistics (Step 11) - Modified to include logic for Mandal derivation
       // Note: We removed the explicit "mandalUpdateStats" (Step 10) query to save time.
       // We will derive mandal stats from this result.
-      prisma.$queryRaw<
-        Array<{
-          mandalName: string
-          secName: string | null
-          mobileUpdatesAllTime: bigint
-          mobileUpdatesToday: bigint
-          healthIdUpdatesAllTime: bigint
-          healthIdUpdatesToday: bigint
-          healthIdsAddedViaUpdates: bigint
-        }>
-      >`
-        SELECT
-          r.mandal_name as mandalName,
-          r.sec_name as secName,
-          COUNT(CASE WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber') THEN 1 END) as mobileUpdatesAllTime,
-          COUNT(CASE WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber') AND ul.update_timestamp >= ${startOfToday} THEN 1 END) as mobileUpdatesToday,
-          COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') THEN 1 END) as healthIdUpdatesAllTime,
-          COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') AND ul.update_timestamp >= ${startOfToday} THEN 1 END) as healthIdUpdatesToday,
-          COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') AND (ul.old_value IS NULL OR ul.old_value IN ('', 'null', 'N/A')) AND ul.new_value IS NOT NULL AND ul.new_value NOT IN ('', 'null', 'N/A') THEN 1 END) as healthIdsAddedViaUpdates
-        FROM update_logs ul
-        INNER JOIN residents r ON ul.resident_id = r.resident_id
-        WHERE r.mandal_name IS NOT NULL
-        GROUP BY r.mandal_name, r.sec_name
-      `
+      // Filter by cutoff date if set to exclude locked data
+      cutoffDate
+        ? prisma.$queryRaw<
+            Array<{
+              mandalName: string
+              secName: string | null
+              mobileUpdatesAllTime: bigint
+              mobileUpdatesToday: bigint
+              healthIdUpdatesAllTime: bigint
+              healthIdUpdatesToday: bigint
+              healthIdsAddedViaUpdates: bigint
+            }>
+          >`
+            SELECT
+              r.mandal_name as mandalName,
+              r.sec_name as secName,
+              COUNT(CASE WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber') AND ul.update_timestamp >= ${cutoffDate} THEN 1 END) as mobileUpdatesAllTime,
+              COUNT(CASE WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber') AND ul.update_timestamp >= ${startOfToday} AND ul.update_timestamp >= ${cutoffDate} THEN 1 END) as mobileUpdatesToday,
+              COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') AND ul.update_timestamp >= ${cutoffDate} THEN 1 END) as healthIdUpdatesAllTime,
+              COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') AND ul.update_timestamp >= ${startOfToday} AND ul.update_timestamp >= ${cutoffDate} THEN 1 END) as healthIdUpdatesToday,
+              COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') AND ul.update_timestamp >= ${cutoffDate} AND (ul.old_value IS NULL OR ul.old_value IN ('', 'null', 'N/A')) AND ul.new_value IS NOT NULL AND ul.new_value NOT IN ('', 'null', 'N/A') THEN 1 END) as healthIdsAddedViaUpdates
+            FROM update_logs ul
+            INNER JOIN residents r ON ul.resident_id = r.resident_id
+            WHERE r.mandal_name IS NOT NULL
+            GROUP BY r.mandal_name, r.sec_name
+          `
+        : prisma.$queryRaw<
+            Array<{
+              mandalName: string
+              secName: string | null
+              mobileUpdatesAllTime: bigint
+              mobileUpdatesToday: bigint
+              healthIdUpdatesAllTime: bigint
+              healthIdUpdatesToday: bigint
+              healthIdsAddedViaUpdates: bigint
+            }>
+          >`
+            SELECT
+              r.mandal_name as mandalName,
+              r.sec_name as secName,
+              COUNT(CASE WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber') THEN 1 END) as mobileUpdatesAllTime,
+              COUNT(CASE WHEN ul.field_updated IN ('citizen_mobile', 'mobile_number', 'citizenMobile', 'mobileNumber') AND ul.update_timestamp >= ${startOfToday} THEN 1 END) as mobileUpdatesToday,
+              COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') THEN 1 END) as healthIdUpdatesAllTime,
+              COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') AND ul.update_timestamp >= ${startOfToday} THEN 1 END) as healthIdUpdatesToday,
+              COUNT(CASE WHEN ul.field_updated IN ('health_id', 'healthId') AND (ul.old_value IS NULL OR ul.old_value IN ('', 'null', 'N/A')) AND ul.new_value IS NOT NULL AND ul.new_value NOT IN ('', 'null', 'N/A') THEN 1 END) as healthIdsAddedViaUpdates
+            FROM update_logs ul
+            INNER JOIN residents r ON ul.resident_id = r.resident_id
+            WHERE r.mandal_name IS NOT NULL
+            GROUP BY r.mandal_name, r.sec_name
+          `
     ])
 
     logTiming('Parallel Heavy Queries', requestStart)
@@ -498,10 +688,11 @@ export async function GET(request: Request) {
     const updatesTimeline = Object.entries(updatesByDate).map(([date, count]) => ({ date, count }))
 
     // 3. Process Mandal Stats
+    // Handle both raw query format (residentCount) and groupBy format (_count.id)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mandalStatistics = mandalStats.map((stat: any) => ({
       mandalName: stat.mandalName || "Unknown",
-      residentCount: stat._count?.id || 0,
+      residentCount: stat.residentCount ? Number(stat.residentCount) : (stat._count?.id || 0),
     }))
 
     // 4. Process Completion Stats
@@ -517,9 +708,11 @@ export async function GET(request: Request) {
     const mandalCompletionStats = mandalStats.map((baseStat: any) => {
       const mandalName = baseStat.mandalName
       const detailedStat = rawStatsMap.get(mandalName)
+      // Handle both raw query format (residentCount) and groupBy format (_count.id)
+      const totalResidents = baseStat.residentCount ? Number(baseStat.residentCount) : (baseStat._count?.id || 0)
       return {
         mandalName,
-        totalResidents: baseStat._count.id, // Source of truth for total
+        totalResidents, // Source of truth for total
         withMobile: detailedStat?.withMobile || 0,
         withHealthId: detailedStat?.withHealthId || 0,
       }
@@ -660,7 +853,7 @@ export async function GET(request: Request) {
         totalResidents,
         residentsWithMobile,
         residentsWithHealthId,
-        residentsWithBothMobileAndHealthId: Number(residentsWithBothMobileAndHealthId[0]?.count || 0),
+        residentsWithBothMobileAndHealthId,
         mobileCompletionRate,
         healthIdCompletionRate,
         recentUpdatesCount,
@@ -673,7 +866,7 @@ export async function GET(request: Request) {
         healthIdUpdatesAllTime,
         healthIdsAddedViaUpdates,
         // Calculate original health IDs (before updates)
-        healthIdsOriginal: Number(residentsWithHealthId) - Number(healthIdsAddedViaUpdates),
+        healthIdsOriginal: residentsWithHealthId - Number(healthIdsAddedViaUpdates),
         // Placeholder metrics
         residentsWithNamePlaceholder,
         residentsWithHhIdPlaceholder,
@@ -685,6 +878,8 @@ export async function GET(request: Request) {
         // Field officer activity metrics
         currentlyActiveOfficersCount,
         totalActiveOfficersCount: allFieldOfficers.length,
+        // Locked residents count (excluded from all metrics above)
+        totalLockedResidents,
       },
       mandalStatistics,
       mandalCompletion: mandalHierarchy,
@@ -704,6 +899,8 @@ export async function GET(request: Request) {
       })),
       updatesTimeline,
       lastUpdated: new Date(),
+      // Include cutoff date for reference (metrics after this date are shown)
+      dataCutoffDate: cutoffDate ? cutoffDate.toISOString() : null,
     }
 
     // Cache the successful response (if no date filters)
